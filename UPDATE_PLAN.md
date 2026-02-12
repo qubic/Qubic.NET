@@ -86,7 +86,19 @@ Each `REGISTER_USER_PROCEDURE(Name, ID)` maps to `public const ushort Name = ID;
 
 ---
 
-## 7. Check struct sizes
+## 7. Regenerate smart contract types
+
+```bash
+dotnet run --project tools/Qubic.ContractGen
+```
+
+This parses all C++ contract headers in `deps/qubic-core/src/contracts/` and regenerates
+typed C# classes in `src/Qubic.Core/Contracts/Generated/`. Verify the output compiles
+and check for new warnings about unresolved types or array sizes.
+
+---
+
+## 8. Check struct sizes
 
 If network structs changed, verify derived size constants in `QubicConstants.cs`:
 - `EntityRecordSize` (64) — `deps/qubic-core/src/network_messages/entity.h`
@@ -99,7 +111,7 @@ Also check if `Qubic.Serialization` readers/writers need updates.
 
 ---
 
-## 8. Build and test
+## 9. Build and test
 
 ```bash
 dotnet build
@@ -108,7 +120,7 @@ dotnet test
 
 ---
 
-## 9. Publish updated packages
+## 10. Publish updated packages
 
 If `Qubic.Crypto` changed:
 1. Bump version in `src/Qubic.Crypto/Qubic.Crypto.csproj`
@@ -129,5 +141,6 @@ Then for `Qubic.Core`:
 | `src/network_messages/common_def.h` | `QubicConstants.cs` |
 | `src/network_messages/network_message_type.h` | `NetworkMessageTypes.cs` |
 | `src/contract_core/contract_def.h` | `QubicContracts.cs` |
-| `src/contracts/Qx.h` | `QxProcedures.cs` |
-| `src/contracts/QUtil.h` | `QutilProcedures.cs` |
+| `src/contracts/Qx.h` | `QxProcedures.cs` (obsolete) |
+| `src/contracts/QUtil.h` | `QutilProcedures.cs` (obsolete) |
+| `src/contracts/*.h` | `Contracts/Generated/*.g.cs` (via ContractGen) |

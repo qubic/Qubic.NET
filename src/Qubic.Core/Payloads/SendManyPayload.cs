@@ -9,6 +9,7 @@ namespace Qubic.Core.Payloads;
 /// This is a QUTIL contract call (contract index 4), not a base protocol feature.
 /// The transaction destination must be set to the QUTIL contract address.
 /// </summary>
+[Obsolete("Use Qubic.Core.Contracts.Qutil.SendToManyV1Payload instead.")]
 public sealed class SendManyPayload : ITransactionPayload
 {
     /// <summary>

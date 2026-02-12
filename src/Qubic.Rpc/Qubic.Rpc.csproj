@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Qubic.Core" Version="1.0.0" />
+    <ProjectReference Include="..\Qubic.Core\Qubic.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

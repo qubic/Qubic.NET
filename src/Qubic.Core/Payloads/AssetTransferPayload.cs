@@ -9,6 +9,7 @@ namespace Qubic.Core.Payloads;
 /// The transaction destination must be set to the QX contract address.
 /// The transaction amount should be 0 (or the transfer fee if required).
 /// </summary>
+[Obsolete("Use Qubic.Core.Contracts.Qx.TransferShareOwnershipAndPossessionPayload instead.")]
 public sealed class AssetTransferPayload : ITransactionPayload
 {
     /// <summary>

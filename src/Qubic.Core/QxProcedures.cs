@@ -3,6 +3,7 @@ namespace Qubic.Core;
 /// <summary>
 /// QX contract procedure IDs for asset operations.
 /// </summary>
+[Obsolete("Use Qubic.Core.Contracts.Qx.QxContract.Procedures instead.")]
 public static class QxProcedures
 {
     /// <summary>

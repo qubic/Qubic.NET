@@ -148,6 +148,22 @@ public sealed class QubicRpcClient : IDisposable
             : Convert.FromBase64String(result.ResponseData);
     }
 
+    /// <summary>
+    /// Queries a smart contract's state using strongly-typed input/output.
+    /// </summary>
+    public async Task<TOutput> QuerySmartContractAsync<TInput, TOutput>(
+        uint contractIndex,
+        uint inputType,
+        TInput input,
+        CancellationToken cancellationToken = default)
+        where TInput : Qubic.Core.Contracts.ISmartContractInput
+        where TOutput : Qubic.Core.Contracts.ISmartContractOutput<TOutput>
+    {
+        var responseData = await QuerySmartContractAsync(
+            contractIndex, inputType, input.ToBytes(), cancellationToken);
+        return TOutput.FromBytes(responseData);
+    }
+
     #endregion
 
     #region Live API — Assets

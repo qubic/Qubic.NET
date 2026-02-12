@@ -3,6 +3,7 @@ namespace Qubic.Core;
 /// <summary>
 /// QUTIL contract procedure IDs.
 /// </summary>
+[Obsolete("Use Qubic.Core.Contracts.Qutil.QutilContract.Procedures instead.")]
 public static class QutilProcedures
 {
     /// <summary>
