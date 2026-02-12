@@ -34,4 +34,9 @@ public static class QxProcedures
     /// Remove a bid order.
     /// </summary>
     public const ushort RemoveFromBidOrder = 8;
+
+    /// <summary>
+    /// Transfer asset management rights to another contract.
+    /// </summary>
+    public const ushort TransferShareManagementRights = 9;
 }
