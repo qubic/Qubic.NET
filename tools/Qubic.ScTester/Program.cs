@@ -8,7 +8,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddSingleton<ContractDiscovery>();
 builder.Services.AddScoped<ScQueryService>();
 
-builder.WebHost.UseUrls("http://localhost:5050");
+builder.WebHost.UseUrls("http://127.0.0.1:0");
 
 var app = builder.Build();
 app.UseStaticFiles();
@@ -17,16 +17,16 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {
-    var url = "http://localhost:5050";
-    Console.WriteLine($"Qubic SC Tester running at {url}");
+    var address = app.Urls.FirstOrDefault() ?? "http://localhost:5050";
+    Console.WriteLine($"Qubic SC Tester running at {address}");
     try
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(address) { UseShellExecute = true });
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            Process.Start("open", url);
+            Process.Start("open", address);
         else
-            Process.Start("xdg-open", url);
+            Process.Start("xdg-open", address);
     }
     catch { /* Browser auto-open is best-effort */ }
 });
