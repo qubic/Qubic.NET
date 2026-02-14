@@ -1,0 +1,164 @@
+@page "/tools/bob-playground"
+@inject ToolkitBackendService Backend
+
+<h4>Bob RPC Playground</h4>
+<p class="text-muted">Send raw JSON-RPC 2.0 requests to the Bob node.</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Request</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label-sm">Method</label>
+                    <select class="form-control form-control-sm" @bind="_method">
+                        <option value="">-- select or type below --</option>
+                        @foreach (var m in _methods)
+                        {
+                            <option value="@m">@m</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label-sm">Or custom method name</label>
+                    <input class="form-control form-control-sm mono" @bind="_method" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label-sm">Params (JSON array, optional)</label>
+                    <textarea class="form-control form-control-sm mono" rows="4"
+                              placeholder='e.g. ["BAAAAA..."] or [12345] or []'
+                              @bind="_params"></textarea>
+                </div>
+                <button class="btn btn-primary" @onclick="Send" disabled="@_loading">
+                    @(_loading ? "Sending..." : "Send Request")
+                </button>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">Quick Actions</div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-1">
+                    @foreach (var m in _methods)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => QuickFill(m)">@m.Replace("qubic_", "")</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <span>Response</span>
+                @if (_elapsed > 0)
+                {
+                    <span class="text-muted small">@_elapsed ms</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (_error != null)
+                {
+                    <div class="alert alert-danger mb-0">@_error</div>
+                }
+                else if (_response != null)
+                {
+                    <pre class="mb-0 p-2 bg-light rounded" style="max-height:600px; overflow:auto; font-size:0.82em; white-space:pre-wrap; word-break:break-all">@_response</pre>
+                }
+                else
+                {
+                    <span class="text-muted">Send a request to see the response.</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _method;
+    private string? _params;
+    private string? _response;
+    private string? _error;
+    private bool _loading;
+    private long _elapsed;
+
+    private static readonly string[] _methods =
+    [
+        "qubic_chainId",
+        "qubic_clientVersion",
+        "qubic_syncing",
+        "qubic_getCurrentEpoch",
+        "qubic_getEpochInfo",
+        "qubic_tickNumber",
+        "qubic_getTickByNumber",
+        "qubic_getTickByHash",
+        "qubic_getBalance",
+        "qubic_getTransfers",
+        "qubic_getAssetBalance",
+        "qubic_getTransactionByHash",
+        "qubic_getTransactionReceipt",
+        "qubic_getLogs",
+        "qubic_querySmartContract",
+        "qubic_broadcastTransaction"
+    ];
+
+    private void QuickFill(string method)
+    {
+        _method = method;
+        _params = method switch
+        {
+            "qubic_chainId" or "qubic_clientVersion" or "qubic_syncing"
+                or "qubic_getCurrentEpoch" or "qubic_tickNumber" => "[]",
+            "qubic_getEpochInfo" => "[1]",
+            "qubic_getTickByNumber" => "[12345678]",
+            "qubic_getTickByHash" => "[\"TICK_HASH_HERE\"]",
+            "qubic_getBalance" => "[\"IDENTITY_HERE\"]",
+            "qubic_getTransfers" => "[\"IDENTITY_HERE\"]",
+            "qubic_getAssetBalance" => "[\"IDENTITY_HERE\", \"ISSUER_HERE\", \"ASSET_NAME\"]",
+            "qubic_getTransactionByHash" => "[\"TX_HASH_HERE\"]",
+            "qubic_getTransactionReceipt" => "[\"TX_HASH_HERE\"]",
+            "qubic_getLogs" => "[{\"contractIndex\": 1}]",
+            "qubic_querySmartContract" => "[{\"contractIndex\": 4, \"inputType\": 1, \"inputData\": \"\"}]",
+            "qubic_broadcastTransaction" => "[\"HEX_ENCODED_TX\"]",
+            _ => "[]"
+        };
+    }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(_method)) return;
+
+        _loading = true;
+        _response = null;
+        _error = null;
+        _elapsed = 0;
+
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var raw = await Backend.SendRawJsonRpcAsync(_method.Trim(), _params?.Trim());
+            sw.Stop();
+            _elapsed = sw.ElapsedMilliseconds;
+
+            // Pretty-print JSON
+            try
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(raw);
+                _response = System.Text.Json.JsonSerializer.Serialize(doc, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            }
+            catch
+            {
+                _response = raw;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

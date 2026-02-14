@@ -1,0 +1,165 @@
+@page "/wallet/assets"
+@inject ToolkitBackendService Backend
+
+<h4>Asset Portfolio</h4>
+<p class="text-muted">View owned, issued, and possessed assets for any identity. (RPC only)</p>
+
+<div class="row mb-3">
+    <div class="col-md-10">
+        <div class="input-group mb-1">
+            <input class="form-control @IdentityValidation.CssClass(_identity)"
+                   placeholder="Enter 60-character identity" @bind="_identity" @bind:event="oninput" />
+            <button class="btn btn-primary" @onclick="Lookup" disabled="@(_loading || IdentityValidation.Validate(_identity) != null)">
+                @(_loading ? "Loading..." : "Lookup Assets")
+            </button>
+        </div>
+        @{ var idErr = IdentityValidation.Validate(_identity); }
+        @if (idErr != null)
+        {
+            <div class="small text-danger">@idErr</div>
+        }
+    </div>
+</div>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_owned != null)
+{
+    <div class="card mb-3">
+        <div class="card-header">Owned Assets (@_owned.Count)</div>
+        <div class="card-body">
+            @if (_owned.Count == 0)
+            {
+                <span class="text-muted">No owned assets.</span>
+            }
+            else
+            {
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr><th>Asset</th><th>Units</th><th>Contract</th><th>Issuance</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _owned)
+                        {
+                            <tr>
+                                <td class="mono">@(a.Data.IssuedAsset?.Name ?? "?")</td>
+                                <td class="mono">@a.Data.NumberOfUnits</td>
+                                <td>@a.Data.ManagingContractIndex</td>
+                                <td>@a.Data.IssuanceIndex</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_possessed != null)
+{
+    <div class="card mb-3">
+        <div class="card-header">Possessed Assets (@_possessed.Count)</div>
+        <div class="card-body">
+            @if (_possessed.Count == 0)
+            {
+                <span class="text-muted">No possessed assets.</span>
+            }
+            else
+            {
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr><th>Asset</th><th>Units</th><th>Possessor</th><th>Contract</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _possessed)
+                        {
+                            <tr>
+                                <td class="mono">@(a.Data.OwnedAsset?.IssuedAsset?.Name ?? "?")</td>
+                                <td class="mono">@a.Data.NumberOfUnits</td>
+                                <td class="mono small">@a.Data.PossessorIdentity[..20]...</td>
+                                <td>@a.Data.ManagingContractIndex</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_issued != null)
+{
+    <div class="card mb-3">
+        <div class="card-header">Issued Assets (@_issued.Count)</div>
+        <div class="card-body">
+            @if (_issued.Count == 0)
+            {
+                <span class="text-muted">No issued assets.</span>
+            }
+            else
+            {
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr><th>Name</th><th>Issuer</th><th>Type</th><th>Decimals</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _issued)
+                        {
+                            <tr>
+                                <td class="mono">@a.Data.Name</td>
+                                <td class="mono small">@a.Data.IssuerIdentity[..20]...</td>
+                                <td>@a.Data.Type</td>
+                                <td>@a.Data.NumberOfDecimalPlaces</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string? _identity;
+    private IReadOnlyList<Qubic.Rpc.Models.OwnedAssetInfo>? _owned;
+    private IReadOnlyList<Qubic.Rpc.Models.PossessedAssetInfo>? _possessed;
+    private IReadOnlyList<Qubic.Rpc.Models.IssuedAssetInfo>? _issued;
+    private bool _loading;
+    private string? _error;
+
+    private async Task Lookup()
+    {
+        if (IdentityValidation.Validate(_identity) != null) return;
+
+        _loading = true;
+        _error = null;
+        _owned = null;
+        _possessed = null;
+        _issued = null;
+
+        try
+        {
+            var id = Qubic.Core.Entities.QubicIdentity.FromIdentity(_identity!.Trim());
+            var ownedTask = Backend.GetOwnedAssetsAsync(id);
+            var possessedTask = Backend.GetPossessedAssetsAsync(id);
+            var issuedTask = Backend.GetIssuedAssetsAsync(id);
+
+            await Task.WhenAll(ownedTask, possessedTask, issuedTask);
+
+            _owned = ownedTask.Result;
+            _possessed = possessedTask.Result;
+            _issued = issuedTask.Result;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

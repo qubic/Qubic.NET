@@ -1,0 +1,316 @@
+@page "/tx/send-many"
+@implements IDisposable
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>Send to Many</h4>
+<p class="text-muted">Send QU to up to 25 recipients in a single transaction (QUTIL SendToManyV1).</p>
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Recipients</span>
+                    @if (_fee != null)
+                    {
+                        <span class="badge bg-info">Fee: @_fee.Value.ToString("N0") QU</span>
+                    }
+                </div>
+                <div class="card-body">
+                    @for (int i = 0; i < _recipients.Count; i++)
+                    {
+                        var idx = i;
+                        <div class="row g-2 mb-1">
+                            <div class="col-7">
+                                <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_recipients[idx].Identity)"
+                                       placeholder="Identity (60 chars)"
+                                       @bind="_recipients[idx].Identity" @bind:event="oninput" />
+                            </div>
+                            <div class="col-3">
+                                <input type="number" class="form-control form-control-sm" placeholder="Amount"
+                                       @bind="_recipients[idx].Amount" />
+                            </div>
+                            <div class="col-2">
+                                @if (_recipients.Count > 1)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => _recipients.RemoveAt(idx)">Remove</button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="d-flex gap-2 mt-2">
+                        @if (_recipients.Count < 25)
+                        {
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="AddRecipient">+ Add Recipient</button>
+                        }
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => _showImport = !_showImport">
+                            @(_showImport ? "Hide Import" : "Import from Text")
+                        </button>
+                    </div>
+
+                    @if (_showImport)
+                    {
+                        <div class="card mt-2 bg-light">
+                            <div class="card-body py-2">
+                                <label class="form-label-sm">Paste recipients (one per line: <code>IDENTITY,AMOUNT</code> or <code>IDENTITY AMOUNT</code>)</label>
+                                <textarea class="form-control form-control-sm mono" rows="5"
+                                          placeholder="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,1000000&#10;BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB 2000000"
+                                          @bind="_importText"></textarea>
+                                <div class="mt-1 d-flex gap-2">
+                                    <button class="btn btn-sm btn-primary" @onclick="ImportRecipients">Import</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => { _showImport = false; _importText = null; _importError = null; }">Cancel</button>
+                                </div>
+                                @if (_importError != null)
+                                {
+                                    <div class="text-danger small mt-1">@_importError</div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <hr />
+                    <div class="mb-2">
+                        <label class="form-label-sm">Target Tick (0 = auto: current + @Settings.TickOffset)</label>
+                        <div class="input-group input-group-sm" style="max-width:300px">
+                            <input type="number" class="form-control @(_autoTickFlash ? "border-success" : "")"
+                                   @bind="_targetTick" />
+                            <button class="btn btn-outline-secondary" @onclick="SetAutoTick">Auto</button>
+                        </div>
+                        @if (_autoTickError != null)
+                        {
+                            <div class="small text-danger mt-1">@_autoTickError</div>
+                        }
+                        else if (TickMonitor.IsConnected)
+                        {
+                            <div class="small text-muted mt-1">Current tick: @TickMonitor.Tick.ToString("N0")</div>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span>Total: <strong class="mono">@ValidRecipients.Sum(r => r.Amount).ToString("N0")</strong> QU</span>
+                            @if (_fee != null)
+                            {
+                                <span class="ms-2 text-muted">+ @_fee.Value.ToString("N0") fee</span>
+                                <span class="ms-1 fw-bold">= @((ValidRecipients.Sum(r => r.Amount) + _fee.Value).ToString("N0")) QU</span>
+                            }
+                            <span class="ms-2 text-muted">(@ValidRecipients.Count() recipients)</span>
+                        </div>
+                        <button class="btn btn-primary" @onclick="Send" disabled="@_sending">
+                            @(_sending ? "Sending..." : "Sign & Broadcast")
+                        </button>
+                    </div>
+
+                    @if (_result != null)
+                    {
+                        <div class="alert alert-success mt-3">
+                            Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                            <div class="mt-1">
+                                <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                                <a href="/tx/history">Transaction History</a>
+                            </div>
+                        </div>
+                    }
+                    @if (_error != null)
+                    {
+                        <div class="alert alert-danger mt-2">@_error</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private class Recipient { public string Identity { get; set; } = ""; public long Amount { get; set; } }
+
+    private readonly List<Recipient> _recipients = [new()];
+    private uint _targetTick;
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+    private long? _fee;
+    private bool _showImport;
+    private string? _importText;
+    private string? _importError;
+    private bool _autoTickFlash;
+    private string? _autoTickError;
+    private bool _disposed;
+
+    private IEnumerable<Recipient> ValidRecipients =>
+        _recipients.Where(r => !string.IsNullOrWhiteSpace(r.Identity) && r.Amount > 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        TickMonitor.OnTickChanged += OnTickChanged;
+        await LoadFee();
+    }
+
+    private void OnTickChanged()
+    {
+        if (_disposed) return;
+        InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    }
+
+    private async Task LoadFee()
+    {
+        try
+        {
+            // QUtil contract 4, GetSendToManyV1Fee = function 1, empty input
+            var result = await Backend.QuerySmartContractAsync(4, 1, []);
+            if (result.Length >= 8)
+                _fee = BitConverter.ToInt64(result, 0);
+        }
+        catch { /* fee display is best-effort */ }
+    }
+
+    private void AddRecipient() { if (_recipients.Count < 25) _recipients.Add(new()); }
+
+    private async Task SetAutoTick()
+    {
+        _autoTickError = null;
+        try
+        {
+            uint current = TickMonitor.IsConnected
+                ? TickMonitor.Tick
+                : (await Backend.GetTickInfoAsync()).Tick;
+            _targetTick = current + (uint)Settings.TickOffset;
+            _autoTickFlash = true;
+            StateHasChanged();
+            await Task.Delay(600);
+            _autoTickFlash = false;
+        }
+        catch (Exception ex) { _autoTickError = "Could not fetch tick: " + ex.Message; }
+    }
+
+    private void ImportRecipients()
+    {
+        _importError = null;
+        if (string.IsNullOrWhiteSpace(_importText)) { _importError = "Nothing to import."; return; }
+
+        var lines = _importText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var imported = new List<Recipient>();
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            // Try comma, semicolon, tab, or space as separator
+            string[] parts;
+            if (line.Contains(',')) parts = line.Split(',', 2, StringSplitOptions.TrimEntries);
+            else if (line.Contains(';')) parts = line.Split(';', 2, StringSplitOptions.TrimEntries);
+            else if (line.Contains('\t')) parts = line.Split('\t', 2, StringSplitOptions.TrimEntries);
+            else parts = line.Split(' ', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length != 2 || !long.TryParse(parts[1], out var amount))
+            {
+                _importError = $"Line {i + 1}: Invalid format. Expected 'IDENTITY,AMOUNT'.";
+                return;
+            }
+
+            var identity = parts[0].Trim();
+            var idErr = IdentityValidation.Validate(identity);
+            if (idErr != null)
+            {
+                _importError = $"Line {i + 1}: {idErr}";
+                return;
+            }
+
+            imported.Add(new Recipient { Identity = identity, Amount = amount });
+        }
+
+        if (imported.Count == 0) { _importError = "No valid entries found."; return; }
+        if (imported.Count > 25) { _importError = $"Too many recipients ({imported.Count}). Max is 25."; return; }
+
+        _recipients.Clear();
+        _recipients.AddRange(imported);
+        _showImport = false;
+        _importText = null;
+    }
+
+    private async Task Send()
+    {
+        _sending = true;
+        _error = null;
+        _result = null;
+
+        try
+        {
+            // Validate all identities first
+            var valid = ValidRecipients.ToList();
+            if (valid.Count == 0)
+            {
+                _error = "Add at least one recipient with an amount.";
+                return;
+            }
+            for (int i = 0; i < valid.Count; i++)
+            {
+                var idErr = IdentityValidation.Validate(valid[i].Identity);
+                if (idErr != null)
+                {
+                    _error = $"Recipient {i + 1}: {idErr}";
+                    return;
+                }
+            }
+
+            #pragma warning disable CS0618 // SendManyPayload is obsolete but the generated replacement has no transfer support
+            var payload = new Qubic.Core.Payloads.SendManyPayload();
+            #pragma warning restore CS0618
+            foreach (var r in valid)
+            {
+                payload.AddTransfer(Qubic.Core.Entities.QubicIdentity.FromIdentity(r.Identity.Trim()), r.Amount);
+            }
+
+            uint tick = _targetTick;
+            if (tick == 0)
+            {
+                tick = TickMonitor.IsConnected
+                    ? TickMonitor.Tick + (uint)Settings.TickOffset
+                    : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+            }
+
+            var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(Qubic.Core.QubicContracts.Qutil));
+            var totalAmount = payload.TotalAmount + (_fee ?? 0);
+            var tx = Seed.CreateAndSignTransaction(dest, totalAmount, tick, payload);
+            var result = await Backend.BroadcastTransactionAsync(tx);
+            _result = result.TransactionId;
+
+            TxTracker.Track(new TrackedTransaction
+            {
+                Hash = result.TransactionId,
+                Source = Seed.Identity?.ToString() ?? "",
+                Destination = dest.ToString(),
+                Amount = totalAmount,
+                TargetTick = tick,
+                InputType = 1, // QUTIL SendToManyV1
+                PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()),
+                Description = $"SendToMany: {payload.Transfers.Count} recipients, {payload.TotalAmount:N0} QU + {(_fee ?? 0):N0} fee"
+            });
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        TickMonitor.OnTickChanged -= OnTickChanged;
+    }
+}

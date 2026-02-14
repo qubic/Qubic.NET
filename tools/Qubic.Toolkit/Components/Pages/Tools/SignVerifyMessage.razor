@@ -1,0 +1,193 @@
+@page "/tools/sign-verify"
+@using Qubic.Crypto
+@inject SeedSessionService Seed
+@inject IJSRuntime JS
+
+<h4>Sign / Verify Message</h4>
+<p class="text-muted">Sign a message with your seed or verify a signed message.</p>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Sign Message</div>
+            <div class="card-body">
+                @if (!Seed.HasSeed)
+                {
+                    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+                }
+                else
+                {
+                    <div class="mb-2">
+                        <label class="form-label-sm">Message</label>
+                        <textarea class="form-control form-control-sm" rows="3" placeholder="Enter message to sign"
+                                  @bind="_signMessage"></textarea>
+                    </div>
+                    <button class="btn btn-sm btn-primary" @onclick="SignMessage">Sign</button>
+
+                    @if (_signResult != null)
+                    {
+                        <div class="mt-3">
+                            <label class="form-label-sm">Signed Output (JSON)</label>
+                            <textarea class="form-control form-control-sm mono" rows="6" readonly>@_signResult</textarea>
+                            <button class="btn btn-sm btn-outline-secondary mt-1" @onclick="CopySignResult">Copy</button>
+                            @if (_copied)
+                            {
+                                <span class="small text-success ms-2">Copied!</span>
+                            }
+                        </div>
+                    }
+                    @if (_signError != null)
+                    {
+                        <div class="text-danger small mt-2">@_signError</div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Verify Message</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label-sm">Signed JSON</label>
+                    <textarea class="form-control form-control-sm mono" rows="6"
+                              placeholder='{"identity":"...","message":"...","signature":"..."}'
+                              @bind="_verifyInput"></textarea>
+                </div>
+                <button class="btn btn-sm btn-primary" @onclick="VerifyMessage">Verify</button>
+
+                @if (_verifyResult != null)
+                {
+                    <div class="mt-2">
+                        <span class="badge @(_verifyResult == true ? "bg-success" : "bg-danger") fs-6">
+                            @(_verifyResult == true ? "Valid Signature" : "Invalid Signature")
+                        </span>
+                    </div>
+                }
+                @if (_verifyError != null)
+                {
+                    <div class="text-danger small mt-2">@_verifyError</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly Qubic.Crypto.QubicCrypt _crypt = new();
+
+    // Sign
+    private string? _signMessage;
+    private string? _signResult;
+    private string? _signError;
+    private bool _copied;
+
+    // Verify
+    private string? _verifyInput;
+    private bool? _verifyResult;
+    private string? _verifyError;
+
+    private void SignMessage()
+    {
+        _signResult = null;
+        _signError = null;
+        _copied = false;
+        try
+        {
+            var messageBytes = System.Text.Encoding.UTF8.GetBytes(_signMessage ?? "");
+            var signature = Seed.SignRawMessage(messageBytes);
+            var identity = Seed.Identity!.Value.ToString();
+            var signatureEncoded = EncodeSignature(signature);
+
+            var json = new
+            {
+                identity,
+                message = _signMessage ?? "",
+                signature = signatureEncoded
+            };
+            _signResult = System.Text.Json.JsonSerializer.Serialize(json, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex) { _signError = ex.Message; }
+    }
+
+    private void VerifyMessage()
+    {
+        _verifyResult = null;
+        _verifyError = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_verifyInput))
+            {
+                _verifyError = "Paste signed JSON to verify.";
+                return;
+            }
+
+            var doc = System.Text.Json.JsonDocument.Parse(_verifyInput);
+            var root = doc.RootElement;
+
+            var identity = root.GetProperty("identity").GetString()
+                ?? throw new Exception("Missing 'identity' field");
+            var message = root.GetProperty("message").GetString()
+                ?? throw new Exception("Missing 'message' field");
+            var signatureStr = root.GetProperty("signature").GetString()
+                ?? throw new Exception("Missing 'signature' field");
+
+            var pubKey = Qubic.Core.Entities.QubicIdentity.FromIdentity(identity).PublicKey;
+            var messageBytes = System.Text.Encoding.UTF8.GetBytes(message);
+            var signatureBytes = DecodeSignature(signatureStr);
+
+            _verifyResult = _crypt.VerifyRaw(pubKey, messageBytes, signatureBytes);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _verifyError = "Invalid JSON format. Expected: {\"identity\":\"...\",\"message\":\"...\",\"signature\":\"...\"}";
+        }
+        catch (Exception ex) { _verifyError = ex.Message; }
+    }
+
+    private async Task CopySignResult()
+    {
+        if (_signResult == null) return;
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", _signResult);
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _copied = false;
+    }
+
+    /// <summary>
+    /// Encodes a 64-byte signature as shifted hex (128 chars) + 1-byte K12 checksum (2 chars) = 130 uppercase chars.
+    /// Compatible with the standard Qubic wallet JS implementation.
+    /// </summary>
+    private string EncodeSignature(byte[] signature)
+    {
+        if (signature.Length != 64)
+            throw new ArgumentException("Signature must be 64 bytes");
+
+        IQubicCrypt crypt = _crypt;
+        var checksum = crypt.KangarooTwelve(signature, 1);
+        return crypt.BytesToShiftedHex(signature) + crypt.BytesToShiftedHex(checksum);
+    }
+
+    /// <summary>
+    /// Decodes a 130-char shifted hex signature (128 sig + 2 checksum) back to 64 bytes.
+    /// Verifies the K12 checksum. Compatible with the standard Qubic wallet JS implementation.
+    /// </summary>
+    private byte[] DecodeSignature(string encoded)
+    {
+        if (encoded.Length != 130)
+            throw new ArgumentException($"Signature must be 130 characters (got {encoded.Length}). Expected shifted hex with checksum.");
+
+        IQubicCrypt crypt = _crypt;
+        var allBytes = crypt.ShiftedHexToBytes(encoded);
+        var signature = allBytes[..64];
+        var checksumByte = allBytes[64];
+
+        var expectedChecksum = crypt.KangarooTwelve(signature, 1);
+        if (checksumByte != expectedChecksum[0])
+            throw new ArgumentException("Signature checksum is invalid.");
+
+        return signature;
+    }
+}

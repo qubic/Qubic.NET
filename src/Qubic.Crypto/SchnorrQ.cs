@@ -223,12 +223,11 @@ public static class SchnorrQ
     }
 
     /// <summary>
-    /// Full sign operation: computes digest and signs in one call.
+    /// Full sign operation: computes K12 digest, then signs the digest.
+    /// Uses the qubic protocol convention where the 32-byte digest is used
+    /// directly in the nonce and challenge K12 inputs.
+    /// Suitable for signing fixed-size data (e.g., transaction digests).
     /// </summary>
-    /// <param name="subSeed">32-byte seed</param>
-    /// <param name="publicKey">32-byte public key</param>
-    /// <param name="message">Message to sign (any length)</param>
-    /// <returns>64-byte signature</returns>
     public static byte[] SignMessage(ReadOnlySpan<byte> subSeed, ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> message)
     {
         var digest = Digest(message);
@@ -236,15 +235,109 @@ public static class SchnorrQ
     }
 
     /// <summary>
-    /// Full verify operation: computes digest and verifies in one call.
+    /// Full verify operation: computes K12 digest, then verifies against the digest.
+    /// Uses the qubic protocol convention. Suitable for verifying transaction signatures.
     /// </summary>
-    /// <param name="publicKey">32-byte public key</param>
-    /// <param name="message">Original message</param>
-    /// <param name="signature">64-byte signature</param>
-    /// <returns>true if valid</returns>
     public static bool VerifyMessage(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> message, ReadOnlySpan<byte> signature)
     {
         var digest = Digest(message);
         return Verify(publicKey, digest, signature);
+    }
+
+    /// <summary>
+    /// Signs an arbitrary-length message using the FourQ SchnorrQ convention.
+    /// The raw message bytes are used directly in the K12 inputs for nonce and
+    /// challenge computation (not pre-hashed to a 32-byte digest).
+    /// Compatible with the FourQ library's SchnorrQ_Sign and the Qubic wallet JS tool.
+    /// </summary>
+    public static byte[] SignRaw(ReadOnlySpan<byte> subSeed, ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> message)
+    {
+        if (subSeed.Length != 32)
+            throw new ArgumentException("SubSeed must be exactly 32 bytes", nameof(subSeed));
+        if (publicKey.Length != 32)
+            throw new ArgumentException("Public key must be exactly 32 bytes", nameof(publicKey));
+
+        // Derive private scalar from seed
+        var seedHash = K12.Hash(subSeed, 64);
+        var privateScalar = ScalarField.FromBytes32LE(seedHash.AsSpan(0, 32));
+
+        // Generate deterministic nonce: k = K12(seedHash[32:64] || message) mod N
+        var nonceInput = new byte[32 + message.Length];
+        seedHash.AsSpan(32, 32).CopyTo(nonceInput);
+        message.CopyTo(nonceInput.AsSpan(32));
+
+        var nonceHash = K12.Hash(nonceInput, 64);
+        var k = ScalarField.FromBytes32LE(nonceHash.AsSpan(0, 32));
+
+        // Compute R = k * G
+        var R = FourQPoint.ScalarMul(FourQPoint.BasePoint, k);
+        var encodedR = FourQCodec.Encode(R);
+
+        // Compute challenge: h = K12(R || publicKey || message) mod N
+        var challengeInput = new byte[64 + message.Length];
+        encodedR.AsSpan().CopyTo(challengeInput);
+        publicKey.CopyTo(challengeInput.AsSpan(32));
+        message.CopyTo(challengeInput.AsSpan(64));
+
+        var challengeHash = K12.Hash(challengeInput, 64);
+        var h = ScalarField.FromBytes32LE(challengeHash.AsSpan(0, 32));
+
+        // Compute s = k - h * privateScalar mod N
+        var s = ScalarField.Sub(k, ScalarField.Mul(h, privateScalar));
+
+        // Signature is R || s (64 bytes)
+        var signature = new byte[64];
+        encodedR.AsSpan().CopyTo(signature);
+        ScalarField.ToBytes32LE(s, signature.AsSpan(32));
+
+        return signature;
+    }
+
+    /// <summary>
+    /// Verifies a SchnorrQ signature over an arbitrary-length message using the FourQ convention.
+    /// The raw message bytes are used directly in the K12 challenge computation.
+    /// Compatible with the FourQ library's SchnorrQ_Verify and the Qubic wallet JS tool.
+    /// </summary>
+    public static bool VerifyRaw(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> message, ReadOnlySpan<byte> signature)
+    {
+        if (publicKey.Length != 32)
+            return false;
+        if (signature.Length < 64)
+            return false;
+
+        // Validate encodings
+        if (!FourQCodec.IsValidPublicKeyEncoding(publicKey))
+            return false;
+        if (!FourQCodec.IsValidSignatureEncoding(signature))
+            return false;
+
+        // Decode public key
+        var P = FourQCodec.Decode(publicKey);
+        if (P == null)
+            return false;
+
+        // Decode R from signature
+        var R = FourQCodec.Decode(signature.Slice(0, 32));
+        if (R == null)
+            return false;
+
+        // Extract s from signature
+        var s = ScalarField.FromBytes32LE(signature.Slice(32, 32));
+
+        // Recompute challenge: h = K12(R || publicKey || message) mod N
+        var challengeInput = new byte[64 + message.Length];
+        signature.Slice(0, 32).CopyTo(challengeInput);
+        publicKey.CopyTo(challengeInput.AsSpan(32));
+        message.CopyTo(challengeInput.AsSpan(64));
+
+        var challengeHash = K12.Hash(challengeInput, 64);
+        var h = ScalarField.FromBytes32LE(challengeHash.AsSpan(0, 32));
+
+        // Verify: s * G + h * P == R
+        var sG = FourQPoint.ScalarMul(FourQPoint.BasePoint, s);
+        var hP = FourQPoint.ScalarMul(P.Value, h);
+        var computed = FourQPoint.Add(sG, hP);
+
+        return computed == R.Value;
     }
 }

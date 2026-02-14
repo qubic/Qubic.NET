@@ -54,8 +54,17 @@ public interface IQubicCrypt
 
     /// <summary>
     /// Signs a message using the seed. Returns message with signature appended.
+    /// Uses the qubic protocol convention (K12 digest in nonce/challenge inputs).
     /// </summary>
     byte[] Sign(string seed, byte[] message);
+
+    /// <summary>
+    /// Signs a raw message using the FourQ SchnorrQ convention.
+    /// Raw message bytes are used directly in nonce/challenge K12 inputs.
+    /// Compatible with the Qubic wallet JS tool's sign/verify feature.
+    /// Returns only the 64-byte signature.
+    /// </summary>
+    byte[] SignRaw(string seed, byte[] message);
 
     /// <summary>
     /// Verifies a message where signature is the last 64 bytes.
@@ -66,6 +75,72 @@ public interface IQubicCrypt
     /// Verifies a message with separate signature.
     /// </summary>
     bool Verify(byte[] publicKey, byte[] message, byte[] signature);
+
+    /// <summary>
+    /// Verifies a raw message with separate signature using the FourQ SchnorrQ convention.
+    /// Raw message bytes are used directly in the challenge K12 input.
+    /// Compatible with the Qubic wallet JS tool's sign/verify feature.
+    /// </summary>
+    bool VerifyRaw(byte[] publicKey, byte[] message, byte[] signature);
+
+    /// <summary>
+    /// Verifies that a 60-character identity string has a valid checksum.
+    /// The last 4 characters encode an 18-bit K12 hash of the public key derived from the first 56 characters.
+    /// </summary>
+    bool VerifyIdentityChecksum(string identity)
+    {
+        if (string.IsNullOrEmpty(identity) || identity.Length != 60)
+            return false;
+
+        try
+        {
+            var pubKey = GetPublicKeyFromIdentity(identity);
+            var regenerated = GetIdentityFromPublicKey(pubKey);
+            return string.Equals(identity, regenerated, StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Encodes bytes to shifted hex (uppercase A-P, where A=0, B=1, ..., P=15).
+    /// Each byte becomes 2 characters. Compatible with the Qubic ecosystem encoding.
+    /// </summary>
+    string BytesToShiftedHex(byte[] data)
+    {
+        if (data == null) throw new ArgumentNullException(nameof(data));
+        var chars = new char[data.Length * 2];
+        for (int i = 0; i < data.Length; i++)
+        {
+            chars[i * 2] = (char)('A' + (data[i] >> 4));
+            chars[i * 2 + 1] = (char)('A' + (data[i] & 0x0F));
+        }
+        return new string(chars);
+    }
+
+    /// <summary>
+    /// Decodes a shifted hex string (A-P per nibble) back to bytes.
+    /// Case-insensitive. If the string has odd length, 'a'/'A' (=0) is prepended.
+    /// </summary>
+    byte[] ShiftedHexToBytes(string hex)
+    {
+        if (hex == null) throw new ArgumentNullException(nameof(hex));
+        var lower = hex.ToLowerInvariant();
+        if (lower.Length % 2 != 0)
+            lower = "a" + lower;
+        var bytes = new byte[lower.Length / 2];
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            int hi = lower[i * 2] - 'a';
+            int lo = lower[i * 2 + 1] - 'a';
+            if (hi < 0 || hi > 15 || lo < 0 || lo > 15)
+                throw new ArgumentException($"Invalid shifted hex character at position {i * 2}");
+            bytes[i] = (byte)((hi << 4) | lo);
+        }
+        return bytes;
+    }
 
     /// <summary>
     /// Converts human-readable string (e.g., txid) to digest bytes.

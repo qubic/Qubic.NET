@@ -1,0 +1,62 @@
+@inject ToolkitBackendService Backend
+
+<div class="sidebar bg-light border-end p-2" style="width:220px; overflow-y:auto">
+    <nav class="nav flex-column">
+        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+
+        <div class="nav-header text-muted small fw-bold mt-3 mb-1 px-2">WALLET</div>
+        <NavLink class="nav-link" href="/wallet/identity">Identity Generator</NavLink>
+        <NavLink class="nav-link" href="/wallet/balance">Balance Lookup</NavLink>
+        @if (IsRpc)
+        {
+            <NavLink class="nav-link" href="/wallet/assets">Asset Portfolio</NavLink>
+        }
+        @if (IsBob)
+        {
+            <NavLink class="nav-link" href="/wallet/transfers">Transfer History</NavLink>
+        }
+
+        <div class="nav-header text-muted small fw-bold mt-3 mb-1 px-2">SIGNING (SEED)</div>
+        @if (CanBroadcast)
+        {
+            <NavLink class="nav-link" href="/tx/send">Send QU</NavLink>
+            <NavLink class="nav-link" href="/tx/send-many">Send to Many</NavLink>
+            <NavLink class="nav-link" href="/tx/burn">Burn Qubic</NavLink>
+            <NavLink class="nav-link" href="/tx/custom">Custom Transaction</NavLink>
+        }
+        <NavLink class="nav-link" href="/tx/offline">Offline Builder</NavLink>
+        <NavLink class="nav-link" href="/tools/sign-verify">Sign / Verify Message</NavLink>
+        <NavLink class="nav-link" href="/tx/history">Transaction History</NavLink>
+
+        <div class="nav-header text-muted small fw-bold mt-3 mb-1 px-2">TRANSACTIONS</div>
+        <NavLink class="nav-link" href="/tx/import">Import & Broadcast</NavLink>
+        <NavLink class="nav-link" href="/tx/lookup">Transaction Lookup</NavLink>
+
+        <div class="nav-header text-muted small fw-bold mt-3 mb-1 px-2">SMART CONTRACTS</div>
+        <NavLink class="nav-link" href="/contracts">Contract Browser</NavLink>
+
+        <div class="nav-header text-muted small fw-bold mt-3 mb-1 px-2">EXPLORER</div>
+        @if (IsRpc)
+        {
+            <NavLink class="nav-link" href="/explorer/tick">Tick Data</NavLink>
+            <NavLink class="nav-link" href="/explorer/computors">Computor List</NavLink>
+        }
+        @if (IsBob)
+        {
+            <NavLink class="nav-link" href="/explorer/logs">Log Viewer</NavLink>
+        }
+
+        <div class="nav-header text-muted small fw-bold mt-3 mb-1 px-2">TOOLS</div>
+        <NavLink class="nav-link" href="/tools/crypto">Crypto Toolkit</NavLink>
+        <NavLink class="nav-link" href="/tools/bob-playground">Bob RPC Playground</NavLink>
+
+        <hr class="my-2" />
+        <NavLink class="nav-link" href="/settings">Settings</NavLink>
+    </nav>
+</div>
+
+@code {
+    private bool IsRpc => Backend.ActiveBackend == QueryBackend.Rpc;
+    private bool IsBob => Backend.ActiveBackend == QueryBackend.Bob;
+    private bool CanBroadcast => Backend.ActiveBackend is QueryBackend.Rpc or QueryBackend.DirectNetwork;
+}

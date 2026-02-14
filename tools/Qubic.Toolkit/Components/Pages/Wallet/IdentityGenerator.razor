@@ -1,0 +1,248 @@
+@page "/wallet/identity"
+
+<h4>Identity Generator</h4>
+<p class="text-muted">Derive identity and keys from a seed, or convert between identity and public key.</p>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">From Seed</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label-sm">Seed (55 characters, lowercase a-z)</label>
+                    <input type="password" class="form-control form-control-sm" placeholder="Enter seed..."
+                           @bind="_seed" @bind:event="oninput" @bind:after="OnSeedChanged" />
+                </div>
+                @if (_seedIdentity != null)
+                {
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <td class="text-muted">Identity</td>
+                            <td class="mono">@_seedIdentity</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Public Key</td>
+                            <td class="mono">@_seedPubKeyHex</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Private Key</td>
+                            <td>
+                                @if (_showPrivKey)
+                                {
+                                    <span class="mono">@_seedPrivKeyHex</span>
+                                    <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => _showPrivKey = false">Hide</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-warning" @onclick="() => _showPrivKey = true">Reveal</button>
+                                }
+                            </td>
+                        </tr>
+                    </table>
+                }
+                @if (_seedError != null)
+                {
+                    <span class="text-danger small">@_seedError</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Generate Random Seed</div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">Cryptographically secure random seed (55 lowercase letters).</p>
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-auto">
+                        <label class="form-label-sm">Count</label>
+                        <input type="number" class="form-control form-control-sm" style="width:80px"
+                               min="1" max="100" @bind="_genCount" />
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-sm btn-primary" @onclick="GenerateSeeds">Generate</button>
+                    </div>
+                </div>
+                @if (_generated != null && _generated.Count > 0)
+                {
+                    <div style="max-height:350px; overflow-y:auto">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Seed</th>
+                                    <th>Identity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < _generated.Count; i++)
+                                {
+                                    var entry = _generated[i];
+                                    <tr>
+                                        <td>@(i + 1)</td>
+                                        <td class="mono small">
+                                            @if (entry.Visible)
+                                            {
+                                                <span>@entry.Seed</span>
+                                                <button class="btn btn-sm btn-link p-0 ms-1" @onclick="() => entry.Visible = false">hide</button>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">********</span>
+                                                <button class="btn btn-sm btn-link p-0 ms-1" @onclick="() => entry.Visible = true">show</button>
+                                            }
+                                        </td>
+                                        <td class="mono small">@entry.Identity</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="alert alert-warning small mt-2 mb-0 py-1 px-2">
+                        Save these seeds securely. They cannot be recovered.
+                    </div>
+                }
+                @if (_genError != null)
+                {
+                    <div class="text-danger small mt-1">@_genError</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Identity / Public Key Converter</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label-sm">Identity (60 chars) or Public Key (64 hex chars)</label>
+                    <input class="form-control form-control-sm" placeholder="BAAAAA... or hex..."
+                           @bind="_convertInput" @bind:event="oninput" @bind:after="OnConvertChanged" />
+                </div>
+                @if (_convertIdentity != null)
+                {
+                    <table class="table table-sm mb-0">
+                        <tr><td class="text-muted">Identity</td><td class="mono">@_convertIdentity</td></tr>
+                        <tr><td class="text-muted">Public Key</td><td class="mono">@_convertPubKeyHex</td></tr>
+                    </table>
+                }
+                @if (_convertError != null)
+                {
+                    <span class="text-danger small">@_convertError</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _seed;
+    private string? _seedIdentity;
+    private string? _seedPubKeyHex;
+    private string? _seedPrivKeyHex;
+    private string? _seedError;
+    private bool _showPrivKey;
+
+    // Generate
+    private int _genCount = 1;
+    private List<GeneratedSeed>? _generated;
+    private string? _genError;
+
+    private string? _convertInput;
+    private string? _convertIdentity;
+    private string? _convertPubKeyHex;
+    private string? _convertError;
+
+    private readonly Qubic.Crypto.QubicCrypt _crypt = new();
+
+    private class GeneratedSeed
+    {
+        public string Seed { get; set; } = "";
+        public string Identity { get; set; } = "";
+        public bool Visible { get; set; }
+    }
+
+    private void GenerateSeeds()
+    {
+        _generated = null;
+        _genError = null;
+        try
+        {
+            var count = Math.Clamp(_genCount, 1, 100);
+            var results = new List<GeneratedSeed>(count);
+            for (int n = 0; n < count; n++)
+            {
+                var randomBytes = new byte[55];
+                System.Security.Cryptography.RandomNumberGenerator.Fill(randomBytes);
+                var chars = new char[55];
+                for (int i = 0; i < 55; i++)
+                    chars[i] = (char)('a' + (randomBytes[i] % 26));
+                var seed = new string(chars);
+                var pubKey = _crypt.GetPublicKey(seed);
+                var identity = Qubic.Core.Entities.QubicIdentity.FromPublicKey(pubKey);
+                results.Add(new GeneratedSeed { Seed = seed, Identity = identity.ToString() });
+            }
+            _generated = results;
+        }
+        catch (Exception ex) { _genError = ex.Message; }
+    }
+
+    private void OnSeedChanged()
+    {
+        _seedIdentity = null;
+        _seedPubKeyHex = null;
+        _seedPrivKeyHex = null;
+        _seedError = null;
+        _showPrivKey = false;
+
+        if (string.IsNullOrEmpty(_seed) || _seed.Length != 55) return;
+
+        try
+        {
+            var id = Qubic.Core.Entities.QubicIdentity.FromSeed(_seed);
+            _seedIdentity = id.ToString();
+            _seedPubKeyHex = Convert.ToHexString(_crypt.GetPublicKey(_seed)).ToLowerInvariant();
+            _seedPrivKeyHex = Convert.ToHexString(_crypt.GetPrivateKey(_seed)).ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            _seedError = ex.Message;
+        }
+    }
+
+    private void OnConvertChanged()
+    {
+        _convertIdentity = null;
+        _convertPubKeyHex = null;
+        _convertError = null;
+
+        if (string.IsNullOrWhiteSpace(_convertInput)) return;
+
+        var input = _convertInput.Trim();
+
+        try
+        {
+            if (input.Length == 60 && input.All(c => c >= 'A' && c <= 'Z'))
+            {
+                var id = Qubic.Core.Entities.QubicIdentity.FromIdentity(input);
+                _convertIdentity = id.ToString();
+                _convertPubKeyHex = Convert.ToHexString(id.PublicKey).ToLowerInvariant();
+            }
+            else if (input.Length == 64 && input.All(c => "0123456789abcdefABCDEF".Contains(c)))
+            {
+                var pubKey = Convert.FromHexString(input);
+                var id = Qubic.Core.Entities.QubicIdentity.FromPublicKey(pubKey);
+                _convertIdentity = id.ToString();
+                _convertPubKeyHex = Convert.ToHexString(pubKey).ToLowerInvariant();
+            }
+            else
+            {
+                _convertError = "Enter a 60-char identity (A-Z) or 64-char hex public key.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _convertError = ex.Message;
+        }
+    }
+}

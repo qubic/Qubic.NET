@@ -149,6 +149,7 @@ public class QubicCrypt : IQubicCrypt
 
     /// <summary>
     /// Signs a message using the seed. Returns signature appended to message.
+    /// Uses the qubic protocol convention (K12 digest used in nonce/challenge inputs).
     /// </summary>
     public byte[] Sign(string seed, byte[] message)
     {
@@ -167,7 +168,24 @@ public class QubicCrypt : IQubicCrypt
     }
 
     /// <summary>
+    /// Signs a raw message using the FourQ SchnorrQ convention.
+    /// The raw message bytes are used directly in nonce/challenge K12 inputs.
+    /// Compatible with the Qubic wallet JS tool's sign/verify feature.
+    /// Returns only the 64-byte signature (not appended to message).
+    /// </summary>
+    public byte[] SignRaw(string seed, byte[] message)
+    {
+        if (message == null)
+            throw new ArgumentNullException(nameof(message));
+
+        var subSeed = SchnorrQ.GetSubSeedFromSeed(seed);
+        var publicKey = SchnorrQ.GeneratePublicKey(subSeed);
+        return SchnorrQ.SignRaw(subSeed, publicKey, message);
+    }
+
+    /// <summary>
     /// Verifies a message where signature is the last 64 bytes.
+    /// Uses the qubic protocol convention (K12 digest used in challenge).
     /// </summary>
     public bool Verify(byte[] publicKey, byte[] message)
     {
@@ -185,6 +203,7 @@ public class QubicCrypt : IQubicCrypt
 
     /// <summary>
     /// Verifies a message with separate signature.
+    /// Uses the qubic protocol convention (K12 digest used in challenge).
     /// </summary>
     public bool Verify(byte[] publicKey, byte[] message, byte[] signature)
     {
@@ -197,5 +216,22 @@ public class QubicCrypt : IQubicCrypt
 
         var digest = K12.Hash(message, 32);
         return SchnorrQ.Verify(publicKey, digest, signature);
+    }
+
+    /// <summary>
+    /// Verifies a raw message with separate signature using the FourQ SchnorrQ convention.
+    /// The raw message bytes are used directly in the challenge K12 input.
+    /// Compatible with the Qubic wallet JS tool's sign/verify feature.
+    /// </summary>
+    public bool VerifyRaw(byte[] publicKey, byte[] message, byte[] signature)
+    {
+        if (publicKey == null || publicKey.Length != 32)
+            return false;
+        if (message == null)
+            return false;
+        if (signature == null || signature.Length < 64)
+            return false;
+
+        return SchnorrQ.VerifyRaw(publicKey, message, signature);
     }
 }

@@ -1,0 +1,154 @@
+@page "/"
+@inject ToolkitBackendService Backend
+
+<h4>Dashboard</h4>
+<p class="text-muted">Qubic network overview.</p>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Current Tick</div>
+            <div class="card-body">
+                @if (_tickInfo != null)
+                {
+                    <table class="table table-sm mb-0">
+                        <tr><td class="text-muted">Tick</td><td class="mono"><strong>@_tickInfo.Tick</strong></td></tr>
+                        <tr><td class="text-muted">Epoch</td><td>@_tickInfo.Epoch</td></tr>
+                        <tr><td class="text-muted">Duration</td><td>@(_tickInfo.TickDuration)ms</td></tr>
+                        <tr><td class="text-muted">Initial Tick</td><td class="mono">@_tickInfo.InitialTick</td></tr>
+                    </table>
+                }
+                else if (_loading)
+                {
+                    <span class="text-muted">Loading...</span>
+                }
+                else if (_error != null)
+                {
+                    <span class="text-danger">@_error</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Bob Status</div>
+            <div class="card-body">
+                @if (_chainId != null)
+                {
+                    <table class="table table-sm mb-0">
+                        <tr><td class="text-muted">Network</td><td>@_chainId.Network</td></tr>
+                        <tr><td class="text-muted">Chain ID</td><td class="mono">@_chainId.ChainId</td></tr>
+                        <tr><td class="text-muted">Version</td><td>@_clientVersion</td></tr>
+                    </table>
+                }
+                else
+                {
+                    <span class="text-muted">Switch to Bob backend to see status.</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Connection</div>
+            <div class="card-body">
+                <button class="btn btn-sm btn-primary" @onclick="TestConnection" disabled="@_testing">
+                    @(_testing ? "Testing..." : "Test Connection")
+                </button>
+                @if (_testResult != null)
+                {
+                    <span class="ms-2 badge @(_testSuccess ? "bg-success" : "bg-danger")">@_testResult</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">Quick Stats</div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <td class="text-muted">Contracts Discovered</td>
+                        <td><strong>@_contractCount</strong></td>
+                        <td class="text-muted">Total Functions</td>
+                        <td><strong>@_functionCount</strong></td>
+                        <td class="text-muted">Backend</td>
+                        <td><strong>@Backend.ActiveBackend</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Qubic.Core.Entities.CurrentTickInfo? _tickInfo;
+    private Qubic.Bob.Models.ChainIdResponse? _chainId;
+    private string? _clientVersion;
+    private bool _loading;
+    private string? _error;
+    private bool _testing;
+    private bool _testSuccess;
+    private string? _testResult;
+    private int _contractCount;
+    private int _functionCount;
+
+    [Inject] ContractDiscovery Discovery { get; set; } = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _contractCount = Discovery.Contracts.Count;
+        _functionCount = Discovery.Contracts.Sum(c => c.Functions.Count);
+        await LoadDashboard();
+    }
+
+    private async Task LoadDashboard()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _tickInfo = await Backend.GetTickInfoAsync();
+            try
+            {
+                _chainId = await Backend.GetChainIdAsync();
+                _clientVersion = await Backend.GetClientVersionAsync();
+            }
+            catch { /* Bob-only, ignore if not available */ }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message.Length > 100 ? ex.Message[..100] + "..." : ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        _testing = true;
+        _testResult = null;
+        try
+        {
+            await Backend.QuerySmartContractAsync(4, 1, []);
+            _testSuccess = true;
+            _testResult = "Connected";
+        }
+        catch (Exception ex)
+        {
+            _testSuccess = false;
+            _testResult = ex.Message.Length > 60 ? ex.Message[..60] + "..." : ex.Message;
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+}

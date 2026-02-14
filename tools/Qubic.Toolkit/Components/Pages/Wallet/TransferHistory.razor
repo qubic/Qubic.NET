@@ -1,0 +1,126 @@
+@page "/wallet/transfers"
+@inject ToolkitBackendService Backend
+
+<h4>Transfer History</h4>
+<p class="text-muted">View QU transfer history for any identity. (Bob only)</p>
+
+<div class="row mb-3">
+    <div class="col-md-8">
+        <div class="mb-1">
+            <input class="form-control @IdentityValidation.CssClass(_identity)"
+                   placeholder="Enter 60-character identity" @bind="_identity" @bind:event="oninput" />
+            @{ var idErr = IdentityValidation.Validate(_identity); }
+            @if (idErr != null)
+            {
+                <div class="small text-danger mt-1">@idErr</div>
+            }
+        </div>
+        <div class="row g-2 mb-2">
+            <div class="col">
+                <label class="form-label-sm">Start Tick (optional)</label>
+                <input type="number" class="form-control form-control-sm" @bind="_startTick" />
+            </div>
+            <div class="col">
+                <label class="form-label-sm">End Tick (optional)</label>
+                <input type="number" class="form-control form-control-sm" @bind="_endTick" />
+            </div>
+            <div class="col-auto d-flex align-items-end">
+                <button class="btn btn-primary" @onclick="Lookup" disabled="@_loading">
+                    @(_loading ? "Loading..." : "Lookup")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_transfers != null)
+{
+    <div class="card">
+        <div class="card-header">Transfers (@_transfers.Count)</div>
+        <div class="card-body">
+            @if (_transfers.Count == 0)
+            {
+                <span class="text-muted">No transfers found.</span>
+            }
+            else
+            {
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tick</th>
+                            <th>Direction</th>
+                            <th>Counterparty</th>
+                            <th>Amount</th>
+                            <th>Hash</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _transfers)
+                        {
+                            var isSender = string.Equals(t.Source.Identity, _identity?.Trim(), StringComparison.OrdinalIgnoreCase);
+                            <tr>
+                                <td class="mono">@t.Tick</td>
+                                <td>
+                                    <span class="badge @(isSender ? "bg-danger" : "bg-success")">
+                                        @(isSender ? "OUT" : "IN")
+                                    </span>
+                                </td>
+                                <td class="mono small">@((isSender ? t.Destination.Identity : t.Source.Identity)[..20])...</td>
+                                <td class="mono">@t.Amount.ToString("N0")</td>
+                                <td class="mono small">@t.TransactionHash[..16]...</td>
+                                <td>
+                                    @if (t.Success == true)
+                                    {
+                                        <span class="badge bg-success">OK</span>
+                                    }
+                                    else if (t.Success == false)
+                                    {
+                                        <span class="badge bg-danger">Failed</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string? _identity;
+    private uint? _startTick;
+    private uint? _endTick;
+    private IReadOnlyList<Qubic.Core.Entities.QubicTransfer>? _transfers;
+    private bool _loading;
+    private string? _error;
+
+    private async Task Lookup()
+    {
+        if (IdentityValidation.Validate(_identity) != null) return;
+
+        _loading = true;
+        _error = null;
+        _transfers = null;
+
+        try
+        {
+            var id = Qubic.Core.Entities.QubicIdentity.FromIdentity(_identity!.Trim());
+            _transfers = await Backend.GetTransfersAsync(id, _startTick, _endTick);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

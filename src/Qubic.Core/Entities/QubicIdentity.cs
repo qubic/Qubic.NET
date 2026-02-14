@@ -31,6 +31,7 @@ public readonly struct QubicIdentity : IEquatable<QubicIdentity>
 
     /// <summary>
     /// Creates a QubicIdentity from a 60-character identity string.
+    /// Validates length, character set, and checksum.
     /// </summary>
     public static QubicIdentity FromIdentity(string identity)
     {
@@ -38,7 +39,12 @@ public readonly struct QubicIdentity : IEquatable<QubicIdentity>
         if (identity.Length != IdentityLength)
             throw new ArgumentException($"Identity must be {IdentityLength} characters.", nameof(identity));
 
-        return new QubicIdentity(identity.ToUpperInvariant());
+        var upper = identity.ToUpperInvariant();
+
+        if (!VerifyChecksum(upper))
+            throw new ArgumentException("Identity has an invalid checksum.", nameof(identity));
+
+        return new QubicIdentity(upper);
     }
 
     /// <summary>
@@ -71,7 +77,7 @@ public readonly struct QubicIdentity : IEquatable<QubicIdentity>
     }
 
     /// <summary>
-    /// Tries to parse an identity string.
+    /// Tries to parse an identity string. Validates length, character set, and checksum.
     /// </summary>
     public static bool TryParse(string? identity, out QubicIdentity result)
     {
@@ -81,8 +87,33 @@ public readonly struct QubicIdentity : IEquatable<QubicIdentity>
             return false;
         }
 
-        result = new QubicIdentity(identity.ToUpperInvariant());
+        var upper = identity.ToUpperInvariant();
+        if (!VerifyChecksum(upper))
+        {
+            result = default;
+            return false;
+        }
+
+        result = new QubicIdentity(upper);
         return true;
+    }
+
+    /// <summary>
+    /// Verifies that the last 4 characters (checksum) of a 60-character identity are valid.
+    /// </summary>
+    private static bool VerifyChecksum(string identity)
+    {
+        try
+        {
+            IQubicCrypt crypt = new QubicCrypt();
+            var pubKey = crypt.GetPublicKeyFromIdentity(identity);
+            var regenerated = crypt.GetIdentityFromPublicKey(pubKey);
+            return string.Equals(identity, regenerated, StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private byte[] GetPublicKeyFromIdentity()

@@ -1,0 +1,83 @@
+@page "/explorer/computors"
+@inject ToolkitBackendService Backend
+
+<h4>Computor List</h4>
+<p class="text-muted">View the 676 computors for an epoch. (RPC only)</p>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <div class="input-group">
+            <input type="number" class="form-control" placeholder="Epoch number" @bind="_epoch" />
+            <button class="btn btn-primary" @onclick="Lookup" disabled="@_loading">
+                @(_loading ? "Loading..." : "Lookup")
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_lists != null)
+{
+    @foreach (var list in _lists)
+    {
+        <div class="card mb-3">
+            <div class="card-header">
+                Epoch @list.Epoch — Tick @list.TickNumber — @list.Identities.Count computors
+            </div>
+            <div class="card-body" style="max-height:500px; overflow-y:auto">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr><th>#</th><th>Identity</th></tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < list.Identities.Count; i++)
+                        {
+                            <tr>
+                                <td>@i</td>
+                                <td class="mono small">@list.Identities[i]</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_lists.Count == 0)
+    {
+        <div class="alert alert-warning">No computor lists found for epoch @_epoch.</div>
+    }
+}
+
+@code {
+    private uint _epoch;
+    private IReadOnlyList<Qubic.Rpc.Models.ComputorListInfo>? _lists;
+    private bool _loading;
+    private string? _error;
+
+    private async Task Lookup()
+    {
+        if (_epoch == 0) return;
+
+        _loading = true;
+        _error = null;
+        _lists = null;
+
+        try
+        {
+            _lists = await Backend.GetComputorListsForEpochAsync(_epoch);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

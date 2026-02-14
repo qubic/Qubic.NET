@@ -1,0 +1,79 @@
+/* Sidebar */
+.sidebar .nav-link {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.87rem;
+    color: #333;
+    border-radius: 4px;
+}
+.sidebar .nav-link:hover {
+    background-color: #e9ecef;
+}
+.sidebar .nav-link.active {
+    background-color: #0d6efd;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Monospace values */
+.mono {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.85em;
+    word-break: break-all;
+}
+
+/* Compact cards */
+.card-header {
+    padding: 0.4rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* Output table */
+.output-table td:first-child {
+    font-weight: 500;
+    white-space: nowrap;
+    width: 1%;
+}
+.output-table td:nth-child(2) {
+    color: #6c757d;
+    white-space: nowrap;
+    width: 1%;
+}
+
+/* Function card styling */
+.fn-card {
+    border-left: 3px solid #0d6efd;
+}
+.fn-card.empty-input {
+    border-left-color: #198754;
+}
+
+/* Seed warning */
+.seed-warning {
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Dark navbar input placeholders */
+.navbar .form-control::placeholder,
+.navbar .form-select::placeholder {
+    color: #888;
+    opacity: 1;
+}
+
+/* Auto-tick flash */
+.form-control.border-success {
+    border-color: #198754 !important;
+    box-shadow: 0 0 0 0.15rem rgba(25, 135, 84, 0.35);
+    transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+/* Compact form layout */
+.form-label-sm {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 0.15rem;
+}

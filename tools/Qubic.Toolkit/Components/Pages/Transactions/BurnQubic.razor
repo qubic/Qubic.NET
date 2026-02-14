@@ -1,0 +1,120 @@
+@page "/tx/burn"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>Burn Qubic</h4>
+<p class="text-muted">Permanently burn QU by sending to QUTIL BurnQubic procedure.</p>
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Burn</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label-sm">Amount to burn (QU)</label>
+                        <input type="number" class="form-control form-control-sm" min="1" @bind="_amount" />
+                    </div>
+
+                    @if (!_confirmed)
+                    {
+                        <button class="btn btn-warning" @onclick="() => _confirmed = true" disabled="@(_amount <= 0)">
+                            Preview Burn
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="alert alert-danger">
+                            <strong>WARNING:</strong> This will permanently destroy <strong>@_amount.ToString("N0")</strong> QU. This cannot be undone.
+                        </div>
+                        <button class="btn btn-danger me-2" @onclick="Burn" disabled="@_sending">
+                            @(_sending ? "Burning..." : "Confirm Burn")
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="() => _confirmed = false">Cancel</button>
+                    }
+
+                    @if (_result != null)
+                    {
+                        <div class="alert alert-success mt-3">
+                            Burn transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                            <div class="mt-1">
+                                <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                                <a href="/tx/history">Transaction History</a>
+                            </div>
+                        </div>
+                    }
+                    @if (_error != null)
+                    {
+                        <div class="alert alert-danger mt-2">@_error</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private long _amount = 0;
+    private bool _confirmed;
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+
+    private async Task Burn()
+    {
+        _sending = true;
+        _error = null;
+        _result = null;
+
+        try
+        {
+            if (_amount <= 0)
+            {
+                _error = "Amount must be positive.";
+                return;
+            }
+
+            var tick = TickMonitor.IsConnected
+                ? TickMonitor.Tick + (uint)Settings.TickOffset
+                : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+            // QUTIL BurnQubic = procedure 2, input is sint64 amount (8 bytes LE)
+            var inputData = BitConverter.GetBytes(_amount);
+            var payload = new Qubic.Toolkit.Models.GenericContractPayload(2, inputData);
+
+            var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(Qubic.Core.QubicContracts.Qutil));
+            var tx = Seed.CreateAndSignTransaction(dest, _amount, tick, payload);
+            var result = await Backend.BroadcastTransactionAsync(tx);
+            _result = result.TransactionId;
+            _confirmed = false;
+
+            TxTracker.Track(new TrackedTransaction
+            {
+                Hash = result.TransactionId,
+                Source = Seed.Identity?.ToString() ?? "",
+                Destination = dest.ToString(),
+                Amount = _amount,
+                TargetTick = tick,
+                InputType = 2, // QUTIL BurnQubic
+                PayloadHex = Convert.ToHexString(inputData),
+                Description = $"Burn {_amount:N0} QU"
+            });
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+}

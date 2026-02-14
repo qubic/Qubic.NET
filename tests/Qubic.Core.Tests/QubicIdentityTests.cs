@@ -50,6 +50,22 @@ public class QubicIdentityTests
     }
 
     [Fact]
+    public void FromIdentity_InvalidChecksum_ThrowsArgumentException()
+    {
+        // Valid format but wrong checksum (AAAA instead of RMID)
+        Assert.Throws<ArgumentException>(() =>
+            QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
+    }
+
+    [Fact]
+    public void TryParse_InvalidChecksum_ReturnsFalse()
+    {
+        var result = QubicIdentity.TryParse("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", out _);
+
+        Assert.False(result);
+    }
+
+    [Fact]
     public void Equality_SameIdentity_AreEqual()
     {
         var identity1 = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");

@@ -101,7 +101,7 @@ public class QubicPacketWriterTests
     public void WriteBroadcastTransaction_WithSignedTransaction_CreatesValidPacket()
     {
         var source = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");
-        var dest = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACFCC");
+        var dest = QubicIdentity.FromIdentity("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACNKL");
 
         var transaction = CreateSignedTransaction(source, dest, 1000000, 12345678);
 
@@ -117,7 +117,7 @@ public class QubicPacketWriterTests
     public void WriteBroadcastTransaction_WithPayload_CreatesValidPacket()
     {
         var source = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");
-        var dest = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACFCC");
+        var dest = QubicIdentity.FromIdentity("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACNKL");
         var payload = new byte[100];
         new Random(42).NextBytes(payload);
 
@@ -134,7 +134,7 @@ public class QubicPacketWriterTests
     public void WriteBroadcastTransaction_UnsignedTransaction_ThrowsException()
     {
         var source = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");
-        var dest = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACFCC");
+        var dest = QubicIdentity.FromIdentity("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACNKL");
 
         var transaction = new QubicTransaction
         {

@@ -1,0 +1,326 @@
+@page "/tx/send"
+@implements IDisposable
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>Send QU</h4>
+<p class="text-muted">Send QU to another identity.</p>
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing and sending transactions.</div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Transfer</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label-sm">From</label>
+                        <input class="form-control form-control-sm mono" value="@Seed.Identity" readonly />
+                        @if (_balance != null)
+                        {
+                            <div class="small mt-1">
+                                Balance: <strong>@FormatQu(_balance.Value)</strong> QU
+                            </div>
+                        }
+                        else if (_balanceLoading)
+                        {
+                            <div class="small text-muted mt-1">Loading balance...</div>
+                        }
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Destination (60-char identity)</label>
+                        <input class="form-control form-control-sm @IdentityValidation.CssClass(_destination)"
+                               placeholder="BAAAAA..." @bind="_destination" @bind:event="oninput" />
+                        @{ var destErr = IdentityValidation.Validate(_destination); }
+                        @if (destErr != null)
+                        {
+                            <div class="small text-danger mt-1">@destErr</div>
+                        }
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Amount (QU)</label>
+                        <input type="number" class="form-control form-control-sm" min="1" @bind="_amount" />
+                        @if (_balance != null)
+                        {
+                            <div class="d-flex gap-1 mt-1">
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetPercent(10)">10%</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetPercent(25)">25%</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetPercent(50)">50%</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetPercent(100)">100%</button>
+                                @if (_amount > 0)
+                                {
+                                    <span class="small text-muted align-self-center ms-2">@FormatQu(_amount) QU</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-sm">Target Tick (0 = auto: current + @Settings.TickOffset)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control @(_autoTickFlash ? "border-success" : "")"
+                                   @bind="_targetTick" />
+                            <button class="btn btn-outline-secondary" @onclick="SetAutoTick">Auto</button>
+                        </div>
+                        @if (_autoTickError != null)
+                        {
+                            <div class="small text-danger mt-1">@_autoTickError</div>
+                        }
+                        else if (TickMonitor.IsConnected)
+                        {
+                            <div class="small text-muted mt-1">Current tick: @TickMonitor.Tick.ToString("N0")</div>
+                        }
+                    </div>
+
+                    @if (!_confirmed)
+                    {
+                        <button class="btn btn-primary" @onclick="Preview" disabled="@_loading">
+                            @(_loading ? "Loading..." : "Preview Transaction")
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">
+                            <strong>Confirm:</strong> Send <strong>@FormatQu(_amount)</strong> QU
+                            to <span class="mono">@_destination?[..20]...</span>
+                            @if (_targetTick == 0)
+                            {
+                                <span>at tick <strong>~@_resolvedTick.ToString("N0")</strong> <span class="small text-muted">(auto, refreshed at send)</span></span>
+                            }
+                            else
+                            {
+                                <span>at tick <strong>@_resolvedTick.ToString("N0")</strong></span>
+                            }
+                        </div>
+                        <button class="btn btn-success me-2" @onclick="Send" disabled="@_sending">
+                            @(_sending ? "Sending..." : "Sign & Broadcast")
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="() => _confirmed = false">Cancel</button>
+                    }
+
+                    @if (_result != null)
+                    {
+                        <div class="alert alert-success mt-3">
+                            Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                            <div class="mt-1">
+                                <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                                <a href="/tx/history">Transaction History</a>
+                            </div>
+                        </div>
+                    }
+                    @if (_error != null)
+                    {
+                        <div class="alert alert-danger mt-2">@_error</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string? _destination;
+    private long _amount = 1;
+    private uint _targetTick;
+    private uint _resolvedTick;
+    private bool _confirmed;
+    private bool _loading;
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+
+    private long? _balance;
+    private bool _balanceLoading;
+    private bool _autoTickFlash;
+    private string? _autoTickError;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        TickMonitor.OnTickChanged += OnTickChanged;
+
+        if (Seed.HasSeed)
+            await LoadBalance();
+    }
+
+    private void OnTickChanged()
+    {
+        if (_disposed) return;
+        InvokeAsync(() =>
+        {
+            if (!_disposed && _targetTick == 0 && !_confirmed)
+                StateHasChanged();
+        });
+    }
+
+    private async Task LoadBalance()
+    {
+        if (!Seed.HasSeed || Seed.Identity == null) return;
+        _balanceLoading = true;
+        try
+        {
+            var bal = await Backend.GetBalanceAsync(Seed.Identity.Value);
+            _balance = bal.Amount;
+        }
+        catch { _balance = null; }
+        finally { _balanceLoading = false; }
+    }
+
+    private void SetPercent(int pct)
+    {
+        if (_balance == null || _balance.Value <= 0) return;
+        _amount = _balance.Value * pct / 100;
+        if (_amount <= 0) _amount = 1;
+    }
+
+    private async Task SetAutoTick()
+    {
+        _autoTickError = null;
+        try
+        {
+            uint current;
+            if (TickMonitor.IsConnected)
+                current = TickMonitor.Tick;
+            else
+                current = (await Backend.GetTickInfoAsync()).Tick;
+
+            _targetTick = current + (uint)Settings.TickOffset;
+            _autoTickFlash = true;
+            StateHasChanged();
+            await Task.Delay(600);
+            _autoTickFlash = false;
+        }
+        catch (Exception ex)
+        {
+            _autoTickError = "Could not fetch tick: " + ex.Message;
+        }
+    }
+
+    private async Task Preview()
+    {
+        _error = null;
+        _result = null;
+
+        if (string.IsNullOrWhiteSpace(_destination) || _destination.Trim().Length != 60)
+        {
+            _error = "Destination must be a 60-character identity.";
+            return;
+        }
+        if (_amount <= 0)
+        {
+            _error = "Amount must be positive.";
+            return;
+        }
+
+        // Check balance
+        if (_balance != null && _amount > _balance.Value)
+        {
+            _error = $"Insufficient balance. You have {FormatQu(_balance.Value)} QU but trying to send {FormatQu(_amount)} QU.";
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            // Refresh balance before confirming
+            await LoadBalance();
+            if (_balance != null && _amount > _balance.Value)
+            {
+                _error = $"Insufficient balance. You have {FormatQu(_balance.Value)} QU but trying to send {FormatQu(_amount)} QU.";
+                return;
+            }
+
+            if (_targetTick == 0)
+            {
+                _resolvedTick = TickMonitor.IsConnected
+                    ? TickMonitor.Tick + (uint)Settings.TickOffset
+                    : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+            }
+            else
+            {
+                _resolvedTick = _targetTick;
+            }
+            _confirmed = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Send()
+    {
+        _sending = true;
+        _error = null;
+        try
+        {
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(_destination) || IdentityValidation.Validate(_destination) != null)
+            {
+                _error = "Invalid destination identity.";
+                return;
+            }
+            if (_amount <= 0)
+            {
+                _error = "Amount must be positive.";
+                return;
+            }
+
+            // Re-resolve tick at send time to avoid stale ticks from preview
+            if (_targetTick == 0)
+            {
+                _resolvedTick = TickMonitor.IsConnected
+                    ? TickMonitor.Tick + (uint)Settings.TickOffset
+                    : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+            }
+
+            var dest = Qubic.Core.Entities.QubicIdentity.FromIdentity(_destination.Trim());
+            var tx = Seed.CreateAndSignTransfer(dest, _amount, _resolvedTick);
+            var result = await Backend.BroadcastTransactionAsync(tx);
+            _result = result.TransactionId;
+            _confirmed = false;
+
+            TxTracker.Track(new TrackedTransaction
+            {
+                Hash = result.TransactionId,
+                Source = Seed.Identity?.ToString() ?? "",
+                Destination = dest.ToString(),
+                Amount = _amount,
+                TargetTick = _resolvedTick,
+                Description = $"Send {FormatQu(_amount)} QU to {_destination?[..12]}..."
+            });
+
+            // Refresh balance after send
+            _ = LoadBalance();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private static string FormatQu(long amount)
+    {
+        return amount.ToString("N0");
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        TickMonitor.OnTickChanged -= OnTickChanged;
+    }
+}

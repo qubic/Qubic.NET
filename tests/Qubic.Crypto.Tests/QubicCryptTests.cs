@@ -238,4 +238,101 @@ public class QubicCryptTests
         Assert.True(isValid);
     }
 
+    [Fact]
+    public void ShiftedHex_RoundTrip_PreservesBytes()
+    {
+        var data = new byte[] { 0x00, 0xFF, 0xAB, 0x42, 0x10 };
+        var encoded = _crypt.BytesToShiftedHex(data);
+
+        Assert.Equal(10, encoded.Length);
+        Assert.Equal("AAPPKLECBA", encoded);
+
+        var decoded = _crypt.ShiftedHexToBytes(encoded);
+        Assert.Equal(data, decoded);
+    }
+
+    [Fact]
+    public void ShiftedHex_CaseInsensitive()
+    {
+        var data = new byte[] { 0xAB, 0xCD };
+        var encoded = _crypt.BytesToShiftedHex(data);
+
+        var decoded1 = _crypt.ShiftedHexToBytes(encoded);
+        var decoded2 = _crypt.ShiftedHexToBytes(encoded.ToLower());
+
+        Assert.Equal(data, decoded1);
+        Assert.Equal(data, decoded2);
+    }
+
+    [Fact]
+    public void SignVerify_WithShiftedHexEncoding_FullRoundTrip()
+    {
+        var seed = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc";
+        var message = "test message";
+        var messageBytes = System.Text.Encoding.UTF8.GetBytes(message);
+
+        // Sign
+        var publicKey = _crypt.GetPublicKey(seed);
+        var signedMsg = _crypt.Sign(seed, messageBytes);
+        var signature = signedMsg.AsSpan(messageBytes.Length, 64).ToArray();
+
+        // Encode as shifted hex + K12 checksum (130 chars)
+        var checksum = _crypt.KangarooTwelve(signature, 1);
+        var encodedSig = _crypt.BytesToShiftedHex(signature) + _crypt.BytesToShiftedHex(checksum);
+        Assert.Equal(130, encodedSig.Length);
+
+        var identity = _crypt.GetIdentityFromPublicKey(publicKey);
+
+        // Decode
+        var verifyPubKey = _crypt.GetPublicKeyFromIdentity(identity);
+        Assert.Equal(publicKey, verifyPubKey);
+
+        var allBytes = _crypt.ShiftedHexToBytes(encodedSig);
+        Assert.Equal(65, allBytes.Length);
+        var decodedSig = allBytes[..64];
+        var checksumByte = allBytes[64];
+
+        var expectedChecksum = _crypt.KangarooTwelve(decodedSig, 1);
+        Assert.Equal(expectedChecksum[0], checksumByte);
+        Assert.Equal(signature, decodedSig);
+
+        // Verify
+        var isValid = _crypt.Verify(verifyPubKey, messageBytes, decodedSig);
+        Assert.True(isValid, "Signature verification failed after shifted hex round-trip");
+    }
+
+    [Fact]
+    public void SignVerify_ViaDirectSchnorrQ_MatchesQubicCrypt()
+    {
+        var seed = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc";
+        var message = "test message";
+        var messageBytes = System.Text.Encoding.UTF8.GetBytes(message);
+
+        var publicKey = _crypt.GetPublicKey(seed);
+        var signedMsg = _crypt.Sign(seed, messageBytes);
+        var signature = signedMsg.AsSpan(messageBytes.Length, 64).ToArray();
+
+        // Verify via reference pattern: pre-hash then SchnorrQ.Verify directly
+        var messageDigest = _crypt.KangarooTwelve(messageBytes);
+        var isValid = SchnorrQ.Verify(publicKey, messageDigest, signature);
+        Assert.True(isValid, "Reference pattern verification failed");
+    }
+
+    [Fact]
+    public void VerifyRaw_JSGeneratedSignature_IsValid()
+    {
+        // Test vector from the JS Qubic wallet sign/verify tool
+        var identity = "WEWDPTCXKABYFFPDXYHTQCJCBJADFTGTVVMINUBWNEFAGQFDPTUGVGRFKQBK";
+        var message = "test";
+        var signatureStr = "DFGPHCKJDGIKGGLJGJACOIMOHAJJHMANCNIOILLGPMFFPBDFLGODMKNMFNJJBKODKFJENFLMJICOJDDGPPFBKJLMAGEAMPMIEHIMMIIDNMEBNDBLPEIOALHIELMDCBAAKP";
+
+        var pubKey = _crypt.GetPublicKeyFromIdentity(identity);
+        var allBytes = _crypt.ShiftedHexToBytes(signatureStr);
+        var signature = allBytes[..64];
+        var messageBytes = System.Text.Encoding.UTF8.GetBytes(message);
+
+        // FourQ convention: raw message used directly in challenge K12 input
+        var isValid = _crypt.VerifyRaw(pubKey, messageBytes, signature);
+        Assert.True(isValid, "JS-generated signature should verify with VerifyRaw");
+    }
 }

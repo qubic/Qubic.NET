@@ -11,7 +11,7 @@ public class TransactionBuilderTests
     public void CreateTransfer_ValidParameters_CreatesTransaction()
     {
         var source = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");
-        var destination = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB");
+        var destination = QubicIdentity.FromIdentity("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACNKL");
 
         var transaction = _builder.CreateTransfer(source, destination, 1000, 12345);
 
@@ -28,7 +28,7 @@ public class TransactionBuilderTests
     public void CreateTransfer_NegativeAmount_ThrowsArgumentException()
     {
         var source = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");
-        var destination = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB");
+        var destination = QubicIdentity.FromIdentity("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACNKL");
 
         Assert.Throws<ArgumentException>(() => _builder.CreateTransfer(source, destination, -100, 12345));
     }
@@ -37,7 +37,7 @@ public class TransactionBuilderTests
     public void CreateTransaction_WithSendManyPayload_SetsCorrectInputType()
     {
         var source = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");
-        var recipient = QubicIdentity.FromIdentity("BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB");
+        var recipient = QubicIdentity.FromIdentity("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACNKL");
 
         var payload = new SendManyPayload()
             .AddTransfer(recipient, 500)

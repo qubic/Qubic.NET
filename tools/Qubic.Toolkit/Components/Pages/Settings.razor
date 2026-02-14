@@ -1,0 +1,54 @@
+@page "/settings"
+@inject ToolkitSettingsService Cfg
+
+<h4>Settings</h4>
+<p class="text-muted">Configure Qubic Toolkit behavior.</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">Transaction Settings</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Auto-Tick Offset</label>
+                    <input type="number" class="form-control" min="1" max="100"
+                           value="@Cfg.TickOffset"
+                           @onchange="e => Cfg.TickOffset = int.TryParse(e.Value?.ToString(), out var v) ? v : 5" />
+                    <div class="form-text">
+                        Number of ticks added to the current tick when using auto-tick.
+                        Higher values give more time for the transaction to be processed but delay execution.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="autoResend"
+                               checked="@Cfg.AutoResend"
+                               @onchange="e => Cfg.AutoResend = (bool)(e.Value ?? false)" />
+                        <label class="form-check-label" for="autoResend">
+                            Auto-Resend Failed Transactions
+                        </label>
+                    </div>
+                    <div class="form-text">
+                        When enabled, transactions whose target tick has passed without confirmation
+                        will be automatically re-signed with a fresh tick and rebroadcast.
+                        Requires an active seed.
+                    </div>
+                </div>
+
+                @if (Cfg.AutoResend)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Max Resend Attempts</label>
+                        <input type="number" class="form-control" min="1" max="20"
+                               value="@Cfg.AutoResendMaxRetries"
+                               @onchange="e => Cfg.AutoResendMaxRetries = int.TryParse(e.Value?.ToString(), out var v) ? v : 3" />
+                        <div class="form-text">
+                            Maximum number of times a transaction will be automatically resent before giving up.
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

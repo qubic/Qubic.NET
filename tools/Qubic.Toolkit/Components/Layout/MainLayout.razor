@@ -1,0 +1,157 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+
+<div class="d-flex flex-column vh-100">
+    <nav class="navbar navbar-dark bg-dark px-3">
+        <a class="navbar-brand mb-0 h1" href="/">Qubic Toolkit</a>
+        <div class="d-flex align-items-center gap-2">
+            @if (Seed.HasSeed)
+            {
+                <span class="badge bg-danger">Seed active</span>
+                <span class="badge bg-secondary mono small">@Seed.Identity?.ToString()[..12]...</span>
+                <button class="btn btn-sm btn-outline-light" @onclick="ClearSeed">Clear</button>
+            }
+            else
+            {
+                <input type="password" class="form-control form-control-sm bg-dark text-light border-secondary"
+                       style="width:280px" placeholder="Enter 55-char seed to enable signing..."
+                       @bind="_seedInput" @bind:event="oninput" />
+                <button class="btn btn-sm btn-outline-success" @onclick="SetSeed"
+                        disabled="@(_seedInput?.Length != 55)">Unlock</button>
+            }
+            <span class="text-secondary mx-1">|</span>
+            <select class="form-select form-select-sm bg-dark text-light border-secondary" style="width:auto"
+                    @bind="Backend.ActiveBackend" @bind:after="OnBackendChanged">
+                <option value="@QueryBackend.Rpc">RPC</option>
+                <option value="@QueryBackend.Bob">Bob</option>
+                <option value="@QueryBackend.DirectNetwork">Direct Network</option>
+            </select>
+            @if (Backend.ActiveBackend == QueryBackend.DirectNetwork)
+            {
+                <input class="form-control form-control-sm bg-dark text-light border-secondary" style="width:160px"
+                       placeholder="Host" @bind="Backend.NodeHost" @bind:event="oninput" />
+                <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" style="width:70px"
+                       placeholder="Port" @bind="Backend.NodePort" />
+            }
+            else
+            {
+                <input class="form-control form-control-sm bg-dark text-light border-secondary" style="width:260px"
+                       placeholder="URL" @bind="CurrentUrl" @bind:event="oninput" />
+            }
+            @if (TickMonitor.IsConnected)
+            {
+                <button class="btn btn-sm btn-outline-danger" @onclick="Disconnect">Disconnect</button>
+                <span class="badge bg-success mono">Epoch @TickMonitor.Epoch | Tick @TickMonitor.Tick</span>
+            }
+            else
+            {
+                <button class="btn btn-sm btn-outline-info" @onclick="Reconnect" disabled="@_reconnecting">
+                    @(_reconnecting ? "..." : "Connect")
+                </button>
+                @if (TickMonitor.Error != null)
+                {
+                    <span class="badge bg-danger" title="@TickMonitor.Error">Offline</span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary">Not connected</span>
+                }
+            }
+        </div>
+    </nav>
+    @if (Seed.HasSeed)
+    {
+        <div class="bg-warning text-dark text-center small py-1">
+            Your seed is held in memory for this session. Clear it when done.
+        </div>
+    }
+    <div class="d-flex flex-grow-1 overflow-hidden">
+        <NavMenu />
+        <main class="flex-grow-1 overflow-auto p-4">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private string? _seedInput;
+    private bool _reconnecting;
+
+    private string CurrentUrl
+    {
+        get => Backend.ActiveBackend == QueryBackend.Rpc ? Backend.RpcUrl : Backend.BobUrl;
+        set
+        {
+            if (Backend.ActiveBackend == QueryBackend.Rpc)
+                Backend.RpcUrl = value;
+            else
+                Backend.BobUrl = value;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        TickMonitor.OnTickChanged += OnTickChanged;
+        await TickMonitor.StartAsync();
+    }
+
+    private bool _disposed;
+
+    private void OnTickChanged()
+    {
+        if (_disposed) return;
+        InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    }
+
+    private void SetSeed()
+    {
+        if (_seedInput?.Length == 55)
+        {
+            try
+            {
+                Seed.SetSeed(_seedInput);
+                TxTracker.SetEncryptionKey(_seedInput);
+                _seedInput = null;
+            }
+            catch { }
+        }
+    }
+
+    private void ClearSeed()
+    {
+        Seed.ClearSeed();
+        TxTracker.ClearEncryptionKey();
+        _seedInput = null;
+    }
+
+    private async Task OnBackendChanged()
+    {
+        Backend.ResetClients();
+        await TickMonitor.StartAsync();
+    }
+
+    private async Task Reconnect()
+    {
+        _reconnecting = true;
+        StateHasChanged();
+        Backend.ResetClients();
+        await TickMonitor.StartAsync();
+        _reconnecting = false;
+    }
+
+    private async Task Disconnect()
+    {
+        await TickMonitor.StopAsync();
+        Backend.ResetClients();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        TickMonitor.OnTickChanged -= OnTickChanged;
+    }
+}

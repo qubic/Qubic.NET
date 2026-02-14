@@ -1,0 +1,156 @@
+@page "/tx/import"
+@inject ToolkitBackendService Backend
+
+<h4>Import & Broadcast</h4>
+<p class="text-muted">Import a pre-signed transaction (hex or base64) and broadcast it to the network.</p>
+
+<div class="row">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header">Import Signed Transaction</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label-sm">Signed Transaction (hex or base64)</label>
+                    <textarea class="form-control form-control-sm mono" rows="4"
+                              placeholder="Paste hex or base64 encoded signed transaction..."
+                              @bind="_input" @bind:event="oninput" @bind:after="Decode"></textarea>
+                </div>
+
+                @if (_decoded != null)
+                {
+                    <table class="table table-sm output-table mb-3">
+                        <tr><td>Source</td><td class="mono">@_decoded.Source</td></tr>
+                        <tr><td>Destination</td><td class="mono">@_decoded.Destination</td></tr>
+                        <tr><td>Amount</td><td class="mono">@_decoded.Amount.ToString("N0") QU</td></tr>
+                        <tr><td>Tick</td><td class="mono">@_decoded.Tick</td></tr>
+                        <tr><td>Input Type</td><td class="mono">@_decoded.InputType</td></tr>
+                        <tr><td>Input Size</td><td class="mono">@_decoded.InputSize</td></tr>
+                        <tr><td>Total Size</td><td class="mono">@_decoded.TotalSize bytes</td></tr>
+                    </table>
+
+                    <button class="btn btn-success" @onclick="Broadcast" disabled="@_broadcasting">
+                        @(_broadcasting ? "Broadcasting..." : "Broadcast to Network")
+                    </button>
+                }
+
+                @if (_broadcastResult != null)
+                {
+                    <div class="alert alert-success mt-3">
+                        Broadcast success! TX: <span class="mono">@_broadcastResult</span>
+                    </div>
+                }
+                @if (_error != null)
+                {
+                    <div class="alert alert-danger mt-2">@_error</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private class DecodedTx
+    {
+        public string Source { get; set; } = "";
+        public string Destination { get; set; } = "";
+        public long Amount { get; set; }
+        public uint Tick { get; set; }
+        public ushort InputType { get; set; }
+        public ushort InputSize { get; set; }
+        public int TotalSize { get; set; }
+        public byte[] RawBytes { get; set; } = [];
+    }
+
+    private string? _input;
+    private DecodedTx? _decoded;
+    private bool _broadcasting;
+    private string? _broadcastResult;
+    private string? _error;
+
+    private void Decode()
+    {
+        _decoded = null;
+        _error = null;
+        _broadcastResult = null;
+
+        if (string.IsNullOrWhiteSpace(_input)) return;
+
+        try
+        {
+            var trimmed = _input.Trim();
+            byte[] bytes;
+
+            // Try hex first, then base64
+            if (trimmed.All(c => "0123456789abcdefABCDEF".Contains(c)) && trimmed.Length % 2 == 0)
+                bytes = Convert.FromHexString(trimmed);
+            else
+                bytes = Convert.FromBase64String(trimmed);
+
+            // Minimum: 32+32+8+4+2+2+64 = 144 bytes
+            if (bytes.Length < 144)
+            {
+                _error = $"Transaction too small ({bytes.Length} bytes, minimum 144).";
+                return;
+            }
+
+            var crypt = new Qubic.Crypto.QubicCrypt();
+            var srcPubKey = bytes[0..32];
+            var dstPubKey = bytes[32..64];
+
+            _decoded = new DecodedTx
+            {
+                Source = crypt.GetIdentityFromPublicKey(srcPubKey),
+                Destination = crypt.GetIdentityFromPublicKey(dstPubKey),
+                Amount = BitConverter.ToInt64(bytes, 64),
+                Tick = BitConverter.ToUInt32(bytes, 72),
+                InputType = BitConverter.ToUInt16(bytes, 76),
+                InputSize = BitConverter.ToUInt16(bytes, 78),
+                TotalSize = bytes.Length,
+                RawBytes = bytes
+            };
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to decode: {ex.Message}";
+        }
+    }
+
+    private async Task Broadcast()
+    {
+        if (_decoded == null) return;
+
+        _broadcasting = true;
+        _error = null;
+        _broadcastResult = null;
+
+        try
+        {
+            // Broadcast raw bytes via RPC (base64 encoded)
+            var encoded = Convert.ToBase64String(_decoded.RawBytes);
+
+            // Use the RPC client directly to post base64
+            using var http = new HttpClient();
+            var response = await http.PostAsJsonAsync(
+                $"{Backend.RpcUrl}/live/v1/broadcast-transaction",
+                new { encodedTransaction = encoded });
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<BroadcastResponse>();
+            _broadcastResult = result?.TransactionId ?? "Sent (no ID returned)";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _broadcasting = false;
+        }
+    }
+
+    private class BroadcastResponse
+    {
+        public string? TransactionId { get; set; }
+        public int PeersBroadcasted { get; set; }
+    }
+}

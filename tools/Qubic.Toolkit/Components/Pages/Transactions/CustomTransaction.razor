@@ -1,0 +1,202 @@
+@page "/tx/custom"
+@implements IDisposable
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>Custom Transaction</h4>
+<p class="text-muted">Build an arbitrary transaction to any contract or address.</p>
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Build Transaction</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label-sm">Destination (60-char identity or contract index 0-23)</label>
+                        <input class="form-control form-control-sm @IdentityValidation.DestCssClass(_destination)"
+                               placeholder="Identity or contract index" @bind="_destination" @bind:event="oninput" />
+                        @{ var destErr = IdentityValidation.ValidateDestination(_destination); }
+                        @if (destErr != null)
+                        {
+                            <div class="small text-danger mt-1">@destErr</div>
+                        }
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col">
+                            <label class="form-label-sm">Amount (QU)</label>
+                            <input type="number" class="form-control form-control-sm" @bind="_amount" />
+                        </div>
+                        <div class="col">
+                            <label class="form-label-sm">Input Type (procedure/function ID)</label>
+                            <input type="number" class="form-control form-control-sm" @bind="_inputType" />
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Payload (hex, optional)</label>
+                        <textarea class="form-control form-control-sm mono" rows="3" placeholder="e.g. 0100000000000000"
+                                  @bind="_payloadHex"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-sm">Target Tick (0 = auto: current + @Settings.TickOffset)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control @(_autoTickFlash ? "border-success" : "")"
+                                   @bind="_targetTick" />
+                            <button class="btn btn-outline-secondary" @onclick="SetAutoTick">Auto</button>
+                        </div>
+                        @if (_autoTickError != null)
+                        {
+                            <div class="small text-danger mt-1">@_autoTickError</div>
+                        }
+                        else if (TickMonitor.IsConnected)
+                        {
+                            <div class="small text-muted mt-1">Current tick: @TickMonitor.Tick.ToString("N0")</div>
+                        }
+                    </div>
+
+                    <button class="btn btn-primary me-2" @onclick="Send" disabled="@_sending">
+                        @(_sending ? "Sending..." : "Sign & Broadcast")
+                    </button>
+
+                    @if (_result != null)
+                    {
+                        <div class="alert alert-success mt-3">
+                            Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                            <div class="mt-1">
+                                <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                                <a href="/tx/history">Transaction History</a>
+                            </div>
+                        </div>
+                    }
+                    @if (_error != null)
+                    {
+                        <div class="alert alert-danger mt-2">@_error</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string? _destination;
+    private long _amount;
+    private ushort _inputType;
+    private string? _payloadHex;
+    private uint _targetTick;
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+    private bool _autoTickFlash;
+    private string? _autoTickError;
+    private bool _disposed;
+
+    protected override void OnInitialized()
+    {
+        TickMonitor.OnTickChanged += OnTickChanged;
+    }
+
+    private void OnTickChanged()
+    {
+        if (_disposed) return;
+        InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    }
+
+    private async Task SetAutoTick()
+    {
+        _autoTickError = null;
+        try
+        {
+            uint current = TickMonitor.IsConnected
+                ? TickMonitor.Tick
+                : (await Backend.GetTickInfoAsync()).Tick;
+            _targetTick = current + (uint)Settings.TickOffset;
+            _autoTickFlash = true;
+            StateHasChanged();
+            await Task.Delay(600);
+            _autoTickFlash = false;
+        }
+        catch (Exception ex) { _autoTickError = "Could not fetch tick: " + ex.Message; }
+    }
+
+    private async Task Send()
+    {
+        _sending = true;
+        _error = null;
+        _result = null;
+
+        try
+        {
+            // Validate destination
+            var destErr = IdentityValidation.ValidateDestination(_destination);
+            if (string.IsNullOrWhiteSpace(_destination))
+            {
+                _error = "Destination is required.";
+                return;
+            }
+            if (destErr != null)
+            {
+                _error = "Destination: " + destErr;
+                return;
+            }
+
+            // Resolve destination
+            Qubic.Core.Entities.QubicIdentity dest;
+            if (int.TryParse(_destination.Trim(), out var contractIdx) && contractIdx is >= 0 and <= 23)
+                dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(contractIdx));
+            else
+                dest = Qubic.Core.Entities.QubicIdentity.FromIdentity(_destination.Trim());
+
+            // Resolve tick
+            var tick = _targetTick;
+            if (tick == 0)
+            {
+                tick = TickMonitor.IsConnected
+                    ? TickMonitor.Tick + (uint)Settings.TickOffset
+                    : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+            }
+
+            // Build payload
+            var data = string.IsNullOrWhiteSpace(_payloadHex) ? [] : Convert.FromHexString(_payloadHex.Trim());
+            var payload = new Qubic.Toolkit.Models.GenericContractPayload(_inputType, data);
+
+            var tx = Seed.CreateAndSignTransaction(dest, _amount, tick, payload);
+            var result = await Backend.BroadcastTransactionAsync(tx);
+            _result = result.TransactionId;
+
+            TxTracker.Track(new TrackedTransaction
+            {
+                Hash = result.TransactionId,
+                Source = Seed.Identity?.ToString() ?? "",
+                Destination = dest.ToString(),
+                Amount = _amount,
+                TargetTick = tick,
+                InputType = _inputType,
+                PayloadHex = data.Length > 0 ? Convert.ToHexString(data) : null,
+                Description = $"Custom TX: dest={_destination}, inputType={_inputType}, {data.Length}B payload"
+            });
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        TickMonitor.OnTickChanged -= OnTickChanged;
+    }
+}

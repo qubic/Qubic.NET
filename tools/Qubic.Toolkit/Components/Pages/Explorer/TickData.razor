@@ -1,0 +1,134 @@
+@page "/explorer/tick"
+@inject ToolkitBackendService Backend
+
+<h4>Tick Data</h4>
+<p class="text-muted">View tick details and transactions. (RPC only)</p>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="number" class="form-control" placeholder="Tick number" @bind="_tickNumber" />
+            <button class="btn btn-primary" @onclick="Lookup" disabled="@_loading">
+                @(_loading ? "Loading..." : "Lookup")
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_tickData != null)
+{
+    <div class="card mb-3">
+        <div class="card-header">Tick @_tickData.TickNumber</div>
+        <div class="card-body">
+            <table class="table table-sm output-table mb-0">
+                <tr><td>Tick</td><td class="mono">@_tickData.TickNumber</td></tr>
+                <tr><td>Epoch</td><td class="mono">@_tickData.Epoch</td></tr>
+                <tr><td>Computor Index</td><td class="mono">@_tickData.ComputorIndex</td></tr>
+                <tr><td>Timestamp</td><td class="mono">@_tickData.Timestamp</td></tr>
+                <tr><td>Transactions</td><td class="mono">@_tickData.TransactionHashes.Count</td></tr>
+                @if (_tickData.ContractFees.Count > 0)
+                {
+                    <tr><td>Contract Fees</td><td class="mono">@string.Join(", ", _tickData.ContractFees)</td></tr>
+                }
+            </table>
+        </div>
+    </div>
+}
+
+@if (_transactions != null)
+{
+    <div class="card">
+        <div class="card-header">Transactions in Tick (@_transactions.Count)</div>
+        <div class="card-body">
+            @if (_transactions.Count == 0)
+            {
+                <span class="text-muted">No transactions in this tick.</span>
+            }
+            else
+            {
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Hash</th>
+                            <th>Source</th>
+                            <th>Destination</th>
+                            <th>Amount</th>
+                            <th>Type</th>
+                            <th>Money Flew</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tx in _transactions)
+                        {
+                            <tr>
+                                <td class="mono small">@tx.Hash[..16]...</td>
+                                <td class="mono small">@tx.Source[..16]...</td>
+                                <td class="mono small">@tx.Destination[..16]...</td>
+                                <td class="mono">@tx.Amount</td>
+                                <td class="mono">@tx.InputType</td>
+                                <td>
+                                    @if (tx.MoneyFlew == true)
+                                    {
+                                        <span class="badge bg-success">Yes</span>
+                                    }
+                                    else if (tx.MoneyFlew == false)
+                                    {
+                                        <span class="badge bg-secondary">No</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (!_loading && _tickData == null && _searched)
+{
+    <div class="alert alert-warning">Tick not found.</div>
+}
+
+@code {
+    private uint _tickNumber;
+    private Qubic.Rpc.Models.TickDataInfo? _tickData;
+    private IReadOnlyList<Qubic.Rpc.Models.TransactionInfo>? _transactions;
+    private bool _loading;
+    private string? _error;
+    private bool _searched;
+
+    private async Task Lookup()
+    {
+        if (_tickNumber == 0) return;
+
+        _loading = true;
+        _error = null;
+        _tickData = null;
+        _transactions = null;
+        _searched = true;
+
+        try
+        {
+            var dataTask = Backend.GetTickDataAsync(_tickNumber);
+            var txTask = Backend.GetTransactionsForTickAsync(_tickNumber);
+            await Task.WhenAll(dataTask, txTask);
+
+            _tickData = dataTask.Result;
+            _transactions = txTask.Result;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
