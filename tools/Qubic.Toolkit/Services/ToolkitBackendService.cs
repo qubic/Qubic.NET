@@ -202,6 +202,42 @@ public class ToolkitBackendService : IDisposable
         return await Bob.GetLogsAsync(contractIndex, startLogId, endLogId, ct);
     }
 
+    // ── Direct Network (Node) ──
+
+    public async Task<string[]> GetNodePeerListAsync(CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Peer list is only available with DirectNetwork backend.");
+        var node = await GetNodeClientAsync();
+        return await node.GetPeerListAsync(ct);
+    }
+
+    public async Task<Qubic.Core.Entities.ContractIpo> GetIpoStatusAsync(uint contractIndex, CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("IPO status is only available with DirectNetwork backend.");
+        var node = await GetNodeClientAsync();
+        return await node.GetContractIpoAsync(contractIndex, ct);
+    }
+
+    // ── Node Commands (DirectNetwork) ──
+
+    public async Task<byte[]> SendNodeCommandAsync(byte[] commandPayload, byte[] signature, CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Node commands are only available with DirectNetwork backend.");
+        var node = await GetNodeClientAsync();
+        return await node.SendSpecialCommandAsync(commandPayload, signature, ct);
+    }
+
+    public async Task SendRawPacketAsync(byte[] data, CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Raw packet sending is only available with DirectNetwork backend.");
+        var node = await GetNodeClientAsync();
+        await node.SendRawPacketAsync(data, ct);
+    }
+
     // ── Raw JSON-RPC (Bob Playground) ──
 
     public async Task<string> SendRawJsonRpcAsync(string method, string? paramsJson = null, CancellationToken ct = default)

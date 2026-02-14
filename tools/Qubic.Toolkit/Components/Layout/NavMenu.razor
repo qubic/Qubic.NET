@@ -47,6 +47,7 @@
                     @NavItem("/tx/send", "bi-send", "Send QU")
                     @NavItem("/tx/send-many", "bi-send-plus", "Send to Many")
                     @NavItem("/tx/burn", "bi-fire", "Burn QU")
+                    @NavItem("/tx/ipobid", "bi-cash-stack", "IPO Bid")
                     @NavItem("/tx/custom", "bi-code-square", "Custom Transaction")
                 }
                 @NavItem("/tx/offline", "bi-file-earmark-lock", "Offline Builder")
@@ -80,7 +81,6 @@
                     @NavItem("/tx/msvault", "bi-people", "MSVault")
                     @NavItem("/tx/nostromo", "bi-rocket-takeoff", "Nostromo")
                     @NavItem("/tx/qvault", "bi-safe", "QVault")
-                    @NavItem("/tx/governance", "bi-bank", "Governance")
                 }
             </div>
         }
@@ -109,6 +109,12 @@
                 {
                     @NavItem("/explorer/tick", "bi-graph-up", "Tick Data")
                     @NavItem("/explorer/computors", "bi-hdd-network", "Computor List")
+                    @NavItem("/explorer/ipos", "bi-rocket", "Active IPOs")
+                    @NavItem("/explorer/checktx", "bi-check2-square", "Check Tx on Tick")
+                }
+                @if (IsDirectNetwork)
+                {
+                    @NavItem("/explorer/ipostatus", "bi-bar-chart-steps", "IPO Status")
                 }
                 @if (IsBob)
                 {
@@ -137,6 +143,32 @@
             </div>
         }
 
+        @* ── COMPUTOR OPERATION ── *@
+        @if (CanBroadcast || IsDirectNetwork)
+        {
+            <div class="nav-section-header">
+                <a class="nav-section-label" href="/node">COMPUTOR OPERATION</a>
+                <span class="nav-section-toggle" @onclick='() => Toggle("computor")'>
+                    <i class="bi bi-chevron-right chevron @(IsExpanded("computor") ? "expanded" : "")"></i>
+                </span>
+            </div>
+            @if (IsExpanded("computor"))
+            {
+                <div class="nav-sub-links">
+                    @if (CanBroadcast)
+                    {
+                        @NavItem("/tx/governance", "bi-bank", "Governance")
+                        @NavItem("/tx/ccf", "bi-currency-exchange", "CCF")
+                    }
+                    @if (IsDirectNetwork)
+                    {
+                        @NavItem("/node/peers", "bi-diagram-3", "Node Peers")
+                        @NavItem("/node/management", "bi-sliders", "Node Management")
+                    }
+                </div>
+            }
+        }
+
         <hr class="my-2" />
         <NavLink class="nav-link" href="/settings">
             <i class="bi bi-gear me-2"></i>Settings
@@ -149,6 +181,7 @@
 
     private bool IsRpc => Backend.ActiveBackend == QueryBackend.Rpc;
     private bool IsBob => Backend.ActiveBackend == QueryBackend.Bob;
+    private bool IsDirectNetwork => Backend.ActiveBackend == QueryBackend.DirectNetwork;
     private bool CanBroadcast => Backend.ActiveBackend is QueryBackend.Rpc or QueryBackend.DirectNetwork;
 
     private static readonly Dictionary<string, (string Label, string Icon)> PageRegistry = new()
@@ -171,6 +204,7 @@
         ["/tx/nostromo"] = ("Nostromo", "bi-rocket-takeoff"),
         ["/tx/qvault"] = ("QVault", "bi-safe"),
         ["/tx/governance"] = ("Governance", "bi-bank"),
+        ["/tx/ccf"] = ("CCF", "bi-currency-exchange"),
         ["/wallet/balance"] = ("Balance Lookup", "bi-currency-exchange"),
         ["/wallet/assets"] = ("Asset Portfolio", "bi-grid-3x3-gap"),
         ["/tx/lookup"] = ("Tx Lookup", "bi-search"),
@@ -182,14 +216,21 @@
         ["/tx/import"] = ("Broadcast Tx", "bi-broadcast"),
         ["/tools/crypto"] = ("Crypto Toolkit", "bi-key"),
         ["/tools/bob-playground"] = ("Bob Playground", "bi-terminal"),
+        ["/explorer/ipos"] = ("Active IPOs", "bi-rocket"),
+        ["/explorer/ipostatus"] = ("IPO Status", "bi-bar-chart-steps"),
+        ["/explorer/checktx"] = ("Check Tx on Tick", "bi-check2-square"),
+        ["/tx/ipobid"] = ("IPO Bid", "bi-cash-stack"),
+        ["/node/peers"] = ("Node Peers", "bi-diagram-3"),
+        ["/node/management"] = ("Node Management", "bi-sliders"),
     };
 
     private static readonly Dictionary<string, string[]> SectionRoutes = new()
     {
-        ["signing"] = ["/signing", "/tx/send", "/tx/send-many", "/tx/burn", "/tx/custom", "/tx/offline", "/tools/sign-verify", "/tx/history"],
-        ["contracts"] = ["/contracts", "/contracts/", "/tx/qx", "/tx/qswap", "/tx/qearn", "/tx/qbond", "/tx/qutil", "/tx/quottery", "/tx/msvault", "/tx/nostromo", "/tx/qvault", "/tx/governance"],
-        ["explorer"] = ["/explorer", "/explorer/", "/wallet/balance", "/wallet/assets", "/tx/lookup", "/wallet/transfers", "/explorer/tick", "/explorer/computors", "/explorer/logs"],
+        ["signing"] = ["/signing", "/tx/send", "/tx/send-many", "/tx/burn", "/tx/ipobid", "/tx/custom", "/tx/offline", "/tools/sign-verify", "/tx/history"],
+        ["contracts"] = ["/contracts", "/contracts/", "/tx/qx", "/tx/qswap", "/tx/qearn", "/tx/qbond", "/tx/qutil", "/tx/quottery", "/tx/msvault", "/tx/nostromo", "/tx/qvault"],
+        ["explorer"] = ["/explorer", "/explorer/", "/wallet/balance", "/wallet/assets", "/tx/lookup", "/wallet/transfers", "/explorer/tick", "/explorer/computors", "/explorer/ipos", "/explorer/ipostatus", "/explorer/checktx", "/explorer/logs"],
         ["tools"] = ["/tools", "/tools/", "/wallet/identity", "/tx/import", "/tools/crypto", "/tools/bob-playground"],
+        ["computor"] = ["/node", "/node/", "/tx/governance", "/tx/ccf", "/node/peers", "/node/management"],
     };
 
     protected override void OnInitialized()

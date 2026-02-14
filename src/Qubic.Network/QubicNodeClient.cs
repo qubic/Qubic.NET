@@ -99,6 +99,57 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Gets the peer list from the node via ExchangePublicPeers.
+    /// Returns non-zero IPv4 addresses.
+    /// </summary>
+    public async Task<string[]> GetPeerListAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+
+        var requestPacket = _writer.WriteExchangePublicPeers();
+        var response = await SendAndReceiveAsync(requestPacket, QubicPacketTypes.ExchangePublicPeers, cancellationToken);
+
+        return _reader.ReadExchangePublicPeers(response.AsSpan(QubicPacketHeader.Size));
+    }
+
+    /// <summary>
+    /// Gets the IPO status for a contract (676 participant slots with bids).
+    /// </summary>
+    public async Task<ContractIpo> GetContractIpoAsync(uint contractIndex, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+
+        var requestPacket = _writer.WriteRequestContractIPO(contractIndex);
+        var response = await SendAndReceiveAsync(requestPacket, QubicPacketTypes.RespondContractIPO, cancellationToken);
+
+        return _reader.ReadContractIpoResponse(response.AsSpan(QubicPacketHeader.Size));
+    }
+
+    /// <summary>
+    /// Sends a signed SpecialCommand to the node and returns the response payload.
+    /// </summary>
+    public async Task<byte[]> SendSpecialCommandAsync(byte[] commandPayload, byte[] signature, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+
+        var packet = _writer.WriteSpecialCommand(commandPayload, signature);
+        var response = await SendAndReceiveAsync(packet, QubicPacketTypes.SpecialCommand, cancellationToken);
+
+        var header = _reader.ReadHeader(response);
+        return response.AsSpan(QubicPacketHeader.Size, header.PayloadSize).ToArray();
+    }
+
+    /// <summary>
+    /// Sends raw bytes directly to the node TCP stream.
+    /// </summary>
+    public async Task SendRawPacketAsync(byte[] data, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        await _stream!.WriteAsync(data, cancellationToken);
+        await _stream.FlushAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Broadcasts a signed transaction to the network.
     /// </summary>
     public async Task BroadcastTransactionAsync(QubicTransaction transaction, CancellationToken cancellationToken = default)

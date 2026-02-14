@@ -30,6 +30,9 @@ public static class QubicPacketTypes
     public const byte RequestContractFunction = 42;
     public const byte RespondContractFunction = 43;
 
+    // Special command
+    public const byte SpecialCommand = 255;
+
     // Response types
     public const byte RespondCurrentTickInfo = 28;
 }

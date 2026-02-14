@@ -1,0 +1,699 @@
+@page "/node/management"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@using System.Buffers.Binary
+@using Qubic.Core.Entities
+
+<h4><i class="bi bi-hdd-rack me-2"></i>Node Management</h4>
+<p class="text-muted">Send operator commands to the connected node. Requires DirectNetwork backend and operator seed.</p>
+
+@if (Backend.ActiveBackend != QueryBackend.DirectNetwork)
+{
+    <div class="alert alert-warning">
+        This feature requires the <strong>DirectNetwork</strong> backend. Switch in <a href="/settings">Settings</a>.
+    </div>
+}
+else if (!Seed.HasSeed)
+{
+    <div class="alert alert-warning">
+        Enter your operator seed in any transaction page first.
+    </div>
+}
+else
+{
+    <div class="alert alert-danger mb-3">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        <strong>Warning:</strong> These commands directly affect the connected node. Only use if you are the node operator.
+    </div>
+
+    @* ── INFORMATION ── *@
+    <h5 class="mt-3 mb-2"><i class="bi bi-info-circle me-1"></i>Information</h5>
+    <div class="row g-3 mb-4">
+        @* Query Time *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Query Node Time</h6>
+                    <p class="small text-muted mb-2">Read the node's current UTC clock.</p>
+                    <button class="btn btn-primary btn-sm" @onclick="QueryTime" disabled="@IsLoading("queryTime")">
+                        @(IsLoading("queryTime") ? "Querying..." : "Query")
+                    </button>
+                    @RenderFeedback("queryTime")
+                </div>
+            </div>
+        </div>
+
+        @* Get Execution Fee Multiplier *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Get Execution Fee Multiplier</h6>
+                    <p class="small text-muted mb-2">Read the current fee multiplier.</p>
+                    <button class="btn btn-primary btn-sm" @onclick="GetFeeMultiplier" disabled="@IsLoading("getFee")">
+                        @(IsLoading("getFee") ? "Querying..." : "Query")
+                    </button>
+                    @RenderFeedback("getFee")
+                </div>
+            </div>
+        </div>
+
+        @* Mining Score Ranking *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Mining Score Ranking</h6>
+                    <p class="small text-muted mb-2">Fetch miner scores from the node.</p>
+                    <button class="btn btn-primary btn-sm" @onclick="GetMiningScoreRanking" disabled="@IsLoading("mining")">
+                        @(IsLoading("mining") ? "Loading..." : "Fetch")
+                    </button>
+                    @RenderFeedback("mining")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_miningRankings is { Count: > 0 })
+    {
+        <div class="card mb-4">
+            <div class="card-header">Mining Score Ranking (@_miningRankings.Count miners)</div>
+            <div class="card-body p-0" style="max-height:400px; overflow-y:auto">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>#</th><th>Identity</th><th>Score</th></tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < _miningRankings.Count; i++)
+                        {
+                            var entry = _miningRankings[i];
+                            <tr>
+                                <td>@(i + 1)</td>
+                                <td class="mono small">@entry.Identity</td>
+                                <td class="mono">@entry.Score.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @* ── QUICK ACTIONS ── *@
+    <h5 class="mt-3 mb-2"><i class="bi bi-lightning me-1"></i>Quick Actions</h5>
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Refresh Peer List</h6>
+                    <p class="small text-muted mb-2">Close all connections and refresh. (F4)</p>
+                    <button class="btn btn-warning btn-sm" @onclick='() => SendSimple(9, "refreshPeers", "Peer list refresh triggered.")' disabled="@IsLoading("refreshPeers")">
+                        @(IsLoading("refreshPeers") ? "Sending..." : "Refresh")
+                    </button>
+                    @RenderFeedback("refreshPeers")
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Force Next Tick</h6>
+                    <p class="small text-muted mb-2">Force an empty tick. (F5)</p>
+                    <button class="btn btn-warning btn-sm" @onclick='() => SendSimple(10, "forceTick", "Force next tick triggered.")' disabled="@IsLoading("forceTick")">
+                        @(IsLoading("forceTick") ? "Sending..." : "Force Tick")
+                    </button>
+                    @RenderFeedback("forceTick")
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Reissue Vote</h6>
+                    <p class="small text-muted mb-2">Re-send the computor vote. (F9)</p>
+                    <button class="btn btn-warning btn-sm" @onclick='() => SendSimple(11, "reissueVote", "Vote reissued.")' disabled="@IsLoading("reissueVote")">
+                        @(IsLoading("reissueVote") ? "Sending..." : "Reissue")
+                    </button>
+                    @RenderFeedback("reissueVote")
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Save Snapshot</h6>
+                    <p class="small text-muted mb-2">Trigger a node snapshot save. (F8)</p>
+                    <button class="btn btn-warning btn-sm" @onclick="SaveSnapshot" disabled="@IsLoading("snapshot")">
+                        @(IsLoading("snapshot") ? "Sending..." : "Save")
+                    </button>
+                    @RenderFeedback("snapshot")
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Force Switch Epoch</h6>
+                    <p class="small text-muted mb-2">Force epoch transition. (F7)</p>
+                    <button class="btn btn-danger btn-sm" @onclick='() => SendSimple(15, "switchEpoch", "Epoch switch triggered.")' disabled="@IsLoading("switchEpoch")">
+                        @(IsLoading("switchEpoch") ? "Sending..." : "Switch")
+                    </button>
+                    @RenderFeedback("switchEpoch")
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Continue Switch Epoch</h6>
+                    <p class="small text-muted mb-2">Continue epoch switch on log-enabled nodes. (F10)</p>
+                    <button class="btn btn-danger btn-sm" @onclick='() => SendSimple(16, "continueEpoch", "Continue epoch switch sent.")' disabled="@IsLoading("continueEpoch")">
+                        @(IsLoading("continueEpoch") ? "Sending..." : "Continue")
+                    </button>
+                    @RenderFeedback("continueEpoch")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── CONFIGURATION ── *@
+    <h5 class="mt-3 mb-2"><i class="bi bi-sliders me-1"></i>Configuration</h5>
+    <div class="row g-3 mb-4">
+        @* Toggle Main/Aux *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Toggle Main/Aux Mode</h6>
+                    <p class="small text-muted mb-2">Switch between Main and Auxiliary mode. (F12)</p>
+                    <div class="mb-2">
+                        <select class="form-select form-select-sm" @bind="_toggleMode">
+                            <option value="1">Main</option>
+                            <option value="0">Auxiliary</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-warning btn-sm" @onclick="ToggleMainAux" disabled="@IsLoading("toggle")">
+                        @(IsLoading("toggle") ? "Sending..." : "Set Mode")
+                    </button>
+                    @RenderFeedback("toggle")
+                </div>
+            </div>
+        </div>
+
+        @* Set Solution Threshold *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Set Solution Threshold</h6>
+                    <p class="small text-muted mb-2">Set mining solution threshold for a future epoch.</p>
+                    <div class="mb-1">
+                        <input type="number" class="form-control form-control-sm" @bind="_thresholdEpoch" placeholder="Epoch" />
+                    </div>
+                    <div class="mb-1">
+                        <input type="number" class="form-control form-control-sm" @bind="_thresholdValue" placeholder="Threshold" />
+                    </div>
+                    <div class="mb-2">
+                        <input type="number" class="form-control form-control-sm" @bind="_thresholdAlgoType" placeholder="Algo type index" />
+                    </div>
+                    <button class="btn btn-warning btn-sm" @onclick="SetSolutionThreshold" disabled="@IsLoading("threshold")">
+                        @(IsLoading("threshold") ? "Sending..." : "Set")
+                    </button>
+                    @RenderFeedback("threshold")
+                </div>
+            </div>
+        </div>
+
+        @* Sync Time *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Sync Time</h6>
+                    <p class="small text-muted mb-2">Set the node's clock to your current UTC time.</p>
+                    <button class="btn btn-warning btn-sm" @onclick="SyncTime" disabled="@IsLoading("syncTime")">
+                        @(IsLoading("syncTime") ? "Syncing..." : "Sync Now")
+                    </button>
+                    @RenderFeedback("syncTime")
+                </div>
+            </div>
+        </div>
+
+        @* Set Logging Mode *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Set Logging Mode</h6>
+                    <p class="small text-muted mb-2">Change console logging level.</p>
+                    <div class="mb-2">
+                        <select class="form-select form-select-sm" @bind="_loggingMode">
+                            <option value="0">Disabled</option>
+                            <option value="1">Low cost</option>
+                            <option value="2">Full logging</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-warning btn-sm" @onclick="SetLoggingMode" disabled="@IsLoading("logging")">
+                        @(IsLoading("logging") ? "Sending..." : "Set")
+                    </button>
+                    @RenderFeedback("logging")
+                </div>
+            </div>
+        </div>
+
+        @* Set Execution Fee Multiplier *@
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Set Execution Fee Multiplier</h6>
+                    <p class="small text-muted mb-2">Set fee multiplier (numerator / denominator).</p>
+                    <div class="mb-1">
+                        <input type="number" class="form-control form-control-sm" @bind="_feeNumerator" placeholder="Numerator" />
+                    </div>
+                    <div class="mb-2">
+                        <input type="number" class="form-control form-control-sm" @bind="_feeDenominator" placeholder="Denominator" />
+                    </div>
+                    <button class="btn btn-warning btn-sm" @onclick="SetFeeMultiplier" disabled="@IsLoading("setFee")">
+                        @(IsLoading("setFee") ? "Sending..." : "Set")
+                    </button>
+                    @RenderFeedback("setFee")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── ADVANCED ── *@
+    <h5 class="mt-3 mb-2"><i class="bi bi-terminal me-1"></i>Advanced</h5>
+    <div class="row g-3 mb-4">
+        @* Custom Special Command *@
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Send Special Command</h6>
+                    <p class="small text-muted mb-2">Send a SpecialCommand by command number.</p>
+                    <div class="mb-2">
+                        <input type="number" class="form-control form-control-sm" @bind="_customCommandNumber" placeholder="Command number" />
+                    </div>
+                    <button class="btn btn-danger btn-sm" @onclick="SendCustomCommand" disabled="@IsLoading("custom")">
+                        @(IsLoading("custom") ? "Sending..." : "Send")
+                    </button>
+                    @RenderFeedback("custom")
+                </div>
+            </div>
+        </div>
+
+        @* Send Raw Packet *@
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title">Send Raw Packet</h6>
+                    <p class="small text-muted mb-2">Send raw hex bytes directly to the node TCP stream.</p>
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm mono" @bind="_rawPacketHex" placeholder="Hex data (e.g. 0A1B2C...)" />
+                    </div>
+                    <button class="btn btn-danger btn-sm" @onclick="SendRawPacket" disabled="@IsLoading("raw")">
+                        @(IsLoading("raw") ? "Sending..." : "Send")
+                    </button>
+                    @RenderFeedback("raw")
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ── State ──
+    private readonly Dictionary<string, bool> _loading = new();
+    private readonly Dictionary<string, string?> _results = new();
+    private readonly Dictionary<string, string?> _errors = new();
+
+    // Toggle Main/Aux
+    private int _toggleMode = 1;
+
+    // Set Solution Threshold
+    private uint _thresholdEpoch;
+    private int _thresholdValue;
+    private int _thresholdAlgoType;
+
+    // Set Logging Mode
+    private int _loggingMode;
+
+    // Set Execution Fee Multiplier
+    private ulong _feeNumerator;
+    private ulong _feeDenominator;
+
+    // Custom Command
+    private int _customCommandNumber;
+
+    // Raw Packet
+    private string _rawPacketHex = "";
+
+    // Mining Score Ranking (complex response)
+    private List<(string Identity, uint Score)>? _miningRankings;
+
+    // ── Helpers ──
+    private bool IsLoading(string key) => _loading.GetValueOrDefault(key);
+
+    private RenderFragment RenderFeedback(string key) => __builder =>
+    {
+        if (_errors.TryGetValue(key, out var err) && err != null)
+        {
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@err</div>
+        }
+        else if (_results.TryGetValue(key, out var res) && res != null)
+        {
+            <div class="alert alert-success mt-2 mb-0 py-1 px-2 small mono">@res</div>
+        }
+    };
+
+    private (byte[] Payload, byte[] Signature) BuildAndSign(byte commandType, byte[]? extraData = null)
+    {
+        var nonce = (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var nonceAndType = nonce | ((ulong)commandType << 56);
+
+        var payloadSize = 8 + (extraData?.Length ?? 0);
+        var payload = new byte[payloadSize];
+        BinaryPrimitives.WriteUInt64LittleEndian(payload, nonceAndType);
+        if (extraData != null)
+            Array.Copy(extraData, 0, payload, 8, extraData.Length);
+
+        var signature = Seed.SignMessage(payload);
+        return (payload, signature);
+    }
+
+    private void BeginCommand(string key)
+    {
+        _loading[key] = true;
+        _results[key] = null;
+        _errors[key] = null;
+    }
+
+    private void EndCommand(string key)
+    {
+        _loading[key] = false;
+    }
+
+    // ── Simple commands (no extra payload) ──
+    private async Task SendSimple(byte commandType, string key, string successMsg)
+    {
+        BeginCommand(key);
+        StateHasChanged();
+        try
+        {
+            var (payload, sig) = BuildAndSign(commandType);
+            await Backend.SendNodeCommandAsync(payload, sig);
+            _results[key] = successMsg;
+        }
+        catch (Exception ex) { _errors[key] = ex.Message; }
+        finally { EndCommand(key); }
+    }
+
+    // ── Query Time (cmd 12) ──
+    private async Task QueryTime()
+    {
+        BeginCommand("queryTime");
+        StateHasChanged();
+        try
+        {
+            var (payload, sig) = BuildAndSign(12);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            _results["queryTime"] = ParseTimeResponse(response);
+        }
+        catch (Exception ex) { _errors["queryTime"] = ex.Message; }
+        finally { EndCommand("queryTime"); }
+    }
+
+    // ── Get Execution Fee Multiplier (cmd 20) ──
+    private async Task GetFeeMultiplier()
+    {
+        BeginCommand("getFee");
+        StateHasChanged();
+        try
+        {
+            var (payload, sig) = BuildAndSign(20);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            if (response.Length >= 24)
+            {
+                var num = BinaryPrimitives.ReadUInt64LittleEndian(response.AsSpan(8));
+                var den = BinaryPrimitives.ReadUInt64LittleEndian(response.AsSpan(16));
+                _results["getFee"] = $"Multiplier: {num} / {den}";
+            }
+            else
+            {
+                _results["getFee"] = $"Response: {Convert.ToHexString(response)}";
+            }
+        }
+        catch (Exception ex) { _errors["getFee"] = ex.Message; }
+        finally { EndCommand("getFee"); }
+    }
+
+    // ── Mining Score Ranking (cmd 14) ──
+    private async Task GetMiningScoreRanking()
+    {
+        BeginCommand("mining");
+        _miningRankings = null;
+        StateHasChanged();
+        try
+        {
+            var (payload, sig) = BuildAndSign(14);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            if (response.Length >= 12)
+            {
+                var count = BinaryPrimitives.ReadUInt32LittleEndian(response.AsSpan(8));
+                var rankings = new List<(string Identity, uint Score)>((int)count);
+                var offset = 12;
+                for (int i = 0; i < count && offset + 36 <= response.Length; i++)
+                {
+                    var pubKey = response.AsSpan(offset, 32).ToArray();
+                    offset += 32;
+                    var score = BinaryPrimitives.ReadUInt32LittleEndian(response.AsSpan(offset));
+                    offset += 4;
+                    rankings.Add((QubicIdentity.FromPublicKey(pubKey).ToString(), score));
+                }
+                _miningRankings = rankings;
+                _results["mining"] = $"Loaded {rankings.Count} miners.";
+            }
+            else
+            {
+                _results["mining"] = "No ranking data returned.";
+            }
+        }
+        catch (Exception ex) { _errors["mining"] = ex.Message; }
+        finally { EndCommand("mining"); }
+    }
+
+    // ── Toggle Main/Aux (cmd 7) ──
+    private async Task ToggleMainAux()
+    {
+        BeginCommand("toggle");
+        StateHasChanged();
+        try
+        {
+            var extra = new byte[8]; // 1 flag + 7 padding
+            extra[0] = (byte)_toggleMode;
+            var (payload, sig) = BuildAndSign(7, extra);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            if (response.Length >= 9)
+            {
+                var flag = response[8];
+                _results["toggle"] = $"Mode set to: {(flag == 1 ? "Main" : "Auxiliary")}";
+            }
+            else
+            {
+                _results["toggle"] = "Command sent.";
+            }
+        }
+        catch (Exception ex) { _errors["toggle"] = ex.Message; }
+        finally { EndCommand("toggle"); }
+    }
+
+    // ── Set Solution Threshold (cmd 5) ──
+    private async Task SetSolutionThreshold()
+    {
+        BeginCommand("threshold");
+        StateHasChanged();
+        try
+        {
+            var extra = new byte[16];
+            BinaryPrimitives.WriteUInt32LittleEndian(extra.AsSpan(0), _thresholdEpoch);
+            BinaryPrimitives.WriteInt32LittleEndian(extra.AsSpan(4), _thresholdValue);
+            BinaryPrimitives.WriteInt32LittleEndian(extra.AsSpan(8), _thresholdAlgoType);
+            // extra[12..16] = padding (zeros)
+
+            var (payload, sig) = BuildAndSign(5, extra);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            if (response.Length >= 24)
+            {
+                var epoch = BinaryPrimitives.ReadUInt32LittleEndian(response.AsSpan(8));
+                var threshold = BinaryPrimitives.ReadInt32LittleEndian(response.AsSpan(12));
+                var algo = BinaryPrimitives.ReadInt32LittleEndian(response.AsSpan(16));
+                _results["threshold"] = $"Epoch: {epoch}, Threshold: {threshold}, Algo: {algo}";
+            }
+            else
+            {
+                _results["threshold"] = "Command sent.";
+            }
+        }
+        catch (Exception ex) { _errors["threshold"] = ex.Message; }
+        finally { EndCommand("threshold"); }
+    }
+
+    // ── Sync Time (cmd 13) ──
+    private async Task SyncTime()
+    {
+        BeginCommand("syncTime");
+        StateHasChanged();
+        try
+        {
+            var now = DateTime.UtcNow;
+            var extra = new byte[12]; // UtcTime struct
+            BinaryPrimitives.WriteUInt16LittleEndian(extra.AsSpan(0), (ushort)now.Year);
+            extra[2] = (byte)now.Month;
+            extra[3] = (byte)now.Day;
+            extra[4] = (byte)now.Hour;
+            extra[5] = (byte)now.Minute;
+            extra[6] = (byte)now.Second;
+            extra[7] = 0; // padding
+            BinaryPrimitives.WriteUInt32LittleEndian(extra.AsSpan(8), (uint)(now.Ticks % TimeSpan.TicksPerSecond * 100));
+
+            var (payload, sig) = BuildAndSign(13, extra);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            _results["syncTime"] = $"Sent: {now:yyyy-MM-dd HH:mm:ss} UTC\n{ParseTimeResponse(response)}";
+        }
+        catch (Exception ex) { _errors["syncTime"] = ex.Message; }
+        finally { EndCommand("syncTime"); }
+    }
+
+    // ── Set Logging Mode (cmd 17) ──
+    private async Task SetLoggingMode()
+    {
+        BeginCommand("logging");
+        StateHasChanged();
+        try
+        {
+            var extra = new byte[8]; // 1 mode + 7 padding
+            extra[0] = (byte)_loggingMode;
+            var (payload, sig) = BuildAndSign(17, extra);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            if (response.Length >= 9)
+            {
+                var mode = response[8];
+                var modeStr = mode switch { 0 => "Disabled", 1 => "Low cost", 2 => "Full", _ => mode.ToString() };
+                _results["logging"] = $"Logging mode set to: {modeStr}";
+            }
+            else
+            {
+                _results["logging"] = "Command sent.";
+            }
+        }
+        catch (Exception ex) { _errors["logging"] = ex.Message; }
+        finally { EndCommand("logging"); }
+    }
+
+    // ── Save Snapshot (cmd 18) ──
+    private async Task SaveSnapshot()
+    {
+        BeginCommand("snapshot");
+        StateHasChanged();
+        try
+        {
+            var (payload, sig) = BuildAndSign(18);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            if (response.Length >= 13)
+            {
+                var tick = BinaryPrimitives.ReadUInt32LittleEndian(response.AsSpan(8));
+                var status = response[12];
+                var statusStr = status switch
+                {
+                    0 => "Saving triggered",
+                    1 => "Saving in progress",
+                    2 => "Remote save mode disabled",
+                    3 => "Unknown failure",
+                    _ => $"Status {status}"
+                };
+                _results["snapshot"] = $"Tick: {tick}, {statusStr}";
+            }
+            else
+            {
+                _results["snapshot"] = "Command sent.";
+            }
+        }
+        catch (Exception ex) { _errors["snapshot"] = ex.Message; }
+        finally { EndCommand("snapshot"); }
+    }
+
+    // ── Set Execution Fee Multiplier (cmd 19) ──
+    private async Task SetFeeMultiplier()
+    {
+        BeginCommand("setFee");
+        StateHasChanged();
+        try
+        {
+            var extra = new byte[16];
+            BinaryPrimitives.WriteUInt64LittleEndian(extra.AsSpan(0), _feeNumerator);
+            BinaryPrimitives.WriteUInt64LittleEndian(extra.AsSpan(8), _feeDenominator);
+
+            var (payload, sig) = BuildAndSign(19, extra);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            if (response.Length >= 24)
+            {
+                var num = BinaryPrimitives.ReadUInt64LittleEndian(response.AsSpan(8));
+                var den = BinaryPrimitives.ReadUInt64LittleEndian(response.AsSpan(16));
+                _results["setFee"] = $"Multiplier set: {num} / {den}";
+            }
+            else
+            {
+                _results["setFee"] = "Command sent.";
+            }
+        }
+        catch (Exception ex) { _errors["setFee"] = ex.Message; }
+        finally { EndCommand("setFee"); }
+    }
+
+    // ── Custom Special Command ──
+    private async Task SendCustomCommand()
+    {
+        BeginCommand("custom");
+        StateHasChanged();
+        try
+        {
+            var (payload, sig) = BuildAndSign((byte)_customCommandNumber);
+            var response = await Backend.SendNodeCommandAsync(payload, sig);
+            _results["custom"] = $"Response ({response.Length} bytes): {Convert.ToHexString(response)}";
+        }
+        catch (Exception ex) { _errors["custom"] = ex.Message; }
+        finally { EndCommand("custom"); }
+    }
+
+    // ── Send Raw Packet ──
+    private async Task SendRawPacket()
+    {
+        BeginCommand("raw");
+        StateHasChanged();
+        try
+        {
+            var hex = _rawPacketHex.Replace(" ", "").Replace("-", "");
+            var data = Convert.FromHexString(hex);
+            await Backend.SendRawPacketAsync(data);
+            _results["raw"] = $"Sent {data.Length} bytes.";
+        }
+        catch (Exception ex) { _errors["raw"] = ex.Message; }
+        finally { EndCommand("raw"); }
+    }
+
+    // ── Parse time response ──
+    private static string ParseTimeResponse(byte[] response)
+    {
+        if (response.Length >= 20)
+        {
+            var year = BinaryPrimitives.ReadUInt16LittleEndian(response.AsSpan(8));
+            var month = response[10];
+            var day = response[11];
+            var hour = response[12];
+            var minute = response[13];
+            var second = response[14];
+            var ns = BinaryPrimitives.ReadUInt32LittleEndian(response.AsSpan(16));
+            return $"Node time: {year:D4}-{month:D2}-{day:D2} {hour:D2}:{minute:D2}:{second:D2}.{ns / 1000000:D3} UTC";
+        }
+        return $"Response: {Convert.ToHexString(response)}";
+    }
+}

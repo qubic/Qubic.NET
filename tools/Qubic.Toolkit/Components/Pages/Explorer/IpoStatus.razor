@@ -1,0 +1,162 @@
+@page "/explorer/ipostatus"
+@inject ToolkitBackendService Backend
+
+<h4>IPO Status</h4>
+<p class="text-muted">View the 676 participant slots and bids for a contract IPO. (DirectNetwork only)</p>
+
+@if (Backend.ActiveBackend != QueryBackend.DirectNetwork)
+{
+    <div class="alert alert-warning">
+        This feature requires the <strong>DirectNetwork</strong> backend. Switch to DirectNetwork in <a href="/settings">Settings</a>.
+    </div>
+}
+else
+{
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="input-group">
+                @if (_activeIpos != null && _activeIpos.Count > 0)
+                {
+                    <select class="form-select form-select-sm" @bind="_contractIndex">
+                        <option value="0">-- Select contract --</option>
+                        @foreach (var ipo in _activeIpos)
+                        {
+                            <option value="@ipo.ContractIndex">@ipo.ContractIndex — @ipo.AssetName</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="number" class="form-control form-control-sm" min="1" max="23" @bind="_contractIndex" placeholder="Contract index" />
+                }
+                <button class="btn btn-primary btn-sm" @onclick="Lookup" disabled="@_loading">
+                    @(_loading ? "Loading..." : "Lookup")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (_error != null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_ipo != null)
+    {
+        <div class="card mb-3">
+            <div class="card-header">Summary — Contract @_contractIndex</div>
+            <div class="card-body">
+                <table class="table table-sm output-table mb-0">
+                    <tr><td>Total Participants</td><td class="mono"><strong>@_filledSlots</strong> / 676</td></tr>
+                    @if (_filledSlots > 0)
+                    {
+                        <tr><td>Minimum Bid</td><td class="mono">@_minPrice.ToString("N0") QU</td></tr>
+                        <tr><td>Maximum Bid</td><td class="mono">@_maxPrice.ToString("N0") QU</td></tr>
+                        <tr><td>Average Bid</td><td class="mono">@_avgPrice.ToString("N0") QU</td></tr>
+                        <tr><td>Total QU Bid</td><td class="mono">@_totalQu.ToString("N0") QU</td></tr>
+                    }
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Participant Bids (@_filledSlots filled)</div>
+            <div class="card-body" style="max-height:500px; overflow-y:auto">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr><th>Slot</th><th>Identity</th><th>Bid (QU)</th></tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < 676; i++)
+                        {
+                            var identity = _ipo.GetParticipantIdentity(i);
+                            @if (identity != null)
+                            {
+                                <tr>
+                                    <td>@i</td>
+                                    <td class="mono small">@identity</td>
+                                    <td class="mono">@_ipo.Prices[i].ToString("N0")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (!_loading && _ipo == null && _searched)
+    {
+        <div class="alert alert-warning">No IPO data returned for contract @_contractIndex.</div>
+    }
+}
+
+@code {
+    private IReadOnlyList<Qubic.Rpc.Models.IpoInfo>? _activeIpos;
+    private uint _contractIndex;
+    private Qubic.Core.Entities.ContractIpo? _ipo;
+    private bool _loading;
+    private bool _searched;
+    private string? _error;
+
+    // Summary stats
+    private int _filledSlots;
+    private long _minPrice;
+    private long _maxPrice;
+    private long _avgPrice;
+    private long _totalQu;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _activeIpos = await Backend.GetActiveIposAsync();
+        }
+        catch { /* IPO list is optional */ }
+    }
+
+    private async Task Lookup()
+    {
+        if (_contractIndex == 0) return;
+
+        _loading = true;
+        _error = null;
+        _ipo = null;
+        _searched = true;
+
+        try
+        {
+            _ipo = await Backend.GetIpoStatusAsync(_contractIndex);
+            ComputeSummary();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ComputeSummary()
+    {
+        if (_ipo == null) return;
+
+        var filledPrices = new List<long>();
+        for (int i = 0; i < 676; i++)
+        {
+            if (_ipo.GetParticipantIdentity(i) != null)
+                filledPrices.Add(_ipo.Prices[i]);
+        }
+
+        _filledSlots = filledPrices.Count;
+        if (_filledSlots > 0)
+        {
+            _minPrice = filledPrices.Min();
+            _maxPrice = filledPrices.Max();
+            _totalQu = filledPrices.Sum();
+            _avgPrice = _totalQu / _filledSlots;
+        }
+    }
+}

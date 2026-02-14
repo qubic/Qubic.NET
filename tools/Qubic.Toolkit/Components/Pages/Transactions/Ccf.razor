@@ -1,6 +1,6 @@
-@page "/tx/governance"
+@page "/tx/ccf"
 @using System.Buffers.Binary
-@using Qubic.Core.Contracts.Gqmprop
+@using Qubic.Core.Contracts.Ccf
 @using Qubic.Core.Entities
 @using Qubic.Toolkit.Models
 @inject ToolkitBackendService Backend
@@ -9,8 +9,8 @@
 @inject TransactionTrackerService TxTracker
 @inject ToolkitSettingsService Settings
 
-<h4><i class="bi bi-bank me-2"></i>Governance</h4>
-<p class="text-muted">General Quorum Model Proposals (GQMProp) — revenue donation and governance voting.</p>
+<h4><i class="bi bi-currency-exchange me-2"></i>Computor-Controlled Fund (CCF)</h4>
+<p class="text-muted">CCF proposals, voting, transfers, and subscription management (Contract 8).</p>
 
 <ul class="nav nav-tabs mb-3">
     @foreach (var tab in _tabs)
@@ -29,17 +29,37 @@
     case "Browse":
         <div class="mb-3">
             <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="browseMode" checked="@_browseActive" @onchange="() => { _browseActive = true; _browseIndices = null; }" />
+                <input class="form-check-input" type="radio" name="browseMode" checked="@(_browseMode == 0)" @onchange="() => { _browseMode = 0; _browseIndices = null; }" />
                 <label class="form-check-label">Active (current epoch)</label>
             </div>
             <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="browseMode" checked="@(!_browseActive)" @onchange="() => { _browseActive = false; _browseIndices = null; }" />
-                <label class="form-check-label">Prior epochs</label>
+                <input class="form-check-input" type="radio" name="browseMode" checked="@(_browseMode == 1)" @onchange="() => { _browseMode = 1; _browseIndices = null; }" />
+                <label class="form-check-label">Finished</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="browseMode" checked="@(_browseMode == 2)" @onchange="() => { _browseMode = 2; _browseIndices = null; }" />
+                <label class="form-check-label">By Index</label>
             </div>
         </div>
-        <button class="btn btn-primary btn-sm" @onclick="LoadProposalIndices" disabled="@_loading">
-            @(_loading ? "Loading..." : "Load Proposals")
-        </button>
+        @if (_browseMode == 2)
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-auto">
+                    <input type="number" class="form-control form-control-sm" @bind="_browseSingleIndex" min="0" placeholder="Proposal index" />
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary btn-sm" @onclick="LoadSingleProposal" disabled="@_loading">
+                        @(_loading ? "Loading..." : "Load Proposal")
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <button class="btn btn-primary btn-sm" @onclick="LoadProposalIndices" disabled="@_loading">
+                @(_loading ? "Loading..." : "Load Proposals")
+            </button>
+        }
 
         @if (_browseIndices != null)
         {
@@ -51,7 +71,7 @@
                 else
                 {
                     <table class="table table-sm table-hover">
-                        <thead><tr><th style="width:60px">Index</th><th>Proposer</th><th>Type</th><th style="width:60px">Epoch</th><th>URL</th><th style="width:30px"></th></tr></thead>
+                        <thead><tr><th style="width:60px">Index</th><th>Proposer</th><th style="width:60px">Epoch</th><th>Destination</th><th>Amount (QU)</th><th>URL</th><th style="width:30px"></th></tr></thead>
                         <tbody>
                             @foreach (var idx in _browseIndices)
                             {
@@ -60,20 +80,23 @@
                                 <tr @onclick="() => ToggleExpand(localIdx)" style="cursor:pointer">
                                     <td>@idx</td>
                                     <td class="mono small">@(p != null ? TruncateId(p.Proposer) : "...")</td>
-                                    <td>@(p != null ? GetTypeLabel(p.Type) : "...")</td>
                                     <td>@(p?.Epoch.ToString() ?? "...")</td>
-                                    <td class="small text-truncate" style="max-width:250px">@(p?.Url ?? "...")</td>
+                                    <td class="mono small">@(p != null ? TruncateId(p.Destination) : "...")</td>
+                                    <td>@(p != null ? p.Amount.ToString("N0") : "...")</td>
+                                    <td class="small text-truncate" style="max-width:200px">@(p?.Url ?? "...")</td>
                                     <td><i class="bi @(_expandedIndex == idx ? "bi-chevron-up" : "bi-chevron-down")"></i></td>
                                 </tr>
                                 @if (_expandedIndex == idx && p != null)
                                 {
-                                    <tr><td colspan="6">
+                                    <tr><td colspan="7">
                                         <div class="card card-body bg-light small">
                                             <div class="row g-2">
                                                 <div class="col-12"><strong>Proposer:</strong> <span class="mono">@p.Proposer</span></div>
                                                 <div class="col-md-6"><strong>Type:</strong> @GetTypeLabel(p.Type) (0x@(p.Type.ToString("X4")))</div>
                                                 <div class="col-md-3"><strong>Tick:</strong> @p.Tick</div>
                                                 <div class="col-md-3"><strong>Epoch:</strong> @p.Epoch</div>
+                                                <div class="col-12"><strong>Destination:</strong> <span class="mono">@p.Destination</span></div>
+                                                <div class="col-md-6"><strong>Amount:</strong> @p.Amount.ToString("N0") QU</div>
                                                 <div class="col-12"><strong>URL:</strong>
                                                     @if (!string.IsNullOrEmpty(p.Url))
                                                     {
@@ -84,7 +107,26 @@
                                                         <span class="text-muted">(none)</span>
                                                     }
                                                 </div>
-                                                @(RenderProposalData(p))
+                                                @if (p.HasSubscriptionProposal)
+                                                {
+                                                    <div class="col-12 mt-2"><strong class="text-info">Subscription Proposal</strong></div>
+                                                    <div class="col-md-6"><strong>Sub. Proposer:</strong> <span class="mono small">@TruncateId(p.SubProposal!.ProposerId)</span></div>
+                                                    <div class="col-md-6"><strong>Sub. Destination:</strong> <span class="mono small">@TruncateId(p.SubProposal!.Destination)</span></div>
+                                                    <div class="col-md-4"><strong>Weeks/Period:</strong> @p.SubProposal!.WeeksPerPeriod</div>
+                                                    <div class="col-md-4"><strong>Periods:</strong> @p.SubProposal!.NumberOfPeriods</div>
+                                                    <div class="col-md-4"><strong>Amount/Period:</strong> @p.SubProposal!.AmountPerPeriod.ToString("N0") QU</div>
+                                                    <div class="col-md-4"><strong>Start Epoch:</strong> @p.SubProposal!.StartEpoch</div>
+                                                }
+                                                @if (p.HasActiveSubscription)
+                                                {
+                                                    <div class="col-12 mt-2"><strong class="text-success">Active Subscription</strong></div>
+                                                    <div class="col-md-6"><strong>Sub. Destination:</strong> <span class="mono small">@TruncateId(p.Subscription!.Destination)</span></div>
+                                                    <div class="col-md-4"><strong>Weeks/Period:</strong> @p.Subscription!.WeeksPerPeriod</div>
+                                                    <div class="col-md-4"><strong>Periods:</strong> @p.Subscription!.NumberOfPeriods</div>
+                                                    <div class="col-md-4"><strong>Amount/Period:</strong> @p.Subscription!.AmountPerPeriod.ToString("N0") QU</div>
+                                                    <div class="col-md-4"><strong>Start Epoch:</strong> @p.Subscription!.StartEpoch</div>
+                                                    <div class="col-md-4"><strong>Current Period:</strong> @p.Subscription!.CurrentPeriod</div>
+                                                }
                                             </div>
                                         </div>
                                     </td></tr>
@@ -92,7 +134,7 @@
                             }
                         </tbody>
                     </table>
-                    @if (_browseIndices.Count >= 64)
+                    @if (_browseMode != 2 && _browseIndices.Count >= 64)
                     {
                         <button class="btn btn-outline-primary btn-sm" @onclick="LoadMoreProposals" disabled="@_loading">Load More</button>
                     }
@@ -102,7 +144,7 @@
         break;
 
     // ══════════════════════════════════════════════════════════
-    // PROPOSE — set or clear a proposal
+    // PROPOSE — set or clear a CCF proposal
     // ══════════════════════════════════════════════════════════
     case "Propose":
         @if (!Seed.HasSeed)
@@ -113,131 +155,63 @@
         {
             <div class="row"><div class="col-md-8">
                 <div class="card"><div class="card-body">
+                    @if (_proposalFee > 0)
+                    {
+                        <div class="alert alert-info small mb-3">Proposal fee: <strong>@_proposalFee.ToString("N0") QU</strong> (auto-fetched, sent as transaction amount)</div>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-secondary btn-sm mb-3" @onclick="LoadProposalFee" disabled="@_loading">Load Proposal Fee</button>
+                    }
+                    <p class="small text-muted">CCF only supports Transfer: Yes/No (0x0102) proposals.</p>
                     <div class="mb-3">
-                        <label class="form-label">Proposal Type</label>
-                        <select class="form-select form-select-sm" @bind="_propType">
-                            <optgroup label="General">
-                                <option value="2">Yes/No (0x0002)</option>
-                                <option value="3">3 Options (0x0003)</option>
-                                <option value="4">4 Options (0x0004)</option>
-                                <option value="5">5 Options (0x0005)</option>
-                                <option value="6">6 Options (0x0006)</option>
-                                <option value="7">7 Options (0x0007)</option>
-                                <option value="8">8 Options (0x0008)</option>
-                            </optgroup>
-                            <optgroup label="Transfer">
-                                <option value="258">Transfer: Yes/No (0x0102)</option>
-                                <option value="259">Transfer: 2 Amounts (0x0103)</option>
-                                <option value="260">Transfer: 3 Amounts (0x0104)</option>
-                                <option value="261">Transfer: 4 Amounts (0x0105)</option>
-                            </optgroup>
-                            <optgroup label="Variable">
-                                <option value="512">Scalar Mean (0x0200)</option>
-                                <option value="514">Variable: Yes/No (0x0202)</option>
-                                <option value="515">Variable: 2 Values (0x0203)</option>
-                                <option value="516">Variable: 3 Values (0x0204)</option>
-                                <option value="517">Variable: 4 Values (0x0205)</option>
-                            </optgroup>
-                            <optgroup label="Multi-Variables">
-                                <option value="770">Multi-Var: Yes/No (0x0302)</option>
-                                <option value="771">Multi-Var: 3 Options (0x0303)</option>
-                                <option value="772">Multi-Var: 4 Options (0x0304)</option>
-                            </optgroup>
-                            <optgroup label="Transfer in Epoch">
-                                <option value="1026">Transfer in Epoch: Yes/No (0x0402)</option>
-                            </optgroup>
-                        </select>
+                        <label class="form-label">Proposal URL <small class="text-muted">(max 255 chars)</small></label>
+                        <input class="form-control form-control-sm" @bind="_propUrl" maxlength="255" placeholder="https://..." />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Proposal URL <small class="text-muted">(max 255 chars, describes the proposal)</small></label>
-                        <input class="form-control form-control-sm" @bind="_propUrl" maxlength="255" placeholder="https://..." />
+                        <label class="form-label">Destination Identity</label>
+                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_propDest)"
+                               @bind="_propDest" @bind:event="oninput" placeholder="IDENTITY..." />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Amount (QU)</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_propAmount" min="0" />
                     </div>
                     @if (TickMonitor.IsConnected)
                     {
                         <div class="mb-3 small text-muted">Epoch: @TickMonitor.Epoch (auto-detected)</div>
                     }
 
-                    @* ── Type-specific fields ── *@
-                    @{
-                        var ptc = GetTypeClass(_propType);
-                        var poc = GetOptionCount(_propType);
-                    }
-
-                    @if (ptc == 0x01) @* Transfer *@
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="_propIsSub" id="subCheck" />
+                            <label class="form-check-label" for="subCheck">Subscription proposal</label>
+                        </div>
+                    </div>
+                    @if (_propIsSub)
                     {
-                        <div class="mb-3">
-                            <label class="form-label">Destination Identity</label>
-                            <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_propDest)"
-                                   @bind="_propDest" @bind:event="oninput" placeholder="IDENTITY..." />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Amounts <small class="text-muted">(millionths of revenue; 1,000,000 = 100%)</small></label>
-                            @for (int i = 0; i < Math.Min(poc - 1, 4); i++)
-                            {
-                                var ai = i;
-                                <div class="input-group input-group-sm mb-1">
-                                    <span class="input-group-text" style="width:80px">Option @(ai + 1)</span>
-                                    <input type="number" class="form-control" @bind="_propAmounts[ai]" />
-                                </div>
-                            }
-                        </div>
-                    }
-                    else if (ptc == 0x04) @* TransferInEpoch *@
-                    {
-                        <div class="mb-3">
-                            <label class="form-label">Destination Identity</label>
-                            <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_propDest)"
-                                   @bind="_propDest" @bind:event="oninput" placeholder="IDENTITY..." />
-                        </div>
                         <div class="row g-2 mb-3">
-                            <div class="col">
-                                <label class="form-label">Amount <small class="text-muted">(millionths)</small></label>
-                                <input type="number" class="form-control form-control-sm" @bind="_propAmount" />
+                            <div class="col-md-3">
+                                <label class="form-label">Weeks/Period</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_propWeeksPerPeriod" min="1" />
                             </div>
-                            <div class="col">
-                                <label class="form-label">Target Epoch</label>
-                                <input type="number" class="form-control form-control-sm" @bind="_propTargetEpoch" />
+                            <div class="col-md-3">
+                                <label class="form-label">Start Epoch</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_propStartEpoch" min="0" />
                             </div>
-                        </div>
-                    }
-                    else if (ptc == 0x02 && poc == 0) @* Variable Scalar *@
-                    {
-                        <div class="mb-3">
-                            <label class="form-label">Variable ID</label>
-                            <input type="number" class="form-control form-control-sm" @bind="_propVariable" />
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col">
-                                <label class="form-label">Min Value</label>
-                                <input type="number" class="form-control form-control-sm" @bind="_propMinValue" />
+                            <div class="col-md-3">
+                                <label class="form-label">Amount/Period (QU)</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_propAmountPerPeriod" min="0" />
                             </div>
-                            <div class="col">
-                                <label class="form-label">Max Value</label>
-                                <input type="number" class="form-control form-control-sm" @bind="_propMaxValue" />
-                            </div>
-                            <div class="col">
-                                <label class="form-label">Proposed Value</label>
-                                <input type="number" class="form-control form-control-sm" @bind="_propProposedValue" />
+                            <div class="col-md-3">
+                                <label class="form-label"># of Periods</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_propNumPeriods" min="0" />
                             </div>
                         </div>
-                    }
-                    else if (ptc == 0x02 && poc >= 2) @* Variable Options *@
-                    {
-                        <div class="mb-3">
-                            <label class="form-label">Variable ID</label>
-                            <input type="number" class="form-control form-control-sm" @bind="_propVariable" />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Values</label>
-                            @for (int i = 0; i < Math.Min(poc - 1, 4); i++)
-                            {
-                                var vi = i;
-                                <div class="input-group input-group-sm mb-1">
-                                    <span class="input-group-text" style="width:80px">Option @(vi + 1)</span>
-                                    <input type="number" class="form-control" @bind="_propValues[vi]" />
-                                </div>
-                            }
-                        </div>
+                        @if ((uint)_propWeeksPerPeriod * (uint)_propNumPeriods > 52)
+                        {
+                            <div class="alert alert-warning small">Total duration @((uint)_propWeeksPerPeriod * (uint)_propNumPeriods) epochs exceeds max 52.</div>
+                        }
                     }
 
                     <div class="d-flex gap-2">
@@ -278,6 +252,8 @@
                         <div class="alert alert-info small mb-3">
                             <strong>@GetTypeLabel(_voteProposal.Type)</strong> (0x@(_voteProposal.Type.ToString("X4")))<br />
                             Tick: @_voteProposal.Tick &bull; Epoch: @_voteProposal.Epoch<br />
+                            Destination: <span class="mono">@TruncateId(_voteProposal.Destination)</span> &bull;
+                            Amount: @_voteProposal.Amount.ToString("N0") QU<br />
                             @if (!string.IsNullOrEmpty(_voteProposal.Url))
                             {
                                 <text>URL: <a href="@_voteProposal.Url" target="_blank" rel="noopener">@_voteProposal.Url</a></text>
@@ -286,22 +262,10 @@
 
                         <div class="mb-3">
                             <label class="form-label">Vote Value</label>
-                            @if (GetTypeClass(_voteProposal.Type) == 0x02 && GetOptionCount(_voteProposal.Type) == 0)
-                            {
-                                <input type="number" class="form-control form-control-sm" @bind="_voteValue" placeholder="Scalar value" />
-                                <div class="form-text">Scalar voting: enter your proposed value.</div>
-                            }
-                            else
-                            {
-                                <select class="form-select form-select-sm" @bind="_voteValue">
-                                    <option value="0">0 — No Change</option>
-                                    @for (int i = 1; i < GetOptionCount(_voteProposal.Type); i++)
-                                    {
-                                        var oi = i;
-                                        <option value="@oi">@oi — Option @oi</option>
-                                    }
-                                </select>
-                            }
+                            <select class="form-select form-select-sm" @bind="_voteValue">
+                                <option value="0">0 — No Change</option>
+                                <option value="1">1 — Yes (Approve)</option>
+                            </select>
                         </div>
 
                         <div class="d-flex gap-2">
@@ -350,9 +314,9 @@
                             var votes = _resultsData.OptionVotes[ri];
                             var pct = _resultsData.TotalCast > 0 ? 100.0 * votes / _resultsData.TotalCast : 0;
                             <div class="d-flex align-items-center gap-2 mb-1 small">
-                                <span style="width:80px">@(ri == 0 ? "No Change" : $"Option {ri}")</span>
+                                <span style="width:100px">@(ri == 0 ? "No Change" : ri == 1 ? "Yes (Approve)" : $"Option {ri}")</span>
                                 <div class="progress flex-grow-1" style="height:20px">
-                                    <div class="progress-bar @(ri == 0 ? "bg-secondary" : "")" style="width:@(Math.Max(pct, 0.5).ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%">
+                                    <div class="progress-bar @(ri == 0 ? "bg-secondary" : "bg-success")" style="width:@(Math.Max(pct, 0.5).ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%">
                                         @votes (@(pct.ToString("F1"))%)
                                     </div>
                                 </div>
@@ -405,6 +369,10 @@
                             {
                                 <span>0 (No Change)</span>
                             }
+                            else if (_getVoteData.VoteValue == 1)
+                            {
+                                <span class="text-success">1 (Yes / Approve)</span>
+                            }
                             else
                             {
                                 <span>@_getVoteData.VoteValue</span>
@@ -417,35 +385,87 @@
         break;
 
     // ══════════════════════════════════════════════════════════
-    // REVENUE — revenue donation table
+    // SUBSCRIPTIONS — look up active subscription
     // ══════════════════════════════════════════════════════════
-    case "Revenue":
+    case "Subscriptions":
+        <div class="row"><div class="col-md-8">
+            <p class="small text-muted">Look up an active subscription by its destination identity.</p>
+            <div class="mb-3">
+                <label class="form-label">Destination Identity</label>
+                <div class="input-group input-group-sm">
+                    <input class="form-control mono @IdentityValidation.CssClass(_subLookupDest)"
+                           @bind="_subLookupDest" @bind:event="oninput" placeholder="IDENTITY..." />
+                    <button class="btn btn-outline-primary" @onclick="LoadSubscription" disabled="@_loading">
+                        @(_loading ? "Loading..." : "Lookup")
+                    </button>
+                </div>
+            </div>
+
+            @if (_subResult != null)
+            {
+                @if (!_subResult.Found)
+                {
+                    <div class="text-muted">No active subscription found for this destination.</div>
+                }
+                else
+                {
+                    <div class="card card-body small">
+                        <div class="row g-2">
+                            <div class="col-12"><strong>Destination:</strong> <span class="mono">@_subResult.Destination</span></div>
+                            <div class="col-12"><strong>URL:</strong>
+                                @if (!string.IsNullOrEmpty(_subResult.Url))
+                                {
+                                    <a href="@_subResult.Url" target="_blank" rel="noopener">@_subResult.Url</a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">(none)</span>
+                                }
+                            </div>
+                            <div class="col-md-4"><strong>Weeks/Period:</strong> @_subResult.WeeksPerPeriod</div>
+                            <div class="col-md-4"><strong># of Periods:</strong> @_subResult.NumberOfPeriods</div>
+                            <div class="col-md-4"><strong>Amount/Period:</strong> @_subResult.AmountPerPeriod.ToString("N0") QU</div>
+                            <div class="col-md-4"><strong>Start Epoch:</strong> @_subResult.StartEpoch</div>
+                            <div class="col-md-4"><strong>Current Period:</strong> @_subResult.CurrentPeriod</div>
+                        </div>
+                    </div>
+                }
+            }
+        </div></div>
+        break;
+
+    // ══════════════════════════════════════════════════════════
+    // TRANSFERS — latest one-time transfers
+    // ══════════════════════════════════════════════════════════
+    case "Transfers":
         <div>
-            <p class="small text-muted">Revenue donation entries define ongoing transfers from the network revenue pool.</p>
-            <button class="btn btn-outline-primary btn-sm" @onclick="LoadRevenueDonation" disabled="@_loading">
-                @(_loading ? "Loading..." : "Load Revenue Donation Table")
+            <p class="small text-muted">Recent one-time transfers approved by quorum.</p>
+            <button class="btn btn-outline-primary btn-sm" @onclick="LoadTransfers" disabled="@_loading">
+                @(_loading ? "Loading..." : "Load Latest Transfers")
             </button>
 
-            @if (_revEntries != null)
+            @if (_transfers != null)
             {
                 <div class="mt-3">
-                    @if (_revEntries.Count == 0)
+                    @if (_transfers.Count == 0)
                     {
-                        <div class="text-muted">No active revenue donations.</div>
+                        <div class="text-muted">No transfers found.</div>
                     }
                     else
                     {
                         <table class="table table-sm">
-                            <thead><tr><th>#</th><th>Destination</th><th>Amount</th><th>First Epoch</th></tr></thead>
+                            <thead><tr><th>#</th><th>Destination</th><th>Amount (QU)</th><th>Tick</th><th>Success</th><th>URL</th></tr></thead>
                             <tbody>
-                                @for (int i = 0; i < _revEntries.Count; i++)
+                                @for (int i = 0; i < _transfers.Count; i++)
                                 {
-                                    var e = _revEntries[i];
+                                    var t = _transfers[i];
                                     <tr>
                                         <td>@(i + 1)</td>
-                                        <td class="mono small">@e.Destination</td>
-                                        <td>@FormatMillionths(e.MillionthAmount)</td>
-                                        <td>@e.FirstEpoch</td>
+                                        <td class="mono small">@TruncateId(t.Destination)</td>
+                                        <td>@t.Amount.ToString("N0")</td>
+                                        <td>@t.Tick</td>
+                                        <td>@(t.Success ? "Yes" : "No")</td>
+                                        <td class="small text-truncate" style="max-width:200px">@t.Url</td>
                                     </tr>
                                 }
                             </tbody>
@@ -456,6 +476,48 @@
         </div>
         break;
 
+    // ══════════════════════════════════════════════════════════
+    // PAYMENTS — regular subscription payments
+    // ══════════════════════════════════════════════════════════
+    case "Payments":
+        <div>
+            <p class="small text-muted">Recent subscription (regular) payments made by the CCF contract.</p>
+            <button class="btn btn-outline-primary btn-sm" @onclick="LoadPayments" disabled="@_loading">
+                @(_loading ? "Loading..." : "Load Regular Payments")
+            </button>
+
+            @if (_payments != null)
+            {
+                <div class="mt-3">
+                    @if (_payments.Count == 0)
+                    {
+                        <div class="text-muted">No regular payments found.</div>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead><tr><th>#</th><th>Destination</th><th>Amount (QU)</th><th>Tick</th><th>Period</th><th>Success</th><th>URL</th></tr></thead>
+                            <tbody>
+                                @for (int i = 0; i < _payments.Count; i++)
+                                {
+                                    var p = _payments[i];
+                                    <tr>
+                                        <td>@(i + 1)</td>
+                                        <td class="mono small">@TruncateId(p.Destination)</td>
+                                        <td>@p.Amount.ToString("N0")</td>
+                                        <td>@p.Tick</td>
+                                        <td>@p.PeriodIndex</td>
+                                        <td>@(p.Success ? "Yes" : "No")</td>
+                                        <td class="small text-truncate" style="max-width:200px">@p.Url</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        </div>
+        break;
 }
 
 @if (_result != null)
@@ -475,11 +537,11 @@
 
 @code {
     // ── Constants ──
-    const uint GqmpropIndex = 6;
+    const uint CcfIndex = 8;
     const long NO_VOTE_VALUE = long.MinValue;
 
     // ── Tab state ──
-    static readonly string[] _tabs = ["Browse", "Propose", "Vote", "Results", "Get Vote", "Revenue"];
+    static readonly string[] _tabs = ["Browse", "Propose", "Vote", "Results", "Get Vote", "Subscriptions", "Transfers", "Payments"];
     string _activeTab = "Browse";
     string? _error;
     string? _result;
@@ -487,27 +549,26 @@
     bool _loading;
 
     // ── Browse ──
-    bool _browseActive = true;
+    int _browseMode; // 0=active, 1=finished, 2=by index
+    int _browseSingleIndex;
     List<ushort>? _browseIndices;
-    Dictionary<ushort, ParsedProposal> _browseProposals = new();
+    Dictionary<ushort, CcfParsedProposal> _browseProposals = new();
     ushort? _expandedIndex;
 
     // ── Propose ──
-    int _propType = 0x0002;
+    uint _proposalFee;
     string _propUrl = "";
     string _propDest = "";
-    string[] _propAmounts = ["", "", "", ""];
-    string _propVariable = "";
-    string[] _propValues = ["", "", "", ""];
-    string _propMinValue = "";
-    string _propMaxValue = "";
-    string _propProposedValue = "";
-    string _propTargetEpoch = "";
-    string _propAmount = "";
+    long _propAmount;
+    bool _propIsSub;
+    int _propWeeksPerPeriod = 1;
+    uint _propStartEpoch;
+    ulong _propAmountPerPeriod;
+    uint _propNumPeriods;
 
     // ── Vote ──
     int _voteProposalIndex;
-    ParsedProposal? _voteProposal;
+    CcfParsedProposal? _voteProposal;
     string _voteValue = "0";
 
     // ── Results ──
@@ -519,14 +580,27 @@
     string _getVoteIdentity = "";
     ParsedVote? _getVoteData;
 
-    // ── Revenue ──
-    List<RevDonEntry>? _revEntries;
+    // ── Subscriptions ──
+    string _subLookupDest = "";
+    SubscriptionResult? _subResult;
 
-    // ── Helper records ──
-    record ParsedProposal(ushort Index, string Proposer, string Url, ushort Epoch, ushort Type, uint Tick, byte[] DataUnion);
+    // ── Transfers ──
+    List<TransferEntry>? _transfers;
+
+    // ── Payments ──
+    List<PaymentEntry>? _payments;
+
+    // ── Records ──
+    record CcfParsedProposal(ushort Index, string Proposer, string Url, ushort Epoch, ushort Type, uint Tick,
+        string Destination, long Amount, bool HasSubscriptionProposal, bool HasActiveSubscription,
+        SubProposalInfo? SubProposal, SubscriptionInfo? Subscription);
+    record SubProposalInfo(string ProposerId, string Destination, string Url, byte WeeksPerPeriod, uint NumberOfPeriods, ulong AmountPerPeriod, uint StartEpoch);
+    record SubscriptionInfo(string Destination, string Url, byte WeeksPerPeriod, uint NumberOfPeriods, ulong AmountPerPeriod, uint StartEpoch, int CurrentPeriod);
+    record SubscriptionResult(bool Found, string Destination, string Url, byte WeeksPerPeriod, uint NumberOfPeriods, ulong AmountPerPeriod, uint StartEpoch, int CurrentPeriod);
     record ParsedResults(ushort ProposalIndex, ushort OptionCount, uint Tick, uint TotalAuthorized, uint TotalCast, uint[] OptionVotes, long ScalarResult);
     record ParsedVote(ushort ProposalIndex, ushort ProposalType, uint ProposalTick, long VoteValue);
-    record RevDonEntry(string Destination, long MillionthAmount, ushort FirstEpoch);
+    record TransferEntry(string Destination, string Url, long Amount, uint Tick, bool Success);
+    record PaymentEntry(string Destination, string Url, long Amount, uint Tick, int PeriodIndex, bool Success);
 
     // ══════════════════════════════════════════════════════════
     // Helpers
@@ -538,39 +612,11 @@
         ? TickMonitor.Tick + (uint)Settings.TickOffset
         : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
 
-    static int GetTypeClass(int type) => (type >> 8) & 0xFF;
-    static int GetOptionCount(int type) => type & 0xFF;
-
     static string GetTypeLabel(int type) => type switch
     {
-        0x0002 => "General: Yes/No",
-        0x0003 => "General: 3 Options",
-        0x0004 => "General: 4 Options",
-        0x0005 => "General: 5 Options",
-        0x0006 => "General: 6 Options",
-        0x0007 => "General: 7 Options",
-        0x0008 => "General: 8 Options",
         0x0102 => "Transfer: Yes/No",
-        0x0103 => "Transfer: 2 Amounts",
-        0x0104 => "Transfer: 3 Amounts",
-        0x0105 => "Transfer: 4 Amounts",
-        0x0200 => "Variable: Scalar Mean",
-        0x0202 => "Variable: Yes/No",
-        0x0203 => "Variable: 2 Values",
-        0x0204 => "Variable: 3 Values",
-        0x0205 => "Variable: 4 Values",
-        0x0302 => "Multi-Var: Yes/No",
-        0x0303 => "Multi-Var: 3 Options",
-        0x0304 => "Multi-Var: 4 Options",
-        0x0402 => "Transfer in Epoch: Yes/No",
-        _ => $"Unknown (0x{type:X4})"
+        _ => $"Type 0x{type:X4}"
     };
-
-    static string FormatMillionths(long value)
-    {
-        var pct = value / 10000.0;
-        return $"{pct:F4}% ({value:N0})";
-    }
 
     static string TruncateId(string id) => id.Length > 16 ? id[..8] + "..." + id[^8..] : id;
 
@@ -580,82 +626,12 @@
         catch { return Convert.ToHexString(pk)[..16] + "..."; }
     }
 
-    static long ReadSint64(ReadOnlySpan<byte> data, int offset) =>
-        offset + 8 <= data.Length ? BinaryPrimitives.ReadInt64LittleEndian(data[offset..]) : 0;
-
-    static ulong ReadUint64(ReadOnlySpan<byte> data, int offset) =>
-        offset + 8 <= data.Length ? BinaryPrimitives.ReadUInt64LittleEndian(data[offset..]) : 0;
-
-    static ushort ReadUint16(ReadOnlySpan<byte> data, int offset) =>
-        offset + 2 <= data.Length ? BinaryPrimitives.ReadUInt16LittleEndian(data[offset..]) : (ushort)0;
-
-    byte[] ParseHex(string hex)
+    static string SafeUrlFromBytes(ReadOnlySpan<byte> urlBytes)
     {
-        var clean = hex.Replace(" ", "").Replace("\n", "").Replace("\r", "").Trim();
-        return string.IsNullOrEmpty(clean) ? [] : Convert.FromHexString(clean);
+        int end = urlBytes.IndexOf((byte)0);
+        if (end < 0) end = urlBytes.Length;
+        return System.Text.Encoding.ASCII.GetString(urlBytes[..end]);
     }
-
-    // ── Browse: render expanded data fields ──
-    RenderFragment RenderProposalData(ParsedProposal p) => __builder =>
-    {
-        var tc = GetTypeClass(p.Type);
-        var oc = GetOptionCount(p.Type);
-        var d = p.DataUnion.AsSpan();
-
-        if (tc == 0x01) // Transfer
-        {
-            __builder.OpenElement(0, "div"); __builder.AddAttribute(1, "class", "col-12 mt-1");
-            __builder.AddContent(2, (MarkupString)$"<strong>Destination:</strong> <span class=\"mono\">{SafeIdentityFromPk(d[..32].ToArray())}</span>");
-            __builder.CloseElement();
-            for (int i = 0; i < Math.Min(oc - 1, 4); i++)
-            {
-                var amt = ReadSint64(d, 32 + i * 8);
-                __builder.OpenElement(3, "div"); __builder.AddAttribute(4, "class", "col-md-6");
-                __builder.AddContent(5, (MarkupString)$"<strong>Amount {i + 1}:</strong> {FormatMillionths(amt)}");
-                __builder.CloseElement();
-            }
-        }
-        else if (tc == 0x04) // TransferInEpoch
-        {
-            __builder.OpenElement(0, "div"); __builder.AddAttribute(1, "class", "col-12 mt-1");
-            __builder.AddContent(2, (MarkupString)$"<strong>Destination:</strong> <span class=\"mono\">{SafeIdentityFromPk(d[..32].ToArray())}</span>");
-            __builder.CloseElement();
-            __builder.OpenElement(3, "div"); __builder.AddAttribute(4, "class", "col-md-6");
-            __builder.AddContent(5, (MarkupString)$"<strong>Amount:</strong> {FormatMillionths(ReadSint64(d, 32))}");
-            __builder.CloseElement();
-            __builder.OpenElement(6, "div"); __builder.AddAttribute(7, "class", "col-md-6");
-            __builder.AddContent(8, (MarkupString)$"<strong>Target Epoch:</strong> {ReadUint16(d, 40)}");
-            __builder.CloseElement();
-        }
-        else if (tc == 0x02 && oc == 0) // Variable Scalar
-        {
-            __builder.OpenElement(0, "div"); __builder.AddAttribute(1, "class", "col-md-6 mt-1");
-            __builder.AddContent(2, (MarkupString)$"<strong>Variable ID:</strong> {ReadUint64(d, 0)}");
-            __builder.CloseElement();
-            __builder.OpenElement(3, "div"); __builder.AddAttribute(4, "class", "col-md-6");
-            __builder.AddContent(5, (MarkupString)$"<strong>Min:</strong> {ReadSint64(d, 8)}");
-            __builder.CloseElement();
-            __builder.OpenElement(6, "div"); __builder.AddAttribute(7, "class", "col-md-6");
-            __builder.AddContent(8, (MarkupString)$"<strong>Max:</strong> {ReadSint64(d, 16)}");
-            __builder.CloseElement();
-            __builder.OpenElement(9, "div"); __builder.AddAttribute(10, "class", "col-md-6");
-            __builder.AddContent(11, (MarkupString)$"<strong>Proposed:</strong> {ReadSint64(d, 24)}");
-            __builder.CloseElement();
-        }
-        else if (tc == 0x02 && oc >= 2) // Variable Options
-        {
-            __builder.OpenElement(0, "div"); __builder.AddAttribute(1, "class", "col-md-6 mt-1");
-            __builder.AddContent(2, (MarkupString)$"<strong>Variable ID:</strong> {ReadUint64(d, 0)}");
-            __builder.CloseElement();
-            for (int i = 0; i < Math.Min(oc - 1, 4); i++)
-            {
-                var val = ReadSint64(d, 8 + i * 8);
-                __builder.OpenElement(3, "div"); __builder.AddAttribute(4, "class", "col-md-6");
-                __builder.AddContent(5, (MarkupString)$"<strong>Value {i + 1}:</strong> {val}");
-                __builder.CloseElement();
-            }
-        }
-    };
 
     // ══════════════════════════════════════════════════════════
     // Browse
@@ -666,16 +642,16 @@
         _loading = true; _error = null; _browseProposals.Clear(); _expandedIndex = null;
         try
         {
-            var input = new GetProposalIndicesInput { ActiveProposals = _browseActive, PrevProposalIndex = -1 };
-            var result = await Backend.QuerySmartContractAsync(GqmpropIndex, 1, input.ToBytes());
+            var input = new GetProposalIndicesInput { ActiveProposals = _browseMode == 0, PrevProposalIndex = -1 };
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 1, input.ToBytes());
             var output = GetProposalIndicesOutput.FromBytes(result);
             _browseIndices = output.Indices.Take(output.NumOfIndices).ToList();
             StateHasChanged();
 
             foreach (var idx in _browseIndices)
             {
-                try { await LoadProposalDetail(idx); StateHasChanged(); }
-                catch { /* skip failed fetches */ }
+                try { await LoadProposalDetail(idx, new byte[32]); StateHasChanged(); }
+                catch { /* skip */ }
             }
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -689,8 +665,8 @@
         try
         {
             var prevMax = _browseIndices.Max();
-            var input = new GetProposalIndicesInput { ActiveProposals = _browseActive, PrevProposalIndex = prevMax };
-            var result = await Backend.QuerySmartContractAsync(GqmpropIndex, 1, input.ToBytes());
+            var input = new GetProposalIndicesInput { ActiveProposals = _browseMode == 0, PrevProposalIndex = prevMax };
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 1, input.ToBytes());
             var output = GetProposalIndicesOutput.FromBytes(result);
             var newIndices = output.Indices.Take(output.NumOfIndices).ToList();
             _browseIndices.AddRange(newIndices);
@@ -698,7 +674,7 @@
 
             foreach (var idx in newIndices)
             {
-                try { await LoadProposalDetail(idx); StateHasChanged(); }
+                try { await LoadProposalDetail(idx, new byte[32]); StateHasChanged(); }
                 catch { /* skip */ }
             }
         }
@@ -706,29 +682,81 @@
         finally { _loading = false; }
     }
 
-    async Task LoadProposalDetail(ushort index)
+    async Task LoadSingleProposal()
     {
-        var input = new GetProposalInput { ProposalIndex = index };
-        var result = await Backend.QuerySmartContractAsync(GqmpropIndex, 2, input.ToBytes());
-        var p = ParseProposalResponse(index, result);
+        _loading = true; _error = null; _browseProposals.Clear(); _expandedIndex = null;
+        try
+        {
+            var idx = (ushort)_browseSingleIndex;
+            await LoadProposalDetail(idx, new byte[32]);
+            _browseIndices = [idx];
+            _expandedIndex = idx;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    async Task LoadProposalDetail(ushort index, byte[] subscriptionDest)
+    {
+        var input = new GetProposalInput { SubscriptionDestination = subscriptionDest, ProposalIndex = index };
+        var result = await Backend.QuerySmartContractAsync(CcfIndex, 2, input.ToBytes());
+        var p = ParseCcfProposalResponse(index, result);
         if (p != null)
             _browseProposals[index] = p;
     }
 
-    ParsedProposal? ParseProposalResponse(ushort index, byte[] data)
+    CcfParsedProposal? ParseCcfProposalResponse(ushort index, byte[] data)
     {
-        if (data.Length < 368 || data[0] == 0) return null;
+        // GetProposal output: okay(1) + hasSub(1) + hasActive(1) + pad(5) + proposer(32) + ProposalDataYesNo(304) + SubscriptionData(312) + SubscriptionProposalData(340) = 996
+        if (data.Length < 344 || data[0] == 0) return null;
+
+        bool hasSP = data[1] != 0;
+        bool hasAS = data[2] != 0;
 
         var proposerPk = data.AsSpan(8, 32).ToArray();
         var proposer = SafeIdentityFromPk(proposerPk);
-        var proposal = data.AsSpan(40, 328);
-        var url = System.Text.Encoding.ASCII.GetString(proposal[..256]).TrimEnd('\0');
+
+        // ProposalDataYesNo (304 bytes) at offset 40
+        var proposal = data.AsSpan(40, 304);
+        var url = SafeUrlFromBytes(proposal[..256]);
         var epoch = BinaryPrimitives.ReadUInt16LittleEndian(proposal[256..]);
         var type = BinaryPrimitives.ReadUInt16LittleEndian(proposal[258..]);
         var tick = BinaryPrimitives.ReadUInt32LittleEndian(proposal[260..]);
-        var dataUnion = proposal.Slice(264, 64).ToArray();
+        // Data union: destination(32) at 264, amount(8) at 296
+        var destPk = proposal.Slice(264, 32).ToArray();
+        var destination = SafeIdentityFromPk(destPk);
+        var amount = BinaryPrimitives.ReadInt64LittleEndian(proposal[296..]);
 
-        return new ParsedProposal(index, proposer, url, epoch, type, tick, dataUnion);
+        SubProposalInfo? subProp = null;
+        SubscriptionInfo? activeSub = null;
+
+        // SubscriptionData (312 bytes) at offset 344
+        if (hasAS && data.Length >= 344 + 312)
+        {
+            var sd = data.AsSpan(344, 312);
+            var sdDest = SafeIdentityFromPk(sd[..32].ToArray());
+            var sdUrl = SafeUrlFromBytes(sd.Slice(32, 256));
+            activeSub = new SubscriptionInfo(sdDest, sdUrl, sd[288],
+                BinaryPrimitives.ReadUInt32LittleEndian(sd[292..]),
+                BinaryPrimitives.ReadUInt64LittleEndian(sd[296..]),
+                BinaryPrimitives.ReadUInt32LittleEndian(sd[304..]),
+                BinaryPrimitives.ReadInt32LittleEndian(sd[308..]));
+        }
+
+        // SubscriptionProposalData (340 bytes) at offset 656
+        if (hasSP && data.Length >= 656 + 340)
+        {
+            var sp = data.AsSpan(656, 340);
+            var spProposer = SafeIdentityFromPk(sp[..32].ToArray());
+            var spDest = SafeIdentityFromPk(sp.Slice(32, 32).ToArray());
+            var spUrl = SafeUrlFromBytes(sp.Slice(64, 256));
+            subProp = new SubProposalInfo(spProposer, spDest, spUrl, sp[320],
+                BinaryPrimitives.ReadUInt32LittleEndian(sp[324..]),
+                BinaryPrimitives.ReadUInt64LittleEndian(sp[328..]),
+                BinaryPrimitives.ReadUInt32LittleEndian(sp[336..]));
+        }
+
+        return new CcfParsedProposal(index, proposer, url, epoch, type, tick, destination, amount, hasSP, hasAS, subProp, activeSub);
     }
 
     async Task ToggleExpand(ushort index)
@@ -737,7 +765,7 @@
         _expandedIndex = index;
         if (!_browseProposals.ContainsKey(index))
         {
-            try { await LoadProposalDetail(index); }
+            try { await LoadProposalDetail(index, new byte[32]); }
             catch (Exception ex) { _error = ex.Message; }
         }
     }
@@ -746,13 +774,29 @@
     // Propose
     // ══════════════════════════════════════════════════════════
 
+    async Task LoadProposalFee()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 6, []);
+            _proposalFee = GetProposalFeeOutput.FromBytes(result).ProposalFee;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
     async Task SubmitProposal()
     {
         _sending = true; _error = null; _result = null;
         try
         {
+            if (_proposalFee == 0) await LoadProposalFee();
+            if (_proposalFee == 0) throw new InvalidOperationException("Could not determine proposal fee.");
+
             var payload = BuildProposalPayload();
-            await BroadcastGqm(1, payload, "GQMProp Set Proposal");
+            await BroadcastCcf(_proposalFee, payload,
+                _propIsSub ? "CCF Set Proposal (subscription)" : "CCF Set Proposal");
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _sending = false; }
@@ -763,7 +807,12 @@
         _sending = true; _error = null; _result = null;
         try
         {
-            await BroadcastGqm(1, new byte[328], "GQMProp Clear Proposal");
+            if (_proposalFee == 0) await LoadProposalFee();
+            if (_proposalFee == 0) throw new InvalidOperationException("Could not determine proposal fee.");
+
+            // ProposalDataYesNo with epoch=0 (304 bytes) + subscription fields (20 bytes) = 324 bytes, all zeros
+            var data = new byte[324];
+            await BroadcastCcf(_proposalFee, data, "CCF Clear Proposal");
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _sending = false; }
@@ -771,73 +820,44 @@
 
     byte[] BuildProposalPayload()
     {
-        var data = new byte[328];
+        // ProposalDataYesNo (304 bytes) + subscription fields (20 bytes) = 324 bytes
+        var data = new byte[324];
 
         // URL (256 bytes, ASCII, null-terminated)
         var urlBytes = System.Text.Encoding.ASCII.GetBytes(_propUrl.Trim());
         if (urlBytes.Length > 255) throw new InvalidOperationException("URL too long (max 255 chars).");
         Array.Copy(urlBytes, data, urlBytes.Length);
 
-        // Epoch (auto from TickMonitor)
+        // Epoch
         var epoch = TickMonitor.IsConnected ? TickMonitor.Epoch : (ushort)0;
         if (epoch == 0) throw new InvalidOperationException("Cannot determine current epoch. Please connect to the network.");
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(256), epoch);
 
-        // Type
-        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(258), (ushort)_propType);
+        // Type = Transfer: Yes/No (0x0102) — only type allowed for CCF
+        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(258), 0x0102);
 
         // Tick = 0 (system fills at offset 260-263, already zero)
 
-        // Data union (64 bytes at offset 264)
-        var typeClass = GetTypeClass(_propType);
-        var optCount = GetOptionCount(_propType);
-
-        if (typeClass == 0x01) // Transfer
-        {
-            WriteDest(data.AsSpan(264));
-            for (int i = 0; i < Math.Min(optCount - 1, 4); i++)
-                if (long.TryParse(_propAmounts[i], out var amt))
-                    BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(296 + i * 8), amt);
-        }
-        else if (typeClass == 0x04) // TransferInEpoch
-        {
-            WriteDest(data.AsSpan(264));
-            if (long.TryParse(_propAmount, out var amt))
-                BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(296), amt);
-            if (ushort.TryParse(_propTargetEpoch, out var te))
-                BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(304), te);
-        }
-        else if (typeClass == 0x02 && optCount == 0) // Variable Scalar
-        {
-            if (ulong.TryParse(_propVariable, out var vid))
-                BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(264), vid);
-            if (long.TryParse(_propMinValue, out var min))
-                BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(272), min);
-            if (long.TryParse(_propMaxValue, out var max))
-                BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(280), max);
-            if (long.TryParse(_propProposedValue, out var pv))
-                BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(288), pv);
-        }
-        else if (typeClass == 0x02 && optCount >= 2) // Variable Options
-        {
-            if (ulong.TryParse(_propVariable, out var vid))
-                BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(264), vid);
-            for (int i = 0; i < Math.Min(optCount - 1, 4); i++)
-                if (long.TryParse(_propValues[i], out var val))
-                    BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(272 + i * 8), val);
-        }
-        // GeneralOptions (0x00) and MultiVariables (0x03) have no data union fields
-
-        return data;
-    }
-
-    void WriteDest(Span<byte> target)
-    {
+        // Data union: destination(32) at offset 264, amount(8) at offset 296
         var err = IdentityValidation.Validate(_propDest);
         if (err != null) throw new InvalidOperationException($"Invalid destination: {err}");
         if (!QubicIdentity.TryParse(_propDest.Trim(), out var destId))
             throw new InvalidOperationException("Could not parse destination identity.");
-        destId.PublicKey.CopyTo(target);
+        destId.PublicKey.CopyTo(data.AsSpan(264));
+        BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(296), _propAmount);
+
+        // Subscription fields (at offset 304)
+        data[304] = (byte)(_propIsSub ? 1 : 0);
+        if (_propIsSub)
+        {
+            data[305] = (byte)_propWeeksPerPeriod;
+            // _padding0 at 306-307 already zero
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(308), _propStartEpoch);
+            BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(312), _propAmountPerPeriod);
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(320), _propNumPeriods);
+        }
+
+        return data;
     }
 
     // ══════════════════════════════════════════════════════════
@@ -849,9 +869,9 @@
         _loading = true; _error = null; _voteProposal = null;
         try
         {
-            var input = new GetProposalInput { ProposalIndex = (ushort)_voteProposalIndex };
-            var result = await Backend.QuerySmartContractAsync(GqmpropIndex, 2, input.ToBytes());
-            _voteProposal = ParseProposalResponse((ushort)_voteProposalIndex, result);
+            var input = new GetProposalInput { SubscriptionDestination = new byte[32], ProposalIndex = (ushort)_voteProposalIndex };
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 2, input.ToBytes());
+            _voteProposal = ParseCcfProposalResponse((ushort)_voteProposalIndex, result);
             if (_voteProposal == null) _error = "Proposal not found or invalid.";
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -866,7 +886,7 @@
         {
             if (!long.TryParse(_voteValue, out var voteVal)) { _error = "Invalid vote value."; _sending = false; return; }
             var data = BuildVotePayload(_voteProposal, voteVal);
-            await BroadcastGqm(2, data, $"GQMProp Vote (index={_voteProposalIndex}, value={voteVal})");
+            await BroadcastCcf(0, data, $"CCF Vote (index={_voteProposalIndex}, value={voteVal})");
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _sending = false; }
@@ -879,13 +899,13 @@
         try
         {
             var data = BuildVotePayload(_voteProposal, NO_VOTE_VALUE);
-            await BroadcastGqm(2, data, $"GQMProp Clear Vote (index={_voteProposalIndex})");
+            await BroadcastCcf(0, data, $"CCF Clear Vote (index={_voteProposalIndex})");
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _sending = false; }
     }
 
-    static byte[] BuildVotePayload(ParsedProposal proposal, long voteValue)
+    static byte[] BuildVotePayload(CcfParsedProposal proposal, long voteValue)
     {
         var data = new byte[16];
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(0), proposal.Index);
@@ -905,11 +925,10 @@
         try
         {
             var input = new GetVotingResultsInput { ProposalIndex = (ushort)_resultsIndex };
-            var result = await Backend.QuerySmartContractAsync(GqmpropIndex, 4, input.ToBytes());
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 4, input.ToBytes());
 
             if (result.Length < 2 || result[0] == 0) { _error = "No results found for this proposal."; return; }
 
-            // Determine data offset: if response >= 56 bytes, aligned (offset 8); otherwise try packed (offset 1)
             int off = result.Length >= 56 ? 8 : 1;
             var d = result.AsSpan(off);
 
@@ -956,11 +975,10 @@
             }
 
             var input = new GetVoteInput { Voter = voterPk, ProposalIndex = (ushort)_getVoteIndex };
-            var result = await Backend.QuerySmartContractAsync(GqmpropIndex, 3, input.ToBytes());
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 3, input.ToBytes());
 
             if (result.Length < 2 || result[0] == 0) { _error = "No vote found."; return; }
 
-            // Determine offset: aligned (8) or packed (1)
             int off = result.Length >= 24 ? 8 : 1;
             var d = result.AsSpan(off);
 
@@ -976,19 +994,86 @@
     }
 
     // ══════════════════════════════════════════════════════════
-    // Revenue Donation
+    // Subscriptions
     // ══════════════════════════════════════════════════════════
 
-    async Task LoadRevenueDonation()
+    async Task LoadSubscription()
     {
-        _loading = true; _error = null; _revEntries = null;
+        _loading = true; _error = null; _subResult = null;
         try
         {
-            var result = await Backend.QuerySmartContractAsync(GqmpropIndex, 5, []);
-            var output = GetRevenueDonationOutput.FromBytes(result);
-            _revEntries = output.Entries
-                .Where(e => e.DestinationPublicKey.Any(b => b != 0))
-                .Select(e => new RevDonEntry(SafeIdentityFromPk(e.DestinationPublicKey), e.MillionthAmount, e.FirstEpoch))
+            var err = IdentityValidation.Validate(_subLookupDest);
+            if (err != null) { _error = err; _loading = false; return; }
+            if (!QubicIdentity.TryParse(_subLookupDest.Trim(), out var destId))
+            { _error = "Invalid destination identity."; _loading = false; return; }
+
+            // Use GetProposal (function 2) with proposalIndex=0 and subscriptionDestination set
+            var input = new GetProposalInput { SubscriptionDestination = destId.PublicKey, ProposalIndex = 0 };
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 2, input.ToBytes());
+
+            if (result.Length < 8) { _subResult = new SubscriptionResult(false, "", "", 0, 0, 0, 0, 0); return; }
+
+            bool hasActive = result[2] != 0;
+            if (!hasActive || result.Length < 344 + 312)
+            {
+                _subResult = new SubscriptionResult(false, "", "", 0, 0, 0, 0, 0);
+                return;
+            }
+
+            // Parse SubscriptionData at offset 344
+            var sd = result.AsSpan(344, 312);
+            var sdDest = SafeIdentityFromPk(sd[..32].ToArray());
+            var sdUrl = SafeUrlFromBytes(sd.Slice(32, 256));
+            _subResult = new SubscriptionResult(true, sdDest, sdUrl, sd[288],
+                BinaryPrimitives.ReadUInt32LittleEndian(sd[292..]),
+                BinaryPrimitives.ReadUInt64LittleEndian(sd[296..]),
+                BinaryPrimitives.ReadUInt32LittleEndian(sd[304..]),
+                BinaryPrimitives.ReadInt32LittleEndian(sd[308..]));
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Transfers
+    // ══════════════════════════════════════════════════════════
+
+    async Task LoadTransfers()
+    {
+        _loading = true; _error = null; _transfers = null;
+        try
+        {
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 5, []);
+            var output = GetLatestTransfersOutput.FromBytes(result);
+            _transfers = output.Entries
+                .Where(e => e.Destination.Any(b => b != 0))
+                .Select(e => new TransferEntry(
+                    SafeIdentityFromPk(e.Destination),
+                    SafeUrlFromBytes(e.Url),
+                    e.Amount, e.Tick, e.Success))
+                .ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Payments
+    // ══════════════════════════════════════════════════════════
+
+    async Task LoadPayments()
+    {
+        _loading = true; _error = null; _payments = null;
+        try
+        {
+            var result = await Backend.QuerySmartContractAsync(CcfIndex, 7, []);
+            var output = GetRegularPaymentsOutput.FromBytes(result);
+            _payments = output.Entries
+                .Where(e => e.Destination.Any(b => b != 0))
+                .Select(e => new PaymentEntry(
+                    SafeIdentityFromPk(e.Destination),
+                    SafeUrlFromBytes(e.Url),
+                    e.Amount, e.Tick, e.PeriodIndex, e.Success))
                 .ToList();
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -999,15 +1084,11 @@
     // Broadcast helpers
     // ══════════════════════════════════════════════════════════
 
-    async Task BroadcastGqm(ushort inputType, byte[] data, string desc)
+    async Task BroadcastCcf(long amount, byte[] data, string desc)
     {
         var tick = await GetTick();
-        await Broadcast(GqmpropIndex, 0, tick, new GenericContractPayload(inputType, data), desc);
-    }
-
-    async Task Broadcast(uint contractIndex, long amount, uint tick, Qubic.Core.Payloads.ITransactionPayload payload, string desc)
-    {
-        var dest = QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey((int)contractIndex));
+        var dest = QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey((int)CcfIndex));
+        var payload = new GenericContractPayload((ushort)(desc.Contains("Vote") ? 2 : 1), data);
         var tx = Seed.CreateAndSignTransaction(dest, amount, tick, payload);
         var result = await Backend.BroadcastTransactionAsync(tx);
         _result = result.TransactionId;

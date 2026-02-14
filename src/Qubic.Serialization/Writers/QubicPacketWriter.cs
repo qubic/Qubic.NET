@@ -104,6 +104,29 @@ public sealed class QubicPacketWriter
     }
 
     /// <summary>
+    /// Writes a request for a contract's IPO status.
+    /// </summary>
+    public byte[] WriteRequestContractIPO(uint contractIndex)
+    {
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestContractIPO, 4);
+        _writer.Write(contractIndex);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Writes a SpecialCommand packet with the given payload and signature.
+    /// </summary>
+    public byte[] WriteSpecialCommand(byte[] commandPayload, byte[] signature)
+    {
+        Reset();
+        WriteHeader(QubicPacketTypes.SpecialCommand, commandPayload.Length + signature.Length);
+        _writer.Write(commandPayload);
+        _writer.Write(signature);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
     /// Writes a request for owned assets.
     /// </summary>
     public byte[] WriteRequestOwnedAssets(QubicIdentity identity)

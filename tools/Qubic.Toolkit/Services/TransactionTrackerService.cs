@@ -8,8 +8,8 @@ namespace Qubic.Toolkit;
 public enum TrackedTxStatus
 {
     Pending,    // Broadcast, waiting for target tick
-    Confirmed,  // MoneyFlew = true or receipt Status = true
-    Failed,     // MoneyFlew = false or receipt Status = false
+    Confirmed,  // MoneyFlew = true, receipt Status = true, or zero-amount contract call found on-chain
+    Failed,     // MoneyFlew = false (with amount > 0) or receipt Status = false (non-contract)
     Unknown     // Tick passed but couldn't determine status
 }
 
@@ -258,9 +258,14 @@ public sealed class TransactionTrackerService : IDisposable
                         }
                         else if (info.MoneyFlew == false)
                         {
-                            tx.Status = TrackedTxStatus.Failed;
+                            // For contract procedure calls (InputType > 0) with amount 0,
+                            // moneyFlew=false is expected — no QU transferred. The transaction
+                            // being found on-chain means it was executed successfully.
+                            var isZeroAmountContractCall = tx.Amount == 0 && tx.InputType > 0;
+                            tx.Status = isZeroAmountContractCall ? TrackedTxStatus.Confirmed : TrackedTxStatus.Failed;
                             tx.ResolvedUtc = DateTime.UtcNow;
                             changed = true;
+                            confirmed = isZeroAmountContractCall;
                         }
                     }
                 }
@@ -272,10 +277,19 @@ public sealed class TransactionTrackerService : IDisposable
                     if (receipt != null)
                     {
                         tx.MoneyFlew = receipt.Status;
-                        tx.Status = receipt.Status ? TrackedTxStatus.Confirmed : TrackedTxStatus.Failed;
+                        var isZeroAmountContractCall = tx.Amount == 0 && tx.InputType > 0;
+                        if (receipt.Status)
+                        {
+                            tx.Status = TrackedTxStatus.Confirmed;
+                            confirmed = true;
+                        }
+                        else
+                        {
+                            tx.Status = isZeroAmountContractCall ? TrackedTxStatus.Confirmed : TrackedTxStatus.Failed;
+                            confirmed = isZeroAmountContractCall;
+                        }
                         tx.ResolvedUtc = DateTime.UtcNow;
                         changed = true;
-                        confirmed = receipt.Status;
                     }
                 }
 

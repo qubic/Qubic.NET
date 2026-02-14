@@ -1,0 +1,72 @@
+@page "/explorer/ipos"
+@inject ToolkitBackendService Backend
+
+<h4>Active IPOs</h4>
+<p class="text-muted">View currently active Initial Public Offerings. (RPC only)</p>
+
+@if (_error != null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_ipos != null)
+{
+    @if (_ipos.Count == 0)
+    {
+        <div class="alert alert-info">No active IPOs found.</div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header">Active IPOs (@_ipos.Count)</div>
+            <div class="card-body">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Contract Index</th>
+                            <th>Asset Name</th>
+                            <th>Contract Identity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ipo in _ipos)
+                        {
+                            <tr>
+                                <td class="mono">@ipo.ContractIndex</td>
+                                <td class="mono">@ipo.AssetName</td>
+                                <td class="mono small">@Qubic.Core.QubicContracts.GetContractIdentity((int)ipo.ContractIndex)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+else if (_loading)
+{
+    <span class="text-muted">Loading...</span>
+}
+
+@code {
+    private IReadOnlyList<Qubic.Rpc.Models.IpoInfo>? _ipos;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _ipos = await Backend.GetActiveIposAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

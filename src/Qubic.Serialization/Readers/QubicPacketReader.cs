@@ -78,6 +78,58 @@ public sealed class QubicPacketReader
     }
 
     /// <summary>
+    /// Reads an ExchangePublicPeers response (4 IPv4 addresses).
+    /// </summary>
+    public string[] ReadExchangePublicPeers(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length < 16)
+            throw new ArgumentException("Payload too short for ExchangePublicPeers.");
+
+        var peers = new List<string>();
+        for (int i = 0; i < 4; i++)
+        {
+            var offset = i * 4;
+            var ip = $"{payload[offset]}.{payload[offset + 1]}.{payload[offset + 2]}.{payload[offset + 3]}";
+            if (ip != "0.0.0.0")
+                peers.Add(ip);
+        }
+        return peers.ToArray();
+    }
+
+    /// <summary>
+    /// Reads a ContractIPO response (676 public keys + 676 prices).
+    /// </summary>
+    public ContractIpo ReadContractIpoResponse(ReadOnlySpan<byte> payload)
+    {
+        // Payload: 676 * 32 pubkeys + 676 * 8 prices = 27,040 bytes
+        const int numSlots = 676;
+        var expectedSize = numSlots * 32 + numSlots * 8;
+        if (payload.Length < expectedSize)
+            throw new ArgumentException($"Payload too short for ContractIPO. Expected {expectedSize}, got {payload.Length}.");
+
+        var publicKeys = new byte[numSlots][];
+        var offset = 0;
+        for (int i = 0; i < numSlots; i++)
+        {
+            publicKeys[i] = payload.Slice(offset, 32).ToArray();
+            offset += 32;
+        }
+
+        var prices = new long[numSlots];
+        for (int i = 0; i < numSlots; i++)
+        {
+            prices[i] = BinaryPrimitives.ReadInt64LittleEndian(payload[offset..]);
+            offset += 8;
+        }
+
+        return new ContractIpo
+        {
+            PublicKeys = publicKeys,
+            Prices = prices
+        };
+    }
+
+    /// <summary>
     /// Reads a full entity response with Merkle siblings.
     /// </summary>
     public EntityResponse ReadFullEntityResponse(ReadOnlySpan<byte> payload)

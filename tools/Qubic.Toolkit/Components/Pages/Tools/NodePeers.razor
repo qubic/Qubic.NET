@@ -1,0 +1,81 @@
+@page "/node/peers"
+@inject ToolkitBackendService Backend
+
+<h4>Node Peers</h4>
+<p class="text-muted">View connected peer IP addresses. (DirectNetwork only)</p>
+
+@if (Backend.ActiveBackend != QueryBackend.DirectNetwork)
+{
+    <div class="alert alert-warning">
+        This feature requires the <strong>DirectNetwork</strong> backend. Switch to DirectNetwork in <a href="/settings">Settings</a>.
+    </div>
+}
+else
+{
+    <div class="mb-3">
+        <button class="btn btn-sm btn-primary" @onclick="FetchPeers" disabled="@_loading">
+            @(_loading ? "Fetching..." : "Fetch Peers")
+        </button>
+    </div>
+
+    @if (_error != null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    @if (_peers != null)
+    {
+        <div class="card">
+            <div class="card-header">Connected Peers (@_peers.Length)</div>
+            <div class="card-body">
+                @if (_peers.Length == 0)
+                {
+                    <span class="text-muted">No peers returned by node.</span>
+                }
+                else
+                {
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr><th>#</th><th>IP Address</th></tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < _peers.Length; i++)
+                            {
+                                <tr>
+                                    <td>@(i + 1)</td>
+                                    <td class="mono">@_peers[i]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private string[]? _peers;
+    private bool _loading;
+    private string? _error;
+
+    private async Task FetchPeers()
+    {
+        _loading = true;
+        _error = null;
+        _peers = null;
+
+        try
+        {
+            _peers = await Backend.GetNodePeerListAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
