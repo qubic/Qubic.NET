@@ -1,0 +1,248 @@
+@page "/tx/qbond"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>QBond</h4>
+<p class="text-muted">Stake QU to get MBond tokens, trade MBonds, or burn QU via QBond.</p>
+
+@if (_fees != null)
+{
+    <div class="small text-muted mb-2">
+        Fees &mdash; Stake: <strong>@_fees.Value.stake.ToString("N0")%</strong> |
+        Trade: <strong>@_fees.Value.trade.ToString("N0")%</strong> |
+        Transfer: <strong>@_fees.Value.transfer.ToString("N0")</strong>
+    </div>
+}
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var tab in _tabs)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(tab == _activeTab ? "active" : "")" href="" @onclick="() => _activeTab = tab" @onclick:preventDefault>@tab</a>
+            </li>
+        }
+    </ul>
+
+    <div class="row"><div class="col-md-8">
+        @switch (_activeTab)
+        {
+            case "Stake":
+                <div class="card"><div class="card-header">Stake QU</div><div class="card-body">
+                    <p class="small text-muted">Stake QU and receive MBond tokens (1 MBond per million QU).</p>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Amount (millions of QU)</label>
+                        <input type="number" class="form-control form-control-sm" min="1" @bind="_stakeMillions" />
+                    </div>
+                    @if (_stakeMillions > 0)
+                    {
+                        <div class="small text-muted mb-2">Total: @((_stakeMillions * 1_000_000).ToString("N0")) QU</div>
+                    }
+                    <button class="btn btn-primary" @onclick="Stake" disabled="@_sending">@(_sending ? "Staking..." : "Stake")</button>
+                </div></div>
+                break;
+
+            case "Transfer":
+                <div class="card"><div class="card-header">Transfer MBond</div><div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label-sm">New Owner Identity</label>
+                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_xferOwner)" @bind="_xferOwner" @bind:event="oninput" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Epoch</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_xferEpoch" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Number of MBonds</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_xferAmount" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="TransferMBond" disabled="@_sending">@(_sending ? "Transferring..." : "Transfer")</button>
+                </div></div>
+                break;
+
+            case "Ask":
+            case "Bid":
+                <div class="card"><div class="card-header">@_activeTab Orders</div><div class="card-body">
+                    <div class="mb-2 d-flex gap-2">
+                        <button class="btn btn-sm @(_orderAdd ? "btn-primary" : "btn-outline-primary")" @onclick="() => _orderAdd = true">Add</button>
+                        <button class="btn btn-sm @(!_orderAdd ? "btn-primary" : "btn-outline-primary")" @onclick="() => _orderAdd = false">Remove</button>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Epoch</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_orderEpoch" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Price per MBond (QU)</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_orderPrice" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-sm">Number of MBonds</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_orderAmount" />
+                    </div>
+                    @if (_activeTab == "Bid" && _orderAdd && _orderPrice > 0 && _orderAmount > 0)
+                    {
+                        <div class="small text-muted mb-2">Total: @((_orderPrice * _orderAmount).ToString("N0")) QU</div>
+                    }
+                    <button class="btn btn-primary" @onclick="SubmitOrder" disabled="@_sending">
+                        @(_sending ? "Submitting..." : $"{(_orderAdd ? "Add" : "Remove")} {_activeTab}")
+                    </button>
+                </div></div>
+                break;
+
+            case "Burn":
+                <div class="card"><div class="card-header">Burn QU via QBond</div><div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label-sm">Amount (QU)</label>
+                        <input type="number" class="form-control form-control-sm" min="1" @bind="_burnAmount" />
+                    </div>
+                    <button class="btn btn-danger" @onclick="BurnQU" disabled="@_sending">@(_sending ? "Burning..." : "Burn")</button>
+                </div></div>
+                break;
+        }
+
+        @if (_result != null)
+        {
+            <div class="alert alert-success mt-3">
+                Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                <div class="mt-1">
+                    <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                    <a href="/tx/history">Transaction History</a>
+                </div>
+            </div>
+        }
+        @if (_error != null) { <div class="alert alert-danger mt-2">@_error</div> }
+    </div></div>
+}
+
+@code {
+    private static readonly string[] _tabs = ["Stake", "Transfer", "Ask", "Bid", "Burn"];
+    private string _activeTab = "Stake";
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+    private const int ContractIndex = 6;
+    private (ulong stake, ulong trade, ulong transfer)? _fees;
+
+    private long _stakeMillions;
+    private string? _xferOwner;
+    private long _xferEpoch;
+    private long _xferAmount;
+    private bool _orderAdd = true;
+    private long _orderEpoch;
+    private long _orderPrice;
+    private long _orderAmount;
+    private long _burnAmount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await Backend.QuerySmartContractAsync(ContractIndex, 1, []);
+            if (result.Length >= 24)
+                _fees = (BitConverter.ToUInt64(result, 0), BitConverter.ToUInt64(result, 8),
+                         BitConverter.ToUInt64(result, 16));
+        }
+        catch { }
+    }
+
+    private async Task<uint> GetTick() => TickMonitor.IsConnected
+        ? TickMonitor.Tick + (uint)Settings.TickOffset
+        : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+    private async Task BroadcastAndTrack(long amount, uint tick, Qubic.Core.Payloads.ITransactionPayload payload, string desc)
+    {
+        var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(ContractIndex));
+        var tx = Seed.CreateAndSignTransaction(dest, amount, tick, payload);
+        var result = await Backend.BroadcastTransactionAsync(tx);
+        _result = result.TransactionId;
+        TxTracker.Track(new TrackedTransaction
+        {
+            Hash = result.TransactionId, Source = Seed.Identity?.ToString() ?? "",
+            Destination = dest.ToString(), Amount = amount, TargetTick = tick,
+            InputType = payload.InputType, PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()),
+            Description = desc
+        });
+    }
+
+    private async Task Stake()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            if (_stakeMillions <= 0) { _error = "Amount must be positive."; return; }
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qbond.StakePayload { QuMillions = _stakeMillions };
+            await BroadcastAndTrack(_stakeMillions * 1_000_000, tick, payload, $"QBond Stake {_stakeMillions}M QU");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task TransferMBond()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var ownerErr = IdentityValidation.Validate(_xferOwner);
+            if (ownerErr != null) { _error = "Owner: " + ownerErr; return; }
+            if (_xferAmount <= 0) { _error = "Amount must be positive."; return; }
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qbond.TransferMBondOwnershipAndPossessionPayload
+            {
+                NewOwnerAndPossessor = Qubic.Core.Entities.QubicIdentity.FromIdentity(_xferOwner!.Trim()).PublicKey,
+                Epoch = _xferEpoch,
+                NumberOfMBonds = _xferAmount
+            };
+            await BroadcastAndTrack(0, tick, payload, $"QBond Transfer {_xferAmount} MBonds (epoch {_xferEpoch})");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task SubmitOrder()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            if (_orderPrice <= 0) { _error = "Price must be positive."; return; }
+            if (_orderAmount <= 0) { _error = "Amount must be positive."; return; }
+            var tick = await GetTick();
+            bool isAsk = _activeTab == "Ask";
+
+            Qubic.Core.Payloads.ITransactionPayload payload;
+            long amount = 0;
+            string desc;
+
+            if (isAsk && _orderAdd) { payload = new Qubic.Core.Contracts.Qbond.AddAskOrderPayload { Epoch = _orderEpoch, Price = _orderPrice, NumberOfMBonds = _orderAmount }; desc = $"QBond Add Ask: {_orderAmount} @ {_orderPrice:N0}"; }
+            else if (isAsk && !_orderAdd) { payload = new Qubic.Core.Contracts.Qbond.RemoveAskOrderPayload { Epoch = _orderEpoch, Price = _orderPrice, NumberOfMBonds = _orderAmount }; desc = $"QBond Remove Ask: {_orderAmount} @ {_orderPrice:N0}"; }
+            else if (!isAsk && _orderAdd) { payload = new Qubic.Core.Contracts.Qbond.AddBidOrderPayload { Epoch = _orderEpoch, Price = _orderPrice, NumberOfMBonds = _orderAmount }; amount = _orderPrice * _orderAmount; desc = $"QBond Add Bid: {_orderAmount} @ {_orderPrice:N0} (total: {amount:N0})"; }
+            else { payload = new Qubic.Core.Contracts.Qbond.RemoveBidOrderPayload { Epoch = _orderEpoch, Price = _orderPrice, NumberOfMBonds = _orderAmount }; desc = $"QBond Remove Bid: {_orderAmount} @ {_orderPrice:N0}"; }
+
+            await BroadcastAndTrack(amount, tick, payload, desc);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task BurnQU()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            if (_burnAmount <= 0) { _error = "Amount must be positive."; return; }
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qbond.BurnQUPayload { Amount = _burnAmount };
+            await BroadcastAndTrack(_burnAmount, tick, payload, $"QBond Burn {_burnAmount:N0} QU");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+}

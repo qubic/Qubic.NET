@@ -15,7 +15,7 @@
 
 <div class="d-flex align-items-center gap-3 mb-3">
     <span class="text-muted">@_contract.Functions.Count function(s)</span>
-    <a href="/contracts" class="btn btn-sm btn-outline-secondary">Back to list</a>
+    <a href="/contracts/browser" class="btn btn-sm btn-outline-secondary">Back to list</a>
 </div>
 
 @foreach (var func in _contract.Functions)
@@ -383,7 +383,7 @@
             if (ulong.TryParse(str, out var v))
                 return v;
             if (IsAssetNameField(prop.Name, prop.PropertyType) && str.Length <= 7 && str.All(c => c >= ' ' && c <= '~'))
-                return AssetNameToUlong(str);
+                return Qubic.Toolkit.Helpers.AssetNameHelper.ToUlong(str);
             return 0UL;
         }
         if (prop.PropertyType == typeof(long))
@@ -449,7 +449,7 @@
 
         if (value is ulong ul && ul != 0 && IsAssetNameField(name, typeof(ulong)))
         {
-            var decoded = UlongToAssetName(ul);
+            var decoded = Qubic.Toolkit.Helpers.AssetNameHelper.FromUlong(ul);
             if (decoded != null) return $"{ul} ({decoded})";
         }
 
@@ -463,26 +463,7 @@
         return lower.Contains("assetname") || lower.Contains("unitofmeasurement");
     }
 
-    private static ulong AssetNameToUlong(string name)
-    {
-        ulong result = 0;
-        for (int i = 0; i < name.Length && i < 7; i++)
-            result |= (ulong)name[i] << (i * 8);
-        return result;
-    }
 
-    private static string? UlongToAssetName(ulong value)
-    {
-        if (value == 0) return null;
-        Span<byte> bytes = stackalloc byte[8];
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(bytes, value);
-        int len = 8;
-        while (len > 0 && bytes[len - 1] == 0) len--;
-        if (len == 0) return null;
-        for (int i = 0; i < len; i++)
-            if (bytes[i] < 0x20 || bytes[i] > 0x7E) return null;
-        return System.Text.Encoding.ASCII.GetString(bytes[..len]);
-    }
 
     private class FunctionCallState
     {

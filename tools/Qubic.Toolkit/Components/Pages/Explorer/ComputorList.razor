@@ -1,5 +1,6 @@
 @page "/explorer/computors"
 @inject ToolkitBackendService Backend
+@inject TickMonitorService TickMonitor
 
 <h4>Computor List</h4>
 <p class="text-muted">View the 676 computors for an epoch. (RPC only)</p>
@@ -56,6 +57,12 @@
 @code {
     private uint _epoch;
     private IReadOnlyList<Qubic.Rpc.Models.ComputorListInfo>? _lists;
+
+    protected override void OnInitialized()
+    {
+        if (TickMonitor.Epoch > 0)
+            _epoch = TickMonitor.Epoch;
+    }
     private bool _loading;
     private string? _error;
 

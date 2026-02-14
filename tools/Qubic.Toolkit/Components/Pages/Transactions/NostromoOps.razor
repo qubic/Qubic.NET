@@ -1,0 +1,382 @@
+@page "/tx/nostromo"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>Nostromo (Launchpad)</h4>
+<p class="text-muted">Register in tiers, create projects, manage fundraising, and invest.</p>
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var tab in _tabs)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(tab == _activeTab ? "active" : "")" href="" @onclick="() => _activeTab = tab" @onclick:preventDefault>@tab</a>
+            </li>
+        }
+    </ul>
+
+    <div class="row"><div class="col-md-8">
+        @switch (_activeTab)
+        {
+            case "Register":
+                <div class="card"><div class="card-header">Tier Registration</div><div class="card-body">
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="regMode" checked="@(!_upgradeMode && !_logoutMode)" @onchange="() => { _upgradeMode = false; _logoutMode = false; }" />
+                            <label class="form-check-label">Register</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="regMode" checked="@_upgradeMode" @onchange="() => { _upgradeMode = true; _logoutMode = false; }" />
+                            <label class="form-check-label">Upgrade</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="regMode" checked="@_logoutMode" @onchange="() => { _logoutMode = true; _upgradeMode = false; }" />
+                            <label class="form-check-label">Logout</label>
+                        </div>
+                    </div>
+                    @if (!_logoutMode)
+                    {
+                        <div class="mb-2"><label class="form-label-sm">Tier Level</label>
+                            <input type="number" class="form-control form-control-sm" min="1" @bind="_tierLevel" /></div>
+                        <div class="mb-2"><label class="form-label-sm">Fee (QU)</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_tierFee" /></div>
+                    }
+                    <button class="btn btn-primary" @onclick="TierOp" disabled="@_sending">
+                        @(_sending ? "Sending..." : (_logoutMode ? "Logout from Tier" : (_upgradeMode ? "Upgrade Tier" : "Register in Tier")))
+                    </button>
+                </div></div>
+                break;
+
+            case "Project":
+                <div class="card"><div class="card-header">Create Project</div><div class="card-body">
+                    <div class="mb-2"><label class="form-label-sm">Token Name (up to 7 chars)</label>
+                        <input class="form-control form-control-sm" maxlength="7" @bind="_projTokenName" /></div>
+                    <div class="mb-2"><label class="form-label-sm">Token Supply</label>
+                        <input type="number" class="form-control form-control-sm" min="1" @bind="_projSupply" /></div>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label-sm fw-bold">Voting Start</label></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label-sm">Year</label>
+                            <input type="number" class="form-control form-control-sm" @bind="_projStartYear" /></div>
+                        <div class="col"><label class="form-label-sm">Month</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="12" @bind="_projStartMonth" /></div>
+                        <div class="col"><label class="form-label-sm">Day</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="31" @bind="_projStartDay" /></div>
+                        <div class="col"><label class="form-label-sm">Hour</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="23" @bind="_projStartHour" /></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label-sm fw-bold">Voting End</label></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label-sm">Year</label>
+                            <input type="number" class="form-control form-control-sm" @bind="_projEndYear" /></div>
+                        <div class="col"><label class="form-label-sm">Month</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="12" @bind="_projEndMonth" /></div>
+                        <div class="col"><label class="form-label-sm">Day</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="31" @bind="_projEndDay" /></div>
+                        <div class="col"><label class="form-label-sm">Hour</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="23" @bind="_projEndHour" /></div>
+                    </div>
+                    <div class="mb-2"><label class="form-label-sm">Fee (QU)</label>
+                        <input type="number" class="form-control form-control-sm" min="0" @bind="_projFee" /></div>
+                    <button class="btn btn-primary" @onclick="CreateProject" disabled="@_sending">@(_sending ? "Creating..." : "Create Project")</button>
+                </div></div>
+                break;
+
+            case "Vote":
+                <div class="card"><div class="card-header">Vote in Project</div><div class="card-body">
+                    <div class="mb-2"><label class="form-label-sm">Project Index</label>
+                        <input type="number" class="form-control form-control-sm" min="0" @bind="_voteProjectIdx" /></div>
+                    <div class="mb-2"><label class="form-label-sm">Decision</label>
+                        <select class="form-select form-select-sm" @bind="_voteDecision">
+                            <option value="true">Yes (Approve)</option>
+                            <option value="false">No (Reject)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" @onclick="VoteProject" disabled="@_sending">@(_sending ? "Voting..." : "Vote")</button>
+                </div></div>
+                break;
+
+            case "Fundraising":
+                <div class="card"><div class="card-header">Create Fundraising</div><div class="card-body">
+                    <p class="small text-muted">Create a fundraising event for a project.</p>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label-sm">Project Index</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_frProjectIdx" /></div>
+                        <div class="col"><label class="form-label-sm">Token Price (QU)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" @bind="_frTokenPrice" /></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label-sm">Sale Amount</label>
+                            <input type="number" class="form-control form-control-sm" min="1" @bind="_frSaleAmount" /></div>
+                        <div class="col"><label class="form-label-sm">Required Funds (QU)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" @bind="_frReqFunds" /></div>
+                    </div>
+                    @{
+                        var phases = new[] {
+                            ("Phase 1 Start", "_fr1s"), ("Phase 1 End", "_fr1e"),
+                            ("Phase 2 Start", "_fr2s"), ("Phase 2 End", "_fr2e"),
+                            ("Phase 3 Start", "_fr3s"), ("Phase 3 End", "_fr3e"),
+                            ("Listing Start", "_frLs"), ("Cliff End", "_frCe"), ("Vesting End", "_frVe")
+                        };
+                    }
+                    @for (int i = 0; i < _frDates.Length; i++)
+                    {
+                        var idx = i;
+                        var labels = new[] { "Phase 1 Start", "Phase 1 End", "Phase 2 Start", "Phase 2 End",
+                                             "Phase 3 Start", "Phase 3 End", "Listing Start", "Cliff End", "Vesting End" };
+                        <div class="row g-2 mb-1">
+                            <div class="col-3"><label class="form-label-sm fw-bold">@labels[idx]</label></div>
+                            <div class="col"><input type="number" class="form-control form-control-sm" placeholder="Year" @bind="_frDates[idx].Year" /></div>
+                            <div class="col"><input type="number" class="form-control form-control-sm" placeholder="Mon" @bind="_frDates[idx].Month" /></div>
+                            <div class="col"><input type="number" class="form-control form-control-sm" placeholder="Day" @bind="_frDates[idx].Day" /></div>
+                            <div class="col"><input type="number" class="form-control form-control-sm" placeholder="Hr" @bind="_frDates[idx].Hour" /></div>
+                        </div>
+                    }
+                    <div class="row g-2 mb-2 mt-2">
+                        <div class="col"><label class="form-label-sm">Threshold (%)</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="100" @bind="_frThreshold" /></div>
+                        <div class="col"><label class="form-label-sm">TGE (%)</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="100" @bind="_frTGE" /></div>
+                        <div class="col"><label class="form-label-sm">Vesting Steps</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_frVestSteps" /></div>
+                    </div>
+                    <div class="mb-2"><label class="form-label-sm">Fee (QU)</label>
+                        <input type="number" class="form-control form-control-sm" min="0" @bind="_frFee" /></div>
+                    <button class="btn btn-primary" @onclick="CreateFundraising" disabled="@_sending">@(_sending ? "Creating..." : "Create Fundraising")</button>
+                </div></div>
+                break;
+
+            case "Invest":
+                <div class="card"><div class="card-header">Invest / Claim / Transfer</div><div class="card-body">
+                    <div class="mb-2">
+                        <select class="form-select form-select-sm" @bind="_investOp">
+                            <option value="invest">Invest in Project</option>
+                            <option value="claim">Claim Token</option>
+                            <option value="transfer">Transfer Management Rights</option>
+                        </select>
+                    </div>
+                    @if (_investOp == "invest")
+                    {
+                        <div class="mb-2"><label class="form-label-sm">Fundraising Index</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_invFrIdx" /></div>
+                        <div class="mb-2"><label class="form-label-sm">Investment Amount (QU)</label>
+                            <input type="number" class="form-control form-control-sm" min="1" @bind="_invAmount" /></div>
+                    }
+                    else if (_investOp == "claim")
+                    {
+                        <div class="mb-2"><label class="form-label-sm">Fundraising Index</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_claimFrIdx" /></div>
+                        <div class="mb-2"><label class="form-label-sm">Claim Amount</label>
+                            <input type="number" class="form-control form-control-sm" min="1" @bind="_claimAmount" /></div>
+                    }
+                    else
+                    {
+                        <div class="mb-2"><label class="form-label-sm">Token Issuer Identity</label>
+                            <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_tfrIssuer)"
+                                   @bind="_tfrIssuer" placeholder="IDENTITY..." /></div>
+                        <div class="mb-2"><label class="form-label-sm">Token Name (up to 7 chars)</label>
+                            <input class="form-control form-control-sm" maxlength="7" @bind="_tfrTokenName" /></div>
+                        <div class="mb-2"><label class="form-label-sm">New Managing Contract Index</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_tfrNewContract" /></div>
+                        <div class="mb-2"><label class="form-label-sm">Number of Shares</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_tfrShares" /></div>
+                    }
+                    <button class="btn btn-primary" @onclick="InvestOp" disabled="@_sending">@(_sending ? "Sending..." : "Submit")</button>
+                </div></div>
+                break;
+        }
+
+        @if (_result != null)
+        {
+            <div class="alert alert-success mt-3">
+                Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                <div class="mt-1">
+                    <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                    <a href="/tx/history">Transaction History</a>
+                </div>
+            </div>
+        }
+        @if (_error != null) { <div class="alert alert-danger mt-2">@_error</div> }
+    </div></div>
+}
+
+@code {
+    private static readonly string[] _tabs = ["Register", "Project", "Vote", "Fundraising", "Invest"];
+    private string _activeTab = "Register";
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+    private const int ContractIndex = 7;
+
+    // Register/Upgrade/Logout
+    private bool _upgradeMode; private bool _logoutMode;
+    private uint _tierLevel = 1; private long _tierFee;
+    // Project
+    private string _projTokenName = ""; private ulong _projSupply;
+    private uint _projStartYear; private uint _projStartMonth; private uint _projStartDay; private uint _projStartHour;
+    private uint _projEndYear; private uint _projEndMonth; private uint _projEndDay; private uint _projEndHour;
+    private long _projFee;
+    // Vote
+    private uint _voteProjectIdx; private string _voteDecision = "true";
+    // Fundraising
+    private uint _frProjectIdx; private ulong _frTokenPrice; private ulong _frSaleAmount; private ulong _frReqFunds;
+    private readonly DateFields[] _frDates = Enumerable.Range(0, 9).Select(_ => new DateFields()).ToArray();
+    private byte _frThreshold; private byte _frTGE; private byte _frVestSteps;
+    private long _frFee;
+    // Invest/Claim/Transfer
+    private string _investOp = "invest";
+    private uint _invFrIdx; private long _invAmount;
+    private uint _claimFrIdx; private ulong _claimAmount;
+    private string _tfrIssuer = ""; private string _tfrTokenName = ""; private uint _tfrNewContract; private long _tfrShares;
+
+    private class DateFields { public uint Year; public uint Month; public uint Day; public uint Hour; }
+
+    private async Task<uint> GetTick() => TickMonitor.IsConnected
+        ? TickMonitor.Tick + (uint)Settings.TickOffset
+        : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+    private async Task Broadcast(long amount, uint tick, Qubic.Core.Payloads.ITransactionPayload payload, string desc)
+    {
+        var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(ContractIndex));
+        var tx = Seed.CreateAndSignTransaction(dest, amount, tick, payload);
+        var result = await Backend.BroadcastTransactionAsync(tx);
+        _result = result.TransactionId;
+        TxTracker.Track(new TrackedTransaction { Hash = result.TransactionId, Source = Seed.Identity?.ToString() ?? "",
+            Destination = dest.ToString(), Amount = amount, TargetTick = tick,
+            InputType = payload.InputType, PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()), Description = desc });
+    }
+
+    private async Task TierOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            if (_logoutMode)
+            {
+                await Broadcast(0, tick, new Qubic.Core.Contracts.Nost.LogoutFromTierPayload(), "Nostromo Logout from Tier");
+            }
+            else if (_upgradeMode)
+            {
+                var payload = new Qubic.Core.Contracts.Nost.UpgradeTierPayload { NewTierLevel = _tierLevel };
+                await Broadcast(_tierFee, tick, payload, $"Nostromo Upgrade to Tier {_tierLevel}");
+            }
+            else
+            {
+                var payload = new Qubic.Core.Contracts.Nost.RegisterInTierPayload { TierLevel = _tierLevel };
+                await Broadcast(_tierFee, tick, payload, $"Nostromo Register in Tier {_tierLevel}");
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task CreateProject()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_projTokenName)) { _error = "Token name required."; return; }
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Nost.CreateProjectPayload
+            {
+                TokenName = Qubic.Toolkit.Helpers.AssetNameHelper.ToUlong(_projTokenName.Trim()),
+                Supply = _projSupply,
+                StartYear = _projStartYear, StartMonth = _projStartMonth, StartDay = _projStartDay, StartHour = _projStartHour,
+                EndYear = _projEndYear, EndMonth = _projEndMonth, EndDay = _projEndDay, EndHour = _projEndHour
+            };
+            await Broadcast(_projFee, tick, payload, $"Nostromo Create Project: {_projTokenName.Trim()}");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task VoteProject()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Nost.VoteInProjectPayload
+                { IndexOfProject = _voteProjectIdx, Decision = _voteDecision == "true" };
+            await Broadcast(0, tick, payload, $"Nostromo Vote: project {_voteProjectIdx}, {(_voteDecision == "true" ? "Yes" : "No")}");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task CreateFundraising()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            var d = _frDates;
+            var payload = new Qubic.Core.Contracts.Nost.CreateFundraisingPayload
+            {
+                TokenPrice = _frTokenPrice, SoldAmount = _frSaleAmount, RequiredFunds = _frReqFunds,
+                IndexOfProject = _frProjectIdx,
+                FirstPhaseStartYear = d[0].Year, FirstPhaseStartMonth = d[0].Month, FirstPhaseStartDay = d[0].Day, FirstPhaseStartHour = d[0].Hour,
+                FirstPhaseEndYear = d[1].Year, FirstPhaseEndMonth = d[1].Month, FirstPhaseEndDay = d[1].Day, FirstPhaseEndHour = d[1].Hour,
+                SecondPhaseStartYear = d[2].Year, SecondPhaseStartMonth = d[2].Month, SecondPhaseStartDay = d[2].Day, SecondPhaseStartHour = d[2].Hour,
+                SecondPhaseEndYear = d[3].Year, SecondPhaseEndMonth = d[3].Month, SecondPhaseEndDay = d[3].Day, SecondPhaseEndHour = d[3].Hour,
+                ThirdPhaseStartYear = d[4].Year, ThirdPhaseStartMonth = d[4].Month, ThirdPhaseStartDay = d[4].Day, ThirdPhaseStartHour = d[4].Hour,
+                ThirdPhaseEndYear = d[5].Year, ThirdPhaseEndMonth = d[5].Month, ThirdPhaseEndDay = d[5].Day, ThirdPhaseEndHour = d[5].Hour,
+                ListingStartYear = d[6].Year, ListingStartMonth = d[6].Month, ListingStartDay = d[6].Day, ListingStartHour = d[6].Hour,
+                CliffEndYear = d[7].Year, CliffEndMonth = d[7].Month, CliffEndDay = d[7].Day, CliffEndHour = d[7].Hour,
+                VestingEndYear = d[8].Year, VestingEndMonth = d[8].Month, VestingEndDay = d[8].Day, VestingEndHour = d[8].Hour,
+                Threshold = _frThreshold, TGE = _frTGE, StepOfVesting = _frVestSteps
+            };
+            await Broadcast(_frFee, tick, payload, $"Nostromo Create Fundraising: project {_frProjectIdx}");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task InvestOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            switch (_investOp)
+            {
+                case "invest":
+                    if (_invAmount <= 0) { _error = "Amount must be positive."; return; }
+                    var ip = new Qubic.Core.Contracts.Nost.InvestInProjectPayload { IndexOfFundraising = _invFrIdx };
+                    await Broadcast(_invAmount, tick, ip, $"Nostromo Invest: fundraising {_invFrIdx}, {_invAmount:N0} QU");
+                    break;
+                case "claim":
+                    var cp = new Qubic.Core.Contracts.Nost.ClaimTokenPayload { Amount = _claimAmount, IndexOfFundraising = _claimFrIdx };
+                    await Broadcast(0, tick, cp, $"Nostromo Claim: fundraising {_claimFrIdx}, {_claimAmount:N0} tokens");
+                    break;
+                case "transfer":
+                    var err = IdentityValidation.Validate(_tfrIssuer);
+                    if (err != null) { _error = $"Issuer: {err}"; return; }
+                    if (string.IsNullOrWhiteSpace(_tfrTokenName)) { _error = "Token name required."; return; }
+                    var asset = new Qubic.Core.Contracts.QubicAsset
+                    {
+                        Issuer = Qubic.Core.Entities.QubicIdentity.FromIdentity(_tfrIssuer.Trim()).PublicKey,
+                        AssetName = Qubic.Toolkit.Helpers.AssetNameHelper.ToUlong(_tfrTokenName.Trim())
+                    };
+                    var tp = new Qubic.Core.Contracts.Nost.TransferShareManagementRightsPayload
+                        { Asset = asset, NumberOfShares = _tfrShares, NewManagingContractIndex = _tfrNewContract };
+                    await Broadcast(0, tick, tp, $"Nostromo Transfer Mgmt Rights: {_tfrTokenName.Trim()} x{_tfrShares}");
+                    break;
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+}

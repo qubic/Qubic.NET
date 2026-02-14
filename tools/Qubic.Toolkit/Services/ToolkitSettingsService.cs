@@ -11,6 +11,7 @@ public sealed class ToolkitSettingsService
     private int _tickOffset = 5;
     private bool _autoResend;
     private int _autoResendMaxRetries = 3;
+    private List<string> _favorites = [];
 
     public ToolkitSettingsService()
     {
@@ -67,6 +68,18 @@ public sealed class ToolkitSettingsService
         }
     }
 
+    public IReadOnlyList<string> Favorites => _favorites;
+
+    public bool IsFavorite(string path) => _favorites.Contains(path);
+
+    public void ToggleFavorite(string path)
+    {
+        if (!_favorites.Remove(path))
+            _favorites.Add(path);
+        SaveToDisk();
+        OnChanged?.Invoke();
+    }
+
     public event Action? OnChanged;
 
     private void SaveToDisk()
@@ -78,7 +91,8 @@ public sealed class ToolkitSettingsService
             {
                 TickOffset = _tickOffset,
                 AutoResend = _autoResend,
-                AutoResendMaxRetries = _autoResendMaxRetries
+                AutoResendMaxRetries = _autoResendMaxRetries,
+                Favorites = _favorites
             };
             File.WriteAllText(SettingsFile, JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
         }
@@ -96,6 +110,7 @@ public sealed class ToolkitSettingsService
             _tickOffset = Math.Clamp(data.TickOffset, 1, 100);
             _autoResend = data.AutoResend;
             _autoResendMaxRetries = Math.Clamp(data.AutoResendMaxRetries, 1, 20);
+            _favorites = data.Favorites ?? [];
         }
         catch { /* corrupted file, use defaults */ }
     }
@@ -105,5 +120,6 @@ public sealed class ToolkitSettingsService
         public int TickOffset { get; set; } = 5;
         public bool AutoResend { get; set; }
         public int AutoResendMaxRetries { get; set; } = 3;
+        public List<string> Favorites { get; set; } = [];
     }
 }

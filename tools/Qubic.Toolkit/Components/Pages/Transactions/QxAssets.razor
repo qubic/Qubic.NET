@@ -1,0 +1,363 @@
+@page "/tx/qx"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>QX Asset Operations</h4>
+<p class="text-muted">Issue assets, transfer shares, and manage orders on the QX decentralized exchange.</p>
+
+@if (_fees != null)
+{
+    <div class="small text-muted mb-2">
+        Fees &mdash; Issuance: <strong>@_fees.Value.issuance.ToString("N0")</strong> QU |
+        Transfer: <strong>@_fees.Value.transfer.ToString("N0")</strong> QU |
+        Trade: <strong>@_fees.Value.trade.ToString("N0")</strong> QU
+    </div>
+}
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var tab in _tabs)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(tab == _activeTab ? "active" : "")" href="" @onclick="() => _activeTab = tab" @onclick:preventDefault>@tab</a>
+            </li>
+        }
+    </ul>
+
+    <div class="row">
+        <div class="col-md-8">
+            @switch (_activeTab)
+            {
+                case "Issue":
+                    <div class="card">
+                        <div class="card-header">Issue Asset</div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label class="form-label-sm">Asset Name (max 7 chars)</label>
+                                <input class="form-control form-control-sm" maxlength="7" @bind="_issueName" placeholder="e.g. CFB" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Number of Shares</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_issueShares" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Unit of Measurement (max 7 chars)</label>
+                                <input class="form-control form-control-sm" maxlength="7" @bind="_issueUnit" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Decimal Places (0-18)</label>
+                                <input type="number" class="form-control form-control-sm" min="0" max="18" @bind="_issueDecimals" />
+                            </div>
+                            <button class="btn btn-primary" @onclick="IssueAsset" disabled="@_sending">
+                                @(_sending ? "Issuing..." : "Issue Asset")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+
+                case "Transfer":
+                    <div class="card">
+                        <div class="card-header">Transfer Asset</div>
+                        <div class="card-body">
+                            <AssetSelector @bind-IssuerValue="_xferIssuer" @bind-NameValue="_xferName" />
+                            <div class="mb-2">
+                                <label class="form-label-sm">New Owner Identity</label>
+                                <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_xferNewOwner)" @bind="_xferNewOwner" @bind:event="oninput" placeholder="60 chars" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Number of Shares</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_xferShares" />
+                            </div>
+                            <button class="btn btn-primary" @onclick="TransferAsset" disabled="@_sending">
+                                @(_sending ? "Transferring..." : "Transfer")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+
+                case "Ask":
+                case "Bid":
+                    <div class="card">
+                        <div class="card-header">@(_activeTab == "Ask" ? "Ask" : "Bid") Orders</div>
+                        <div class="card-body">
+                            <div class="mb-2 d-flex gap-2">
+                                <button class="btn btn-sm @(_orderAction == "add" ? "btn-primary" : "btn-outline-primary")" @onclick="SetOrderAdd">Add</button>
+                                <button class="btn btn-sm @(_orderAction == "remove" ? "btn-primary" : "btn-outline-primary")" @onclick="SetOrderRemove">Remove</button>
+                            </div>
+                            <AssetSelector @bind-IssuerValue="_orderIssuer" @bind-NameValue="_orderAssetName" />
+                            <div class="mb-2">
+                                <label class="form-label-sm">Price per Share (QU)</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_orderPrice" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Number of Shares</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_orderShares" />
+                            </div>
+                            @if (_activeTab == "Bid" && _orderAction == "add" && _orderPrice > 0 && _orderShares > 0)
+                            {
+                                <div class="small text-muted mb-2">Total: @((_orderPrice * _orderShares).ToString("N0")) QU</div>
+                            }
+                            <button class="btn btn-primary" @onclick="SubmitOrder" disabled="@_sending">
+                                @(_sending ? "Submitting..." : $"{(_orderAction == "add" ? "Add" : "Remove")} {_activeTab} Order")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+
+                case "Rights":
+                    <div class="card">
+                        <div class="card-header">Transfer Management Rights</div>
+                        <div class="card-body">
+                            <AssetSelector @bind-IssuerValue="_rightsIssuer" @bind-NameValue="_rightsAssetName" />
+                            <div class="mb-2">
+                                <label class="form-label-sm">Number of Shares</label>
+                                <input type="number" class="form-control form-control-sm" @bind="_rightsShares" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">New Managing Contract Index</label>
+                                <input type="number" class="form-control form-control-sm" min="0" @bind="_rightsContractIndex" />
+                            </div>
+                            <button class="btn btn-primary" @onclick="TransferRights" disabled="@_sending">
+                                @(_sending ? "Transferring..." : "Transfer Rights")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+            }
+
+            @if (_result != null)
+            {
+                <div class="alert alert-success mt-3">
+                    Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                    <div class="mt-1">
+                        <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                        <a href="/tx/history">Transaction History</a>
+                    </div>
+                </div>
+            }
+            @if (_error != null)
+            {
+                <div class="alert alert-danger mt-2">@_error</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string[] _tabs = ["Issue", "Transfer", "Ask", "Bid", "Rights"];
+    private string _activeTab = "Issue";
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+    private (uint issuance, uint transfer, uint trade)? _fees;
+
+    private const int ContractIndex = 1; // QX
+
+    // Issue
+    private string _issueName = "";
+    private long _issueShares;
+    private string _issueUnit = "";
+    private int _issueDecimals;
+
+    // Transfer
+    private string _xferName = "";
+    private string _xferIssuer = "";
+    private string? _xferNewOwner;
+    private long _xferShares;
+
+    // Orders
+    private void SetOrderAdd() => _orderAction = "add";
+    private void SetOrderRemove() => _orderAction = "remove";
+    private string _orderAction = "add";
+    private string _orderAssetName = "";
+    private string _orderIssuer = "";
+    private long _orderPrice;
+    private long _orderShares;
+
+    // Rights
+    private string _rightsAssetName = "";
+    private string _rightsIssuer = "";
+    private long _rightsShares;
+    private uint _rightsContractIndex;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await Backend.QuerySmartContractAsync(ContractIndex, 1, []);
+            if (result.Length >= 12)
+            {
+                _fees = (
+                    BitConverter.ToUInt32(result, 0),
+                    BitConverter.ToUInt32(result, 4),
+                    BitConverter.ToUInt32(result, 8)
+                );
+            }
+        }
+        catch { /* fee display is best-effort */ }
+    }
+
+    private async Task IssueAsset()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_issueName)) { _error = "Asset name is required."; return; }
+            if (_issueShares <= 0) { _error = "Number of shares must be positive."; return; }
+
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qx.IssueAssetPayload
+            {
+                AssetName = AssetNameHelper.ToUlong(_issueName.Trim()),
+                NumberOfShares = _issueShares,
+                UnitOfMeasurement = string.IsNullOrWhiteSpace(_issueUnit) ? 0 : AssetNameHelper.ToUlong(_issueUnit.Trim()),
+                NumberOfDecimalPlaces = (sbyte)_issueDecimals
+            };
+            long amount = _fees?.issuance ?? 0;
+            await BroadcastAndTrack(amount, tick, payload, payload.InputType,
+                $"QX Issue Asset: {_issueName.Trim()} ({_issueShares:N0} shares)");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task TransferAsset()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var issuerErr = IdentityValidation.Validate(_xferIssuer);
+            if (issuerErr != null) { _error = "Issuer: " + issuerErr; return; }
+            var ownerErr = IdentityValidation.Validate(_xferNewOwner);
+            if (ownerErr != null) { _error = "New Owner: " + ownerErr; return; }
+            if (string.IsNullOrWhiteSpace(_xferName)) { _error = "Asset name is required."; return; }
+            if (_xferShares <= 0) { _error = "Number of shares must be positive."; return; }
+
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qx.TransferShareOwnershipAndPossessionPayload
+            {
+                Issuer = Qubic.Core.Entities.QubicIdentity.FromIdentity(_xferIssuer!.Trim()).PublicKey,
+                NewOwnerAndPossessor = Qubic.Core.Entities.QubicIdentity.FromIdentity(_xferNewOwner!.Trim()).PublicKey,
+                AssetName = AssetNameHelper.ToUlong(_xferName.Trim()),
+                NumberOfShares = _xferShares
+            };
+            long amount = _fees?.transfer ?? 0;
+            await BroadcastAndTrack(amount, tick, payload, payload.InputType,
+                $"QX Transfer {_xferName.Trim()}: {_xferShares:N0} shares to {_xferNewOwner!.Trim()[..8]}...");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task SubmitOrder()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var issuerErr = IdentityValidation.Validate(_orderIssuer);
+            if (issuerErr != null) { _error = "Issuer: " + issuerErr; return; }
+            if (string.IsNullOrWhiteSpace(_orderAssetName)) { _error = "Asset name is required."; return; }
+            if (_orderPrice <= 0) { _error = "Price must be positive."; return; }
+            if (_orderShares <= 0) { _error = "Number of shares must be positive."; return; }
+
+            var tick = await GetTick();
+            var issuerPk = Qubic.Core.Entities.QubicIdentity.FromIdentity(_orderIssuer!.Trim()).PublicKey;
+            var assetName = AssetNameHelper.ToUlong(_orderAssetName.Trim());
+            bool isAsk = _activeTab == "Ask";
+            bool isAdd = _orderAction == "add";
+
+            Qubic.Core.Payloads.ITransactionPayload payload;
+            long amount = 0;
+            string desc;
+
+            if (isAsk && isAdd)
+            {
+                payload = new Qubic.Core.Contracts.Qx.AddToAskOrderPayload { Issuer = issuerPk, AssetName = assetName, Price = _orderPrice, NumberOfShares = _orderShares };
+                desc = $"QX Add Ask: {_orderShares:N0} {_orderAssetName.Trim()} @ {_orderPrice:N0}";
+            }
+            else if (isAsk && !isAdd)
+            {
+                payload = new Qubic.Core.Contracts.Qx.RemoveFromAskOrderPayload { Issuer = issuerPk, AssetName = assetName, Price = _orderPrice, NumberOfShares = _orderShares };
+                desc = $"QX Remove Ask: {_orderShares:N0} {_orderAssetName.Trim()} @ {_orderPrice:N0}";
+            }
+            else if (!isAsk && isAdd)
+            {
+                payload = new Qubic.Core.Contracts.Qx.AddToBidOrderPayload { Issuer = issuerPk, AssetName = assetName, Price = _orderPrice, NumberOfShares = _orderShares };
+                amount = _orderPrice * _orderShares;
+                desc = $"QX Add Bid: {_orderShares:N0} {_orderAssetName.Trim()} @ {_orderPrice:N0} (total: {amount:N0})";
+            }
+            else
+            {
+                payload = new Qubic.Core.Contracts.Qx.RemoveFromBidOrderPayload { Issuer = issuerPk, AssetName = assetName, Price = _orderPrice, NumberOfShares = _orderShares };
+                desc = $"QX Remove Bid: {_orderShares:N0} {_orderAssetName.Trim()} @ {_orderPrice:N0}";
+            }
+
+            await BroadcastAndTrack(amount, tick, payload, payload.InputType, desc);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task TransferRights()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var issuerErr = IdentityValidation.Validate(_rightsIssuer);
+            if (issuerErr != null) { _error = "Issuer: " + issuerErr; return; }
+            if (string.IsNullOrWhiteSpace(_rightsAssetName)) { _error = "Asset name is required."; return; }
+            if (_rightsShares <= 0) { _error = "Number of shares must be positive."; return; }
+
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qx.TransferShareManagementRightsPayload
+            {
+                Asset = new Qubic.Core.Contracts.QubicAsset
+                {
+                    Issuer = Qubic.Core.Entities.QubicIdentity.FromIdentity(_rightsIssuer!.Trim()).PublicKey,
+                    AssetName = AssetNameHelper.ToUlong(_rightsAssetName.Trim())
+                },
+                NumberOfShares = _rightsShares,
+                NewManagingContractIndex = _rightsContractIndex
+            };
+            await BroadcastAndTrack(0, tick, payload, payload.InputType,
+                $"QX Transfer Rights: {_rightsShares:N0} {_rightsAssetName.Trim()} to contract {_rightsContractIndex}");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task<uint> GetTick()
+    {
+        return TickMonitor.IsConnected
+            ? TickMonitor.Tick + (uint)Settings.TickOffset
+            : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+    }
+
+    private async Task BroadcastAndTrack(long amount, uint tick, Qubic.Core.Payloads.ITransactionPayload payload, ushort inputType, string description)
+    {
+        var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(ContractIndex));
+        var tx = Seed.CreateAndSignTransaction(dest, amount, tick, payload);
+        var result = await Backend.BroadcastTransactionAsync(tx);
+        _result = result.TransactionId;
+
+        TxTracker.Track(new TrackedTransaction
+        {
+            Hash = result.TransactionId,
+            Source = Seed.Identity?.ToString() ?? "",
+            Destination = dest.ToString(),
+            Amount = amount,
+            TargetTick = tick,
+            InputType = inputType,
+            PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()),
+            Description = description
+        });
+    }
+}

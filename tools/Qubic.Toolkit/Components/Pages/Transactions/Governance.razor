@@ -1,0 +1,232 @@
+@page "/tx/governance"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>Governance</h4>
+<p class="text-muted">GQMProp (Quorum proposals) and CCF (Computor-Controlled Fund) operations.</p>
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var tab in _tabs)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(tab == _activeTab ? "active" : "")" href="" @onclick="() => _activeTab = tab" @onclick:preventDefault>@tab</a>
+            </li>
+        }
+    </ul>
+
+    <div class="row"><div class="col-md-8">
+        @switch (_activeTab)
+        {
+            case "GQMProp":
+                <div class="card"><div class="card-header">GQMProp (Contract 5)</div><div class="card-body">
+                    <p class="small text-muted">General Quorum Majority Proposals. The generated payload types are empty; use raw hex for proposal data via the Custom Transaction page for complex proposals.</p>
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="gqmMode" checked="@(!_gqmVote)" @onchange="() => _gqmVote = false" />
+                            <label class="form-check-label">Set Proposal</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="gqmMode" checked="@_gqmVote" @onchange="() => _gqmVote = true" />
+                            <label class="form-check-label">Vote</label>
+                        </div>
+                    </div>
+                    <div class="mb-2"><label class="form-label-sm">Raw Payload Hex (optional, for proposals with data)</label>
+                        <textarea class="form-control form-control-sm mono" rows="3" @bind="_gqmHex" placeholder="Leave empty for empty payload, or enter hex bytes..."></textarea></div>
+                    <button class="btn btn-primary" @onclick="GqmOp" disabled="@_sending">@(_sending ? "Sending..." : (_gqmVote ? "Vote (GQMProp)" : "Set Proposal (GQMProp)"))</button>
+                </div></div>
+                break;
+
+            case "CCF":
+                <div class="card"><div class="card-header">CCF (Contract 8)</div><div class="card-body">
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="ccfMode" checked="@(!_ccfVote)" @onchange="() => _ccfVote = false" />
+                            <label class="form-check-label">Set Proposal</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="ccfMode" checked="@_ccfVote" @onchange="() => _ccfVote = true" />
+                            <label class="form-check-label">Vote</label>
+                        </div>
+                    </div>
+                    @if (!_ccfVote)
+                    {
+                        <p class="small text-muted">CCF proposals have subscription fields. The proposal data itself requires raw hex input.</p>
+                        <div class="mb-2"><label class="form-label-sm">Is Subscription?</label>
+                            <select class="form-select form-select-sm" @bind="_ccfIsSub">
+                                <option value="false">No (one-time)</option>
+                                <option value="true">Yes (subscription)</option>
+                            </select>
+                        </div>
+                        @if (_ccfIsSub == "true")
+                        {
+                            <div class="row g-2 mb-2">
+                                <div class="col"><label class="form-label-sm">Weeks Per Period</label>
+                                    <input type="number" class="form-control form-control-sm" min="0" @bind="_ccfWeeksPerPeriod" /></div>
+                                <div class="col"><label class="form-label-sm">Start Epoch</label>
+                                    <input type="number" class="form-control form-control-sm" min="0" @bind="_ccfStartEpoch" /></div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col"><label class="form-label-sm">Amount Per Period (QU)</label>
+                                    <input type="number" class="form-control form-control-sm" min="0" @bind="_ccfAmountPerPeriod" /></div>
+                                <div class="col"><label class="form-label-sm">Number of Periods</label>
+                                    <input type="number" class="form-control form-control-sm" min="0" @bind="_ccfNumPeriods" /></div>
+                            </div>
+                        }
+                        <div class="mb-2"><label class="form-label-sm">Raw Proposal Hex (optional, for ProposalDataT)</label>
+                            <textarea class="form-control form-control-sm mono" rows="3" @bind="_ccfHex" placeholder="Leave empty or enter hex bytes for proposal data..."></textarea></div>
+                    }
+                    else
+                    {
+                        <p class="small text-muted">Vote on a CCF proposal. The generated vote payload is empty; use raw hex for custom vote data.</p>
+                        <div class="mb-2"><label class="form-label-sm">Raw Vote Payload Hex (optional)</label>
+                            <textarea class="form-control form-control-sm mono" rows="3" @bind="_ccfVoteHex" placeholder="Leave empty for empty payload..."></textarea></div>
+                    }
+                    <button class="btn btn-primary" @onclick="CcfOp" disabled="@_sending">@(_sending ? "Sending..." : (_ccfVote ? "Vote (CCF)" : "Set Proposal (CCF)"))</button>
+                </div></div>
+                break;
+        }
+
+        @if (_result != null)
+        {
+            <div class="alert alert-success mt-3">
+                Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                <div class="mt-1">
+                    <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                    <a href="/tx/history">Transaction History</a>
+                </div>
+            </div>
+        }
+        @if (_error != null) { <div class="alert alert-danger mt-2">@_error</div> }
+    </div></div>
+}
+
+@code {
+    private static readonly string[] _tabs = ["GQMProp", "CCF"];
+    private string _activeTab = "GQMProp";
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+
+    // GQMProp
+    private bool _gqmVote;
+    private string _gqmHex = "";
+    // CCF
+    private bool _ccfVote;
+    private string _ccfIsSub = "false";
+    private byte _ccfWeeksPerPeriod; private uint _ccfStartEpoch; private ulong _ccfAmountPerPeriod; private uint _ccfNumPeriods;
+    private string _ccfHex = "";
+    private string _ccfVoteHex = "";
+
+    private async Task<uint> GetTick() => TickMonitor.IsConnected
+        ? TickMonitor.Tick + (uint)Settings.TickOffset
+        : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+    private async Task Broadcast(int contractIndex, long amount, uint tick, Qubic.Core.Payloads.ITransactionPayload payload, string desc)
+    {
+        var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(contractIndex));
+        var tx = Seed.CreateAndSignTransaction(dest, amount, tick, payload);
+        var result = await Backend.BroadcastTransactionAsync(tx);
+        _result = result.TransactionId;
+        TxTracker.Track(new TrackedTransaction { Hash = result.TransactionId, Source = Seed.Identity?.ToString() ?? "",
+            Destination = dest.ToString(), Amount = amount, TargetTick = tick,
+            InputType = payload.InputType, PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()), Description = desc });
+    }
+
+    private byte[] ParseHex(string hex)
+    {
+        var clean = hex.Replace(" ", "").Replace("\n", "").Replace("\r", "").Trim();
+        if (string.IsNullOrEmpty(clean)) return [];
+        return Convert.FromHexString(clean);
+    }
+
+    private async Task GqmOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            var hexData = ParseHex(_gqmHex);
+            ushort inputType = (ushort)(_gqmVote ? 2 : 1);
+
+            if (hexData.Length == 0)
+            {
+                // Use generated empty payload
+                if (_gqmVote)
+                    await Broadcast(5, 0, tick, new Qubic.Core.Contracts.Gqmprop.VotePayload(), "GQMProp Vote");
+                else
+                    await Broadcast(5, 0, tick, new Qubic.Core.Contracts.Gqmprop.SetProposalPayload(), "GQMProp Set Proposal");
+            }
+            else
+            {
+                var payload = new Qubic.Toolkit.Models.GenericContractPayload(inputType, hexData);
+                await Broadcast(5, 0, tick, payload, _gqmVote ? "GQMProp Vote (raw)" : "GQMProp Set Proposal (raw)");
+            }
+        }
+        catch (FormatException) { _error = "Invalid hex string."; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task CcfOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            if (_ccfVote)
+            {
+                var hexData = ParseHex(_ccfVoteHex);
+                if (hexData.Length == 0)
+                    await Broadcast(8, 0, tick, new Qubic.Core.Contracts.Ccf.VotePayload(), "CCF Vote");
+                else
+                    await Broadcast(8, 0, tick, new Qubic.Toolkit.Models.GenericContractPayload(2, hexData), "CCF Vote (raw)");
+            }
+            else
+            {
+                // For SetProposal, try to use the generated type with subscription fields
+                // The Proposal field (ProposalDataT) is unknown, so we build raw bytes
+                var proposalHex = ParseHex(_ccfHex);
+                bool isSub = _ccfIsSub == "true";
+
+                // Build raw payload: The generated CCF.SetProposalPayload is 24 bytes
+                // Layout: [ProposalDataT at 0] [IsSubscription:1] [WeeksPerPeriod:1] [padding:2] [StartEpoch:4] [AmountPerPeriod:8] [NumberOfPeriods:4]
+                // Since ProposalDataT is unknown/0 bytes, offset 0 starts with IsSubscription
+                var data = new byte[24];
+                data[0] = (byte)(isSub ? 1 : 0);
+                data[1] = _ccfWeeksPerPeriod;
+                // bytes 2-3 = padding
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4), _ccfStartEpoch);
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(8), _ccfAmountPerPeriod);
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(16), _ccfNumPeriods);
+
+                // If proposal hex is provided, prepend it
+                byte[] finalData;
+                if (proposalHex.Length > 0)
+                {
+                    finalData = new byte[proposalHex.Length + data.Length];
+                    proposalHex.CopyTo(finalData, 0);
+                    data.CopyTo(finalData, proposalHex.Length);
+                }
+                else
+                {
+                    finalData = data;
+                }
+
+                var payload = new Qubic.Toolkit.Models.GenericContractPayload(1, finalData);
+                await Broadcast(8, 0, tick, payload, isSub ? "CCF Set Proposal (subscription)" : "CCF Set Proposal");
+            }
+        }
+        catch (FormatException) { _error = "Invalid hex string."; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+}

@@ -11,6 +11,7 @@ builder.Services.AddSingleton<SeedSessionService>();
 builder.Services.AddSingleton<TickMonitorService>();
 builder.Services.AddSingleton<TransactionTrackerService>();
 builder.Services.AddSingleton<ToolkitSettingsService>();
+builder.Services.AddSingleton<AssetRegistryService>();
 
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 
@@ -22,7 +23,7 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     var address = app.Urls.FirstOrDefault() ?? "http://127.0.0.1:5060";
-    Console.WriteLine($"Qubic Toolkit running at {address}");
+    Console.WriteLine($"Qubic.Net Toolkit running at {address}");
     try
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

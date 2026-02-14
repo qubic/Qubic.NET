@@ -14,6 +14,86 @@
     font-weight: 600;
 }
 
+/* Collapsible nav sections */
+.nav-section-header {
+    display: flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    margin-top: 0.5rem;
+    border-radius: 4px;
+}
+.nav-section-label {
+    flex: 1;
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #6c757d;
+}
+a.nav-section-label:hover {
+    color: #333;
+}
+.nav-section-toggle {
+    cursor: pointer;
+    padding: 0.2rem 0.3rem;
+    border-radius: 3px;
+    line-height: 1;
+}
+.nav-section-toggle:hover {
+    background-color: #e9ecef;
+}
+.nav-section-toggle .chevron {
+    font-size: 0.65rem;
+    transition: transform 0.15s;
+    display: inline-block;
+    color: #999;
+}
+.nav-section-toggle .chevron.expanded {
+    transform: rotate(90deg);
+}
+.nav-sub-links .nav-link {
+    padding-left: 1.5rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.nav-fav-row {
+    overflow: hidden;
+}
+.nav-sub-header {
+    padding-left: 1.5rem;
+    font-size: 0.7rem;
+    color: #aaa;
+    margin-top: 0.3rem;
+    margin-bottom: 0.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Favorite star buttons */
+.nav-fav-row .fav-btn {
+    padding: 0.1rem 0.25rem;
+    line-height: 1;
+    font-size: 0.65rem;
+    color: #ccc;
+    background: none;
+    border: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+.nav-fav-row:hover .fav-btn {
+    opacity: 0.6;
+}
+.nav-fav-row .fav-btn:hover {
+    opacity: 1;
+    color: #ffc107;
+}
+.nav-fav-row .fav-btn.active {
+    opacity: 1;
+    color: #ffc107;
+}
+
 /* Monospace values */
 .mono {
     font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
@@ -69,6 +149,20 @@
     border-color: #198754 !important;
     box-shadow: 0 0 0 0.15rem rgba(25, 135, 84, 0.35);
     transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+/* Hub card styling */
+.hub-card {
+    transition: transform 0.15s, box-shadow 0.15s;
+    cursor: pointer;
+}
+.hub-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.hub-card .card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
 }
 
 /* Compact form layout */

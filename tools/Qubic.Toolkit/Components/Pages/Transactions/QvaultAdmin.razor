@@ -1,0 +1,309 @@
+@page "/tx/qvault"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>QVault (Admin)</h4>
+<p class="text-muted">Administrative operations for the QVault contract: manage addresses, distribution, and banning.</p>
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var tab in _tabs)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(tab == _activeTab ? "active" : "")" href="" @onclick="() => _activeTab = tab" @onclick:preventDefault>@tab</a>
+            </li>
+        }
+    </ul>
+
+    <div class="row"><div class="col-md-8">
+        @switch (_activeTab)
+        {
+            case "Auth":
+                <div class="card"><div class="card-header">Auth Address</div><div class="card-body">
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="authMode" checked="@(!_authChange)" @onchange="() => _authChange = false" />
+                            <label class="form-check-label">Submit</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="authMode" checked="@_authChange" @onchange="() => _authChange = true" />
+                            <label class="form-check-label">Change</label>
+                        </div>
+                    </div>
+                    @if (_authChange)
+                    {
+                        <div class="mb-2"><label class="form-label-sm">Number of Changed Address</label>
+                            <input type="number" class="form-control form-control-sm" min="0" @bind="_authChangedNum" /></div>
+                    }
+                    else
+                    {
+                        <div class="mb-2"><label class="form-label-sm">New Auth Address</label>
+                            <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_authAddress)"
+                                   @bind="_authAddress" placeholder="IDENTITY..." /></div>
+                    }
+                    <button class="btn btn-primary" @onclick="AuthOp" disabled="@_sending">@(_sending ? "Sending..." : (_authChange ? "Change Auth Address" : "Submit Auth Address"))</button>
+                </div></div>
+                break;
+
+            case "Distribution":
+                <div class="card"><div class="card-header">Distribution Permille</div><div class="card-body">
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="distMode" checked="@(!_distChange)" @onchange="() => _distChange = false" />
+                            <label class="form-check-label">Submit</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="distMode" checked="@_distChange" @onchange="() => _distChange = true" />
+                            <label class="form-check-label">Change</label>
+                        </div>
+                    </div>
+                    <p class="small text-muted">Sum of QCAP Holder + Reinvesting + Dev must equal 970.</p>
+                    <div class="row g-2 mb-2">
+                        <div class="col"><label class="form-label-sm">QCAP Holder Permille</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="970" @bind="_distQcap" /></div>
+                        <div class="col"><label class="form-label-sm">Reinvesting Permille</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="970" @bind="_distReinvest" /></div>
+                        <div class="col"><label class="form-label-sm">Dev Permille</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="970" @bind="_distDev" /></div>
+                    </div>
+                    <div class="small text-muted mb-2">Sum: @(_distQcap + _distReinvest + _distDev)</div>
+                    <button class="btn btn-primary" @onclick="DistOp" disabled="@_sending">@(_sending ? "Sending..." : (_distChange ? "Change Distribution" : "Submit Distribution"))</button>
+                </div></div>
+                break;
+
+            case "Reinvesting":
+                <div class="card"><div class="card-header">Reinvesting Address</div><div class="card-body">
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="reinvMode" checked="@(!_reinvChange)" @onchange="() => _reinvChange = false" />
+                            <label class="form-check-label">Submit</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="reinvMode" checked="@_reinvChange" @onchange="() => _reinvChange = true" />
+                            <label class="form-check-label">Change</label>
+                        </div>
+                    </div>
+                    <div class="mb-2"><label class="form-label-sm">New Address</label>
+                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_reinvAddress)"
+                               @bind="_reinvAddress" placeholder="IDENTITY..." /></div>
+                    <button class="btn btn-primary" @onclick="ReinvOp" disabled="@_sending">@(_sending ? "Sending..." : (_reinvChange ? "Change Reinvesting Address" : "Submit Reinvesting Address"))</button>
+                </div></div>
+                break;
+
+            case "Admin":
+                <div class="card"><div class="card-header">Admin Address</div><div class="card-body">
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="adminMode" checked="@(!_adminChange)" @onchange="() => _adminChange = false" />
+                            <label class="form-check-label">Submit</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="adminMode" checked="@_adminChange" @onchange="() => _adminChange = true" />
+                            <label class="form-check-label">Change</label>
+                        </div>
+                    </div>
+                    <div class="mb-2"><label class="form-label-sm">New Admin Address</label>
+                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_adminAddress)"
+                               @bind="_adminAddress" placeholder="IDENTITY..." /></div>
+                    <button class="btn btn-primary" @onclick="AdminOp" disabled="@_sending">@(_sending ? "Sending..." : (_adminChange ? "Change Admin Address" : "Submit Admin Address"))</button>
+                </div></div>
+                break;
+
+            case "Banning":
+                <div class="card"><div class="card-header">Address Banning</div><div class="card-body">
+                    <div class="mb-2">
+                        <select class="form-select form-select-sm" @bind="_banOp">
+                            <option value="submitBan">Submit Banned Address</option>
+                            <option value="saveBan">Save Banned Address</option>
+                            <option value="submitUnban">Submit Unbanned Address</option>
+                            <option value="unblock">Unblock Banned Address</option>
+                        </select>
+                    </div>
+                    <div class="mb-2"><label class="form-label-sm">Address</label>
+                        <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_banAddress)"
+                               @bind="_banAddress" placeholder="IDENTITY..." /></div>
+                    <button class="btn btn-primary" @onclick="BanOp" disabled="@_sending">@(_sending ? "Sending..." : "Submit")</button>
+                </div></div>
+                break;
+        }
+
+        @if (_result != null)
+        {
+            <div class="alert alert-success mt-3">
+                Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                <div class="mt-1">
+                    <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                    <a href="/tx/history">Transaction History</a>
+                </div>
+            </div>
+        }
+        @if (_error != null) { <div class="alert alert-danger mt-2">@_error</div> }
+    </div></div>
+}
+
+@code {
+    private static readonly string[] _tabs = ["Auth", "Distribution", "Reinvesting", "Admin", "Banning"];
+    private string _activeTab = "Auth";
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+    private const int ContractIndex = 10;
+
+    // Auth
+    private bool _authChange; private string _authAddress = ""; private uint _authChangedNum;
+    // Distribution
+    private bool _distChange; private uint _distQcap; private uint _distReinvest; private uint _distDev;
+    // Reinvesting
+    private bool _reinvChange; private string _reinvAddress = "";
+    // Admin
+    private bool _adminChange; private string _adminAddress = "";
+    // Banning
+    private string _banOp = "submitBan"; private string _banAddress = "";
+
+    private async Task<uint> GetTick() => TickMonitor.IsConnected
+        ? TickMonitor.Tick + (uint)Settings.TickOffset
+        : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+    private async Task Broadcast(long amount, uint tick, Qubic.Core.Payloads.ITransactionPayload payload, string desc)
+    {
+        var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(ContractIndex));
+        var tx = Seed.CreateAndSignTransaction(dest, amount, tick, payload);
+        var result = await Backend.BroadcastTransactionAsync(tx);
+        _result = result.TransactionId;
+        TxTracker.Track(new TrackedTransaction { Hash = result.TransactionId, Source = Seed.Identity?.ToString() ?? "",
+            Destination = dest.ToString(), Amount = amount, TargetTick = tick,
+            InputType = payload.InputType, PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()), Description = desc });
+    }
+
+    private byte[] ParseAddress(string addr)
+        => Qubic.Core.Entities.QubicIdentity.FromIdentity(addr.Trim()).PublicKey;
+
+    private async Task AuthOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            if (_authChange)
+            {
+                var payload = new Qubic.Core.Contracts.Qvault.ChangeAuthAddressPayload { NumberOfChangedAddress = _authChangedNum };
+                await Broadcast(0, tick, payload, $"QVault Change Auth Address #{_authChangedNum}");
+            }
+            else
+            {
+                var err = IdentityValidation.Validate(_authAddress);
+                if (err != null) { _error = err; return; }
+                var payload = new Qubic.Core.Contracts.Qvault.SubmitAuthAddressPayload { NewAddress = ParseAddress(_authAddress) };
+                await Broadcast(0, tick, payload, $"QVault Submit Auth Address");
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task DistOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            if (_distChange)
+            {
+                var payload = new Qubic.Core.Contracts.Qvault.ChangeDistributionPermillePayload
+                    { NewQCAPHolderPermille = _distQcap, NewReinvestingPermille = _distReinvest, NewDevPermille = _distDev };
+                await Broadcast(0, tick, payload, $"QVault Change Distribution: {_distQcap}/{_distReinvest}/{_distDev}");
+            }
+            else
+            {
+                var payload = new Qubic.Core.Contracts.Qvault.SubmitDistributionPermillePayload
+                    { NewQCAPHolderPermille = _distQcap, NewReinvestingPermille = _distReinvest, NewDevPermille = _distDev };
+                await Broadcast(0, tick, payload, $"QVault Submit Distribution: {_distQcap}/{_distReinvest}/{_distDev}");
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task ReinvOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var err = IdentityValidation.Validate(_reinvAddress);
+            if (err != null) { _error = err; return; }
+            var tick = await GetTick();
+            if (_reinvChange)
+            {
+                var payload = new Qubic.Core.Contracts.Qvault.ChangeReinvestingAddressPayload { NewAddress = ParseAddress(_reinvAddress) };
+                await Broadcast(0, tick, payload, "QVault Change Reinvesting Address");
+            }
+            else
+            {
+                var payload = new Qubic.Core.Contracts.Qvault.SubmitReinvestingAddressPayload { NewAddress = ParseAddress(_reinvAddress) };
+                await Broadcast(0, tick, payload, "QVault Submit Reinvesting Address");
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task AdminOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var err = IdentityValidation.Validate(_adminAddress);
+            if (err != null) { _error = err; return; }
+            var tick = await GetTick();
+            if (_adminChange)
+            {
+                var payload = new Qubic.Core.Contracts.Qvault.ChangeAdminAddressPayload { NewAddress = ParseAddress(_adminAddress) };
+                await Broadcast(0, tick, payload, "QVault Change Admin Address");
+            }
+            else
+            {
+                var payload = new Qubic.Core.Contracts.Qvault.SubmitAdminAddressPayload { NewAddress = ParseAddress(_adminAddress) };
+                await Broadcast(0, tick, payload, "QVault Submit Admin Address");
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task BanOp()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var err = IdentityValidation.Validate(_banAddress);
+            if (err != null) { _error = err; return; }
+            var tick = await GetTick();
+            var pk = ParseAddress(_banAddress);
+            switch (_banOp)
+            {
+                case "submitBan":
+                    await Broadcast(0, tick, new Qubic.Core.Contracts.Qvault.SubmitBannedAddressPayload { BannedAddress = pk }, "QVault Submit Banned Address");
+                    break;
+                case "saveBan":
+                    await Broadcast(0, tick, new Qubic.Core.Contracts.Qvault.SaveBannedAddressPayload { BannedAddress = pk }, "QVault Save Banned Address");
+                    break;
+                case "submitUnban":
+                    await Broadcast(0, tick, new Qubic.Core.Contracts.Qvault.SubmitUnbannedAddressPayload { UnbannedAddress = pk }, "QVault Submit Unbanned Address");
+                    break;
+                case "unblock":
+                    await Broadcast(0, tick, new Qubic.Core.Contracts.Qvault.UnblockBannedAddressPayload { UnbannedAddress = pk }, "QVault Unblock Banned Address");
+                    break;
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+}

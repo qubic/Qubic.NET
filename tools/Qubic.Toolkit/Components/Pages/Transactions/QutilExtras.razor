@@ -1,0 +1,385 @@
+@page "/tx/qutil"
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4>QUtil Operations</h4>
+<p class="text-muted">Burn QU for contracts, distribute QU to shareholders, and manage polls.</p>
+
+@if (_fees != null)
+{
+    <div class="small text-muted mb-2">
+        Fees &mdash; SMT1 Invocation: <strong>@_fees.Value.smt1.ToString("N0")</strong> |
+        Poll Creation: <strong>@_fees.Value.pollCreation.ToString("N0")</strong> |
+        Poll Vote: <strong>@_fees.Value.pollVote.ToString("N0")</strong> |
+        Distribute/Shareholder: <strong>@_fees.Value.distribute.ToString("N0")</strong> |
+        Shareholder Proposal: <strong>@_fees.Value.proposal.ToString("N0")</strong>
+    </div>
+}
+
+@if (!Seed.HasSeed)
+{
+    <div class="seed-warning">Enter your seed in the top bar to enable signing.</div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        @foreach (var tab in _tabs)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(tab == _activeTab ? "active" : "")" href="" @onclick="() => _activeTab = tab" @onclick:preventDefault>@tab</a>
+            </li>
+        }
+    </ul>
+
+    <div class="row">
+        <div class="col-md-8">
+            @switch (_activeTab)
+            {
+                case "Burn for Contract":
+                    <div class="card">
+                        <div class="card-header">Burn QU for Contract</div>
+                        <div class="card-body">
+                            <p class="small text-muted">Burns QU and credits the fee reserve of the specified contract.</p>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Contract Index (0-23)</label>
+                                <input type="number" class="form-control form-control-sm" min="0" max="23" @bind="_burnContractIndex" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Amount to burn (QU)</label>
+                                <input type="number" class="form-control form-control-sm" min="1" @bind="_burnAmount" />
+                            </div>
+                            <button class="btn btn-danger" @onclick="BurnForContract" disabled="@_sending">
+                                @(_sending ? "Burning..." : "Burn for Contract")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+
+                case "Distribute":
+                    <div class="card">
+                        <div class="card-header">Distribute QU to Shareholders</div>
+                        <div class="card-body">
+                            <p class="small text-muted">Distribute QU among asset shareholders. Equal amount per share, remainder is reimbursed.</p>
+                            <AssetSelector @bind-IssuerValue="_distIssuer" @bind-NameValue="_distAssetName" />
+                            <div class="mb-2">
+                                <label class="form-label-sm">Total Amount to Distribute (QU)</label>
+                                <input type="number" class="form-control form-control-sm" min="1" @bind="_distAmount" />
+                            </div>
+                            <button class="btn btn-primary" @onclick="Distribute" disabled="@_sending">
+                                @(_sending ? "Distributing..." : "Distribute")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+
+                case "Create Poll":
+                    <div class="card">
+                        <div class="card-header">Create Poll</div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label class="form-label-sm">Poll Name (max 32 chars)</label>
+                                <input class="form-control form-control-sm" maxlength="32" @bind="_pollName" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Poll Type</label>
+                                <select class="form-select form-select-sm" @bind="_pollType">
+                                    <option value="1">Qubic (QU voting)</option>
+                                    <option value="2">Asset (asset-based voting)</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Minimum Vote Amount</label>
+                                <input type="number" class="form-control form-control-sm" min="0" @bind="_pollMinAmount" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">GitHub Link (optional, max 256 chars)</label>
+                                <input class="form-control form-control-sm" maxlength="256" @bind="_pollGithubLink" />
+                            </div>
+                            @if (_pollType == 2)
+                            {
+                                <div class="mb-2">
+                                    <label class="form-label-sm">Allowed Assets (one per line: <code>ASSET_NAME,ISSUER_IDENTITY</code>)</label>
+                                    <textarea class="form-control form-control-sm mono" rows="3" @bind="_pollAssetsText" placeholder="CFB,AAAAAA..."></textarea>
+                                </div>
+                            }
+                            <div class="mb-2">
+                                <label class="form-label-sm">Fee Amount (QU)</label>
+                                <input type="number" class="form-control form-control-sm" min="0" @bind="_pollFee" />
+                            </div>
+                            <button class="btn btn-primary" @onclick="CreatePoll" disabled="@_sending">
+                                @(_sending ? "Creating..." : "Create Poll")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+
+                case "Vote":
+                    <div class="card">
+                        <div class="card-header">Vote in Poll</div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label class="form-label-sm">Poll ID</label>
+                                <input type="number" class="form-control form-control-sm" min="0" @bind="_votePollId" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Vote Amount (QU)</label>
+                                <input type="number" class="form-control form-control-sm" min="0" @bind="_voteAmount" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Chosen Option (0-63)</label>
+                                <input type="number" class="form-control form-control-sm" min="0" max="63" @bind="_voteOption" />
+                            </div>
+                            <button class="btn btn-primary" @onclick="VoteInPoll" disabled="@_sending">
+                                @(_sending ? "Voting..." : "Vote")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+
+                case "Cancel Poll":
+                    <div class="card">
+                        <div class="card-header">Cancel Poll</div>
+                        <div class="card-body">
+                            <p class="small text-muted">Only the poll creator can cancel it.</p>
+                            <div class="mb-2">
+                                <label class="form-label-sm">Poll ID</label>
+                                <input type="number" class="form-control form-control-sm" min="0" @bind="_cancelPollId" />
+                            </div>
+                            <button class="btn btn-warning" @onclick="CancelPoll" disabled="@_sending">
+                                @(_sending ? "Cancelling..." : "Cancel Poll")
+                            </button>
+                        </div>
+                    </div>
+                    break;
+            }
+
+            @if (_result != null)
+            {
+                <div class="alert alert-success mt-3">
+                    Transaction broadcast! Tx ID: <span class="mono">@_result</span>
+                    <div class="mt-1">
+                        <a href="https://explorer.qubic.org/network/tx/@_result" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                        <a href="/tx/history">Transaction History</a>
+                    </div>
+                </div>
+            }
+            @if (_error != null)
+            {
+                <div class="alert alert-danger mt-2">@_error</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string[] _tabs = ["Burn for Contract", "Distribute", "Create Poll", "Vote", "Cancel Poll"];
+    private string _activeTab = "Burn for Contract";
+    private bool _sending;
+    private string? _result;
+    private string? _error;
+    private const int ContractIndex = 4; // QUtil
+    private (long smt1, long pollCreation, long pollVote, long distribute, long proposal)? _fees;
+
+    // Burn for Contract
+    private uint _burnContractIndex;
+    private long _burnAmount;
+
+    // Distribute
+    private string _distIssuer = "";
+    private string _distAssetName = "";
+    private long _distAmount;
+
+    // Create Poll
+    private string _pollName = "";
+    private int _pollType = 1;
+    private long _pollMinAmount;
+    private string _pollGithubLink = "";
+    private string _pollAssetsText = "";
+    private long _pollFee;
+
+    // Vote
+    private ulong _votePollId;
+    private long _voteAmount;
+    private int _voteOption;
+
+    // Cancel Poll
+    private ulong _cancelPollId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await Backend.QuerySmartContractAsync(ContractIndex, 7, []);
+            if (result.Length >= 40)
+                _fees = (BitConverter.ToInt64(result, 0), BitConverter.ToInt64(result, 8),
+                         BitConverter.ToInt64(result, 16), BitConverter.ToInt64(result, 24),
+                         BitConverter.ToInt64(result, 32));
+        }
+        catch { }
+    }
+
+    private async Task<uint> GetTick() => TickMonitor.IsConnected
+        ? TickMonitor.Tick + (uint)Settings.TickOffset
+        : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+    private async Task BroadcastAndTrack(long amount, uint tick, Qubic.Core.Payloads.ITransactionPayload payload, string description)
+    {
+        var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(ContractIndex));
+        var tx = Seed.CreateAndSignTransaction(dest, amount, tick, payload);
+        var result = await Backend.BroadcastTransactionAsync(tx);
+        _result = result.TransactionId;
+        TxTracker.Track(new TrackedTransaction
+        {
+            Hash = result.TransactionId,
+            Source = Seed.Identity?.ToString() ?? "",
+            Destination = dest.ToString(),
+            Amount = amount,
+            TargetTick = tick,
+            InputType = payload.InputType,
+            PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()),
+            Description = description
+        });
+    }
+
+    private async Task BurnForContract()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            if (_burnAmount <= 0) { _error = "Amount must be positive."; return; }
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qutil.BurnQubicForContractPayload
+            {
+                ContractIndexBurnedFor = _burnContractIndex
+            };
+            await BroadcastAndTrack(_burnAmount, tick, payload,
+                $"Burn {_burnAmount:N0} QU for contract {_burnContractIndex}");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task Distribute()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var issuerErr = IdentityValidation.Validate(_distIssuer);
+            if (issuerErr != null) { _error = "Issuer: " + issuerErr; return; }
+            if (string.IsNullOrWhiteSpace(_distAssetName)) { _error = "Asset name is required."; return; }
+            if (_distAmount <= 0) { _error = "Amount must be positive."; return; }
+
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qutil.DistributeQuToShareholdersPayload
+            {
+                Asset = new Qubic.Core.Contracts.QubicAsset
+                {
+                    Issuer = Qubic.Core.Entities.QubicIdentity.FromIdentity(_distIssuer!.Trim()).PublicKey,
+                    AssetName = AssetNameHelper.ToUlong(_distAssetName.Trim())
+                }
+            };
+            await BroadcastAndTrack(_distAmount, tick, payload,
+                $"Distribute {_distAmount:N0} QU to {_distAssetName.Trim()} shareholders");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task CreatePoll()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_pollName)) { _error = "Poll name is required."; return; }
+
+            var tick = await GetTick();
+
+            var nameBytes = new byte[32];
+            var nameStr = System.Text.Encoding.UTF8.GetBytes(_pollName.Trim());
+            Array.Copy(nameStr, nameBytes, Math.Min(nameStr.Length, 32));
+
+            var githubBytes = new byte[256];
+            if (!string.IsNullOrWhiteSpace(_pollGithubLink))
+            {
+                var linkStr = System.Text.Encoding.UTF8.GetBytes(_pollGithubLink.Trim());
+                Array.Copy(linkStr, githubBytes, Math.Min(linkStr.Length, 256));
+            }
+
+            var assets = new Qubic.Core.Contracts.QubicAsset[0];
+            ulong numAssets = 0;
+            if (_pollType == 2 && !string.IsNullOrWhiteSpace(_pollAssetsText))
+            {
+                var lines = _pollAssetsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var assetList = new List<Qubic.Core.Contracts.QubicAsset>();
+                foreach (var line in lines)
+                {
+                    var parts = line.Split(',', 2, StringSplitOptions.TrimEntries);
+                    if (parts.Length != 2) { _error = $"Invalid asset line: {line}"; return; }
+                    var idErr = IdentityValidation.Validate(parts[1]);
+                    if (idErr != null) { _error = $"Asset issuer '{parts[1]}': {idErr}"; return; }
+                    assetList.Add(new Qubic.Core.Contracts.QubicAsset
+                    {
+                        Issuer = Qubic.Core.Entities.QubicIdentity.FromIdentity(parts[1].Trim()).PublicKey,
+                        AssetName = AssetNameHelper.ToUlong(parts[0].Trim())
+                    });
+                }
+                assets = assetList.ToArray();
+                numAssets = (ulong)assets.Length;
+            }
+
+            var payload = new Qubic.Core.Contracts.Qutil.CreatePollPayload
+            {
+                Poll_name = nameBytes,
+                Poll_type = (ulong)_pollType,
+                Min_amount = (ulong)_pollMinAmount,
+                Github_link = githubBytes,
+                Allowed_assets = assets,
+                Num_assets = numAssets
+            };
+            await BroadcastAndTrack(_pollFee, tick, payload,
+                $"Create Poll: {_pollName.Trim()}");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task VoteInPoll()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qutil.VotePayload
+            {
+                Poll_id = _votePollId,
+                Address = Qubic.Core.Entities.QubicIdentity.FromIdentity(Seed.Identity!.ToString()!).PublicKey,
+                Amount = (ulong)_voteAmount,
+                Chosen_option = (ulong)_voteOption
+            };
+            await BroadcastAndTrack(_voteAmount, tick, payload,
+                $"Vote in Poll {_votePollId}: option {_voteOption} with {_voteAmount:N0} QU");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+
+    private async Task CancelPoll()
+    {
+        _sending = true; _error = null; _result = null;
+        try
+        {
+            var tick = await GetTick();
+            var payload = new Qubic.Core.Contracts.Qutil.CancelPollPayload
+            {
+                Poll_id = _cancelPollId
+            };
+            await BroadcastAndTrack(0, tick, payload,
+                $"Cancel Poll {_cancelPollId}");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _sending = false; }
+    }
+}
