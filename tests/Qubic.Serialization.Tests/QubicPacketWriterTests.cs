@@ -111,6 +111,10 @@ public class QubicPacketWriterTests
         // Header (8) + Source (32) + Dest (32) + Amount (8) + Tick (4) + InputType (2) + InputSize (2) + Signature (64) = 152
         Assert.Equal(QubicPacketHeader.Size + 144, packet.Length);
         Assert.Equal(QubicPacketTypes.BroadcastTransaction, packet[3]);
+
+        // Dejavu must be 0 so receiving node propagates to other peers
+        var dejavu = BitConverter.ToUInt32(packet, 4);
+        Assert.Equal(0u, dejavu);
     }
 
     [Fact]

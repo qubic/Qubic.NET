@@ -139,6 +139,7 @@
                     @NavItem("/tx/import", "bi-broadcast", "Broadcast Tx")
                 }
                 @NavItem("/tools/crypto", "bi-key", "Crypto Toolkit")
+                @NavItem("/tools/oracle", "bi-cloud-arrow-down", "Oracle Machine")
                 @NavItem("/tools/bob-playground", "bi-terminal", "Bob Playground")
             </div>
         }
@@ -216,6 +217,7 @@
         ["/tx/import"] = ("Broadcast Tx", "bi-broadcast"),
         ["/tools/crypto"] = ("Crypto Toolkit", "bi-key"),
         ["/tools/bob-playground"] = ("Bob Playground", "bi-terminal"),
+        ["/tools/oracle"] = ("Oracle Machine", "bi-cloud-arrow-down"),
         ["/explorer/ipos"] = ("Active IPOs", "bi-rocket"),
         ["/explorer/ipostatus"] = ("IPO Status", "bi-bar-chart-steps"),
         ["/explorer/checktx"] = ("Check Tx on Tick", "bi-check2-square"),
@@ -229,7 +231,7 @@
         ["signing"] = ["/signing", "/tx/send", "/tx/send-many", "/tx/burn", "/tx/ipobid", "/tx/custom", "/tx/offline", "/tools/sign-verify", "/tx/history"],
         ["contracts"] = ["/contracts", "/contracts/", "/tx/qx", "/tx/qswap", "/tx/qearn", "/tx/qbond", "/tx/qutil", "/tx/quottery", "/tx/msvault", "/tx/nostromo", "/tx/qvault"],
         ["explorer"] = ["/explorer", "/explorer/", "/wallet/balance", "/wallet/assets", "/tx/lookup", "/wallet/transfers", "/explorer/tick", "/explorer/computors", "/explorer/ipos", "/explorer/ipostatus", "/explorer/checktx", "/explorer/logs"],
-        ["tools"] = ["/tools", "/tools/", "/wallet/identity", "/tx/import", "/tools/crypto", "/tools/bob-playground"],
+        ["tools"] = ["/tools", "/tools/", "/wallet/identity", "/tx/import", "/tools/crypto", "/tools/oracle", "/tools/bob-playground"],
         ["computor"] = ["/node", "/node/", "/tx/governance", "/tx/ccf", "/node/peers", "/node/management"],
     };
 

@@ -1,0 +1,1212 @@
+@page "/tools/oracle"
+@implements IDisposable
+@inject ToolkitBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject ToolkitSettingsService Settings
+
+<h4><i class="bi bi-cloud-arrow-down me-2"></i>Oracle Machine (OM)</h4>
+<p class="text-muted">Query decentralized oracles for price data and other information.</p>
+
+@if (!IsDirectNetwork)
+{
+    <div class="alert alert-info py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-info-circle"></i>
+        <span>For the full oracle experience (query tracking, lookup, browse, statistics), switch to the <strong>DirectNetwork</strong> backend in <a href="/settings">Settings</a>.</span>
+    </div>
+}
+
+<ul class="nav nav-tabs mb-3">
+    @foreach (var tab in _tabs)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(tab == _activeTab ? "active" : "")" href="" @onclick="() => _activeTab = tab" @onclick:preventDefault>@tab</a>
+        </li>
+    }
+</ul>
+
+<div class="row">
+    <div class="col-md-8">
+        @switch (_activeTab)
+        {
+            case "Query":
+                @RenderQueryTab()
+                break;
+            case "Lookup":
+                @RenderLookupTab()
+                break;
+            case "Browse":
+                @RenderBrowseTab()
+                break;
+            case "Statistics":
+                @RenderStatsTab()
+                break;
+        }
+
+        @if (_error != null)
+        {
+            <div class="alert alert-danger mt-2">@_error</div>
+        }
+
+        @if (_pendingQueries.Count > 0 && _activeTab == "Query")
+        {
+            @RenderPendingQueries()
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly string[] _tabs = ["Query", "Lookup", "Browse", "Statistics"];
+    private string _activeTab = "Query";
+
+    // ── Common state ──
+    private bool _sending;
+    private string? _error;
+
+    // ── Pending Oracle Queries queue ──
+    private readonly List<PendingOracleQuery> _pendingQueries = [];
+    private CancellationTokenSource? _pollCts;
+
+    // ── Query tab state ──
+    private int _interface; // 0=Price, 1=Mock
+    private string _oracleSource = "binance";
+    private string _pairPreset = "BTC/USDT";
+    private string _customCurrency1 = "";
+    private string _customCurrency2 = "";
+    private int _timeoutSeconds = 60;
+    private DateTime _timestamp = DateTime.UtcNow;
+    private ulong _mockValue;
+
+    // ── Lookup tab state ──
+    private string _lookupQueryId = "";
+    private bool _lookupLoading;
+    private OracleQueryInfo? _lookupResult;
+
+    // ── Browse tab state ──
+    private string _browseTick = "";
+    private uint _browseFilter; // 0-3
+    private bool _browseLoading;
+    private List<long>? _browseQueryIds;
+    private long? _browseExpandedId;
+    private OracleQueryInfo? _browseExpandedInfo;
+
+    // ── Stats tab state ──
+    private bool _statsLoading;
+    private OracleStats? _stats;
+
+    // ── Oracle source definitions ──
+    private static readonly (string Value, string Label)[] OracleSources =
+    [
+        ("binance", "Binance"),
+        ("mexc", "MEXC"),
+        ("gate", "Gate.io"),
+        ("coingecko", "CoinGecko"),
+        ("binance_mexc", "Binance + MEXC"),
+        ("binance_gate", "Binance + Gate.io"),
+        ("gate_mexc", "Gate.io + MEXC"),
+    ];
+
+    private static readonly Dictionary<string, string[]> PairPresets = new()
+    {
+        ["binance"] = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "XRP/USDT", "DOGE/USDT", "ADA/USDT", "AVAX/USDT", "LINK/USDT", "DOT/USDT", "Custom"],
+        ["mexc"] = ["QUBIC/USDT", "BTC/USDT", "ETH/USDT", "Custom"],
+        ["gate"] = ["QUBIC/USDT", "BTC/USDT", "ETH/USDT", "Custom"],
+        ["coingecko"] = ["BTC/USDT", "ETH/USDT", "Custom"],
+        ["binance_mexc"] = ["QUBIC/USDT", "BTC/USDT", "ETH/USDT", "Custom"],
+        ["binance_gate"] = ["QUBIC/USDT", "BTC/USDT", "ETH/USDT", "Custom"],
+        ["gate_mexc"] = ["QUBIC/USDT", "BTC/USDT", "ETH/USDT", "Custom"],
+    };
+
+    private bool CanBroadcast => Backend.ActiveBackend is QueryBackend.Rpc or QueryBackend.DirectNetwork;
+    private bool IsDirectNetwork => Backend.ActiveBackend == QueryBackend.DirectNetwork;
+
+    private string[] CurrentPresets => PairPresets.TryGetValue(_oracleSource, out var p) ? p : ["Custom"];
+
+    private void OnOracleSourceChanged(ChangeEventArgs e)
+    {
+        _oracleSource = e.Value?.ToString() ?? "binance";
+        var presets = CurrentPresets;
+        _pairPreset = presets.Length > 0 ? presets[0] : "Custom";
+    }
+
+    // ── Helpers ──
+
+    private static byte[] EncodeId(string name)
+    {
+        var bytes = new byte[32];
+        for (int i = 0; i < Math.Min(name.Length, 32); i++)
+            bytes[i] = (byte)name[i];
+        return bytes;
+    }
+
+    private static string DecodeId(byte[] data, int offset)
+    {
+        int len = 0;
+        while (len < 32 && offset + len < data.Length && data[offset + len] != 0)
+            len++;
+        return System.Text.Encoding.ASCII.GetString(data, offset, len);
+    }
+
+    private static ulong EncodeDateAndTime(DateTime dt)
+    {
+        return ((ulong)dt.Year << 46) | ((ulong)dt.Month << 42) | ((ulong)dt.Day << 37)
+             | ((ulong)dt.Hour << 32) | ((ulong)dt.Minute << 26) | ((ulong)dt.Second << 20)
+             | ((ulong)dt.Millisecond << 10);
+    }
+
+    private static DateTime DecodeDateAndTime(ulong value)
+    {
+        int year = (int)(value >> 46) & 0xFFF;
+        int month = (int)(value >> 42) & 0xF;
+        int day = (int)(value >> 37) & 0x1F;
+        int hour = (int)(value >> 32) & 0x1F;
+        int minute = (int)(value >> 26) & 0x3F;
+        int second = (int)(value >> 20) & 0x3F;
+        int ms = (int)(value >> 10) & 0x3FF;
+        if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31)
+            return DateTime.MinValue;
+        try { return new DateTime(year, month, day, hour, minute, second, ms, DateTimeKind.Utc); }
+        catch { return DateTime.MinValue; }
+    }
+
+    private async Task<uint> GetTick() =>
+        TickMonitor.IsConnected
+            ? TickMonitor.Tick + (uint)Settings.TickOffset
+            : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+    private static string SafeIdentityFromPk(byte[] data, int offset)
+    {
+        try
+        {
+            var pk = new byte[32];
+            Array.Copy(data, offset, pk, 0, 32);
+            if (pk.All(b => b == 0)) return "(zero)";
+            return Qubic.Core.Entities.QubicIdentity.FromPublicKey(pk).ToString();
+        }
+        catch { return "(invalid)"; }
+    }
+
+    private static string GetStatusLabel(byte status) => status switch
+    {
+        0 => "Unknown",
+        1 => "Pending",
+        2 => "Committed",
+        3 => "Success",
+        4 => "Timeout",
+        5 => "Unresolvable",
+        _ => $"Status {status}"
+    };
+
+    private static string GetStatusClass(byte status) => status switch
+    {
+        1 => "warning",
+        2 => "info",
+        3 => "success",
+        4 => "danger",
+        5 => "danger",
+        _ => "secondary"
+    };
+
+    private static string GetQueryTypeLabel(byte type) => type switch
+    {
+        0 => "Contract",
+        1 => "Subscription",
+        2 => "User",
+        _ => $"Type {type}"
+    };
+
+    // ── Lifecycle ──
+
+    protected override void OnInitialized()
+    {
+        _pollCts = new CancellationTokenSource();
+        _ = PollPendingQueriesLoop(_pollCts.Token);
+    }
+
+    public void Dispose()
+    {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+    }
+
+    // ── Pending Query Polling ──
+
+    private async Task PollPendingQueriesLoop(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(4000, ct);
+                if (_pendingQueries.Count == 0) continue;
+                if (_pendingQueries.All(q => q.State is PendingQueryState.Complete or PendingQueryState.Failed)) continue;
+
+                bool changed = false;
+                foreach (var pq in _pendingQueries.ToList())
+                {
+                    if (ct.IsCancellationRequested) break;
+                    if (pq.State is PendingQueryState.Complete or PendingQueryState.Failed) continue;
+
+                    try
+                    {
+                        changed |= await CheckPendingQuery(pq, ct);
+                    }
+                    catch { /* retry next cycle */ }
+                }
+
+                if (changed)
+                    await InvokeAsync(StateHasChanged);
+            }
+            catch (OperationCanceledException) { break; }
+            catch { /* retry next cycle */ }
+        }
+    }
+
+    private async Task<bool> CheckPendingQuery(PendingOracleQuery pq, CancellationToken ct)
+    {
+        switch (pq.State)
+        {
+            case PendingQueryState.WaitingForTx:
+            {
+                // Check if tx was confirmed
+                var tracked = TxTracker.Transactions.FirstOrDefault(t => t.Hash == pq.TxHash);
+                if (tracked == null) return false;
+
+                if (tracked.Status == TrackedTxStatus.Confirmed)
+                {
+                    pq.State = IsDirectNetwork ? PendingQueryState.DiscoveringQueryId : PendingQueryState.Complete;
+                    pq.StatusText = IsDirectNetwork ? "Transaction confirmed. Finding query ID..." : "Transaction confirmed. Use Lookup tab to check result.";
+                    return true;
+                }
+                if (tracked.Status is TrackedTxStatus.Failed or TrackedTxStatus.Unknown)
+                {
+                    pq.State = PendingQueryState.Failed;
+                    pq.StatusText = $"Transaction {tracked.Status.ToString().ToLower()}";
+                    return true;
+                }
+                return false; // still pending
+            }
+
+            case PendingQueryState.DiscoveringQueryId:
+            {
+                // Browse the tick's user queries and match by our identity
+                var responses = await Backend.GetOracleQueryIdsByTickAsync(pq.TargetTick, 1, ct); // filterType=1 (user)
+                var queryIds = new List<long>();
+                foreach (var r in responses)
+                {
+                    if (r.Length < 4) continue;
+                    var resType = BitConverter.ToUInt32(r, 0);
+                    if (resType == 0)
+                    {
+                        for (int i = 4; i + 8 <= r.Length; i += 8)
+                            queryIds.Add(BitConverter.ToInt64(r, i));
+                    }
+                }
+
+                var myIdentity = Seed.Identity?.ToString() ?? "";
+
+                foreach (var qid in queryIds)
+                {
+                    var qResponses = await Backend.GetOracleQueryAsync(qid, ct);
+                    var info = ParseOracleResponses(qResponses);
+                    if (info.HasMetadata && string.Equals(info.QueryingEntity, myIdentity, StringComparison.OrdinalIgnoreCase)
+                        && info.QueryTick == pq.TargetTick)
+                    {
+                        pq.QueryId = qid;
+                        pq.Result = info;
+                        if (info.Status is 3 or 4 or 5) // Success, Timeout, Unresolvable
+                        {
+                            pq.State = PendingQueryState.Complete;
+                            pq.StatusText = GetStatusLabel(info.Status);
+                        }
+                        else
+                        {
+                            pq.State = PendingQueryState.Polling;
+                            pq.StatusText = $"Query ID: {qid} — {GetStatusLabel(info.Status)}";
+                        }
+                        return true;
+                    }
+                }
+
+                // Not found yet — tick data may not be available yet
+                pq.DiscoverAttempts++;
+                if (pq.DiscoverAttempts > 30) // ~2 minutes
+                {
+                    pq.State = PendingQueryState.Failed;
+                    pq.StatusText = "Could not discover query ID";
+                }
+                return false;
+            }
+
+            case PendingQueryState.Polling:
+            {
+                if (!pq.QueryId.HasValue) return false;
+
+                var responses = await Backend.GetOracleQueryAsync(pq.QueryId.Value, ct);
+                var info = ParseOracleResponses(responses);
+                if (!info.HasMetadata) return false;
+
+                pq.Result = info;
+                pq.StatusText = GetStatusLabel(info.Status);
+
+                if (info.Status is 3 or 4 or 5) // Final state
+                {
+                    pq.State = PendingQueryState.Complete;
+                    return true;
+                }
+
+                return true; // status updated even if not final
+            }
+        }
+        return false;
+    }
+
+    // ── Query Oracle (Tab 1) ──
+
+    private async Task SubmitQuery()
+    {
+        _sending = true;
+        _error = null;
+
+        try
+        {
+            if (!Seed.HasSeed)
+            {
+                _error = "Enter your seed in the top bar to sign transactions.";
+                return;
+            }
+
+            byte[] payload;
+            if (_interface == 0)
+            {
+                // Price oracle
+                string c1, c2;
+                if (_pairPreset == "Custom")
+                {
+                    c1 = _customCurrency1.Trim();
+                    c2 = _customCurrency2.Trim();
+                }
+                else
+                {
+                    var parts = _pairPreset.Split('/');
+                    c1 = parts[0];
+                    c2 = parts.Length > 1 ? parts[1] : "";
+                }
+
+                if (string.IsNullOrEmpty(c1) || string.IsNullOrEmpty(c2))
+                {
+                    _error = "Both currencies are required.";
+                    return;
+                }
+
+                payload = new byte[112]; // 8 prefix + 104 query
+                BitConverter.TryWriteBytes(payload.AsSpan(0, 4), (uint)0); // interfaceIndex=0
+                BitConverter.TryWriteBytes(payload.AsSpan(4, 4), (uint)(_timeoutSeconds * 1000));
+                Array.Copy(EncodeId(_oracleSource), 0, payload, 8, 32);
+                BitConverter.TryWriteBytes(payload.AsSpan(40, 8), EncodeDateAndTime(_timestamp));
+                Array.Copy(EncodeId(c1), 0, payload, 48, 32);
+                Array.Copy(EncodeId(c2), 0, payload, 80, 32);
+            }
+            else
+            {
+                // Mock oracle
+                payload = new byte[16]; // 8 prefix + 8 query
+                BitConverter.TryWriteBytes(payload.AsSpan(0, 4), (uint)1); // interfaceIndex=1
+                BitConverter.TryWriteBytes(payload.AsSpan(4, 4), (uint)(_timeoutSeconds * 1000));
+                BitConverter.TryWriteBytes(payload.AsSpan(8, 8), _mockValue);
+            }
+
+            var tick = await GetTick();
+            var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(new byte[32]); // zero address
+            var txPayload = new Qubic.Toolkit.Models.GenericContractPayload(10, payload);
+            var tx = Seed.CreateAndSignTransaction(dest, 10, tick, txPayload);
+            var result = await Backend.BroadcastTransactionAsync(tx);
+
+            string desc = _interface == 0
+                ? $"{_oracleSource} {(_pairPreset == "Custom" ? $"{_customCurrency1}/{_customCurrency2}" : _pairPreset)}"
+                : $"Mock value={_mockValue}";
+
+            TxTracker.Track(new TrackedTransaction
+            {
+                Hash = result.TransactionId,
+                Source = Seed.Identity?.ToString() ?? "",
+                Destination = dest.ToString(),
+                Amount = 10,
+                TargetTick = tick,
+                InputType = 10,
+                PayloadHex = Convert.ToHexString(payload),
+                Description = $"Oracle Query: {desc}"
+            });
+
+            _pendingQueries.Insert(0, new PendingOracleQuery
+            {
+                TxHash = result.TransactionId,
+                TargetTick = tick,
+                Description = desc,
+                InterfaceIndex = (uint)_interface,
+                State = PendingQueryState.WaitingForTx,
+                StatusText = "Waiting for transaction to confirm...",
+                SubmittedUtc = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    // ── Lookup (Tab 2) ──
+
+    private async Task LoadOracleQuery()
+    {
+        _lookupLoading = true;
+        _error = null;
+        _lookupResult = null;
+
+        try
+        {
+            if (!long.TryParse(_lookupQueryId.Trim(), out var queryId))
+            {
+                _error = "Enter a valid query ID (integer).";
+                return;
+            }
+
+            var responses = await Backend.GetOracleQueryAsync(queryId);
+            _lookupResult = ParseOracleResponses(responses);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _lookupLoading = false;
+        }
+    }
+
+    // ── Browse (Tab 3) ──
+
+    private async Task LoadBrowseQueries()
+    {
+        _browseLoading = true;
+        _error = null;
+        _browseQueryIds = null;
+        _browseExpandedId = null;
+        _browseExpandedInfo = null;
+
+        try
+        {
+            uint tick;
+            if (string.IsNullOrWhiteSpace(_browseTick))
+                tick = TickMonitor.IsConnected ? TickMonitor.Tick : (await Backend.GetTickInfoAsync()).Tick;
+            else if (!uint.TryParse(_browseTick.Trim(), out tick))
+            {
+                _error = "Enter a valid tick number.";
+                return;
+            }
+
+            var responses = await Backend.GetOracleQueryIdsByTickAsync(tick, _browseFilter);
+            _browseQueryIds = [];
+            foreach (var r in responses)
+            {
+                if (r.Length < 4) continue;
+                var resType = BitConverter.ToUInt32(r, 0);
+                if (resType == 0) // respondQueryIds
+                {
+                    for (int i = 4; i + 8 <= r.Length; i += 8)
+                        _browseQueryIds.Add(BitConverter.ToInt64(r, i));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _browseLoading = false;
+        }
+    }
+
+    private async Task ExpandBrowseQuery(long queryId)
+    {
+        if (_browseExpandedId == queryId)
+        {
+            _browseExpandedId = null;
+            _browseExpandedInfo = null;
+            return;
+        }
+
+        _browseExpandedId = queryId;
+        _browseExpandedInfo = null;
+
+        try
+        {
+            var responses = await Backend.GetOracleQueryAsync(queryId);
+            _browseExpandedInfo = ParseOracleResponses(responses);
+        }
+        catch (Exception ex)
+        {
+            _browseExpandedInfo = new OracleQueryInfo { Error = ex.Message };
+        }
+    }
+
+    // ── Statistics (Tab 4) ──
+
+    private async Task LoadStatistics()
+    {
+        _statsLoading = true;
+        _error = null;
+        _stats = null;
+
+        try
+        {
+            var responses = await Backend.GetOracleStatisticsAsync();
+            foreach (var r in responses)
+            {
+                if (r.Length < 4) continue;
+                var resType = BitConverter.ToUInt32(r, 0);
+                if (resType == 7 && r.Length >= 4 + 136) // respondQueryStatistics
+                {
+                    int o = 4;
+                    _stats = new OracleStats
+                    {
+                        PendingCount = BitConverter.ToUInt64(r, o),
+                        PendingOracleMachineCount = BitConverter.ToUInt64(r, o + 8),
+                        PendingCommitCount = BitConverter.ToUInt64(r, o + 16),
+                        PendingRevealCount = BitConverter.ToUInt64(r, o + 24),
+                        SuccessfulCount = BitConverter.ToUInt64(r, o + 32),
+                        RevealTxCount = BitConverter.ToUInt64(r, o + 40),
+                        UnresolvableCount = BitConverter.ToUInt64(r, o + 48),
+                        TimeoutCount = BitConverter.ToUInt64(r, o + 56),
+                        TimeoutNoReplyCount = BitConverter.ToUInt64(r, o + 64),
+                        TimeoutNoCommitCount = BitConverter.ToUInt64(r, o + 72),
+                        TimeoutNoRevealCount = BitConverter.ToUInt64(r, o + 80),
+                        OmRepliesDisagreeCount = BitConverter.ToUInt64(r, o + 88),
+                        OmReplyAvgMilliTicks = BitConverter.ToUInt64(r, o + 96),
+                        CommitAvgMilliTicks = BitConverter.ToUInt64(r, o + 104),
+                        SuccessAvgMilliTicks = BitConverter.ToUInt64(r, o + 112),
+                        TimeoutAvgMilliTicks = BitConverter.ToUInt64(r, o + 120),
+                        WrongKnowledgeProofCount = BitConverter.ToUInt64(r, o + 128),
+                    };
+                }
+            }
+
+            if (_stats == null)
+                _error = "No statistics data returned.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _statsLoading = false;
+        }
+    }
+
+    // ── Parsing ──
+
+    private OracleQueryInfo ParseOracleResponses(List<byte[]> responses)
+    {
+        var info = new OracleQueryInfo();
+        foreach (var r in responses)
+        {
+            if (r.Length < 4) continue;
+            var resType = BitConverter.ToUInt32(r, 0);
+
+            switch (resType)
+            {
+                case 1 when r.Length >= 4 + 72: // respondQueryMetadata
+                {
+                    int o = 4;
+                    info.QueryId = BitConverter.ToInt64(r, o);
+                    info.Type = r[o + 8];
+                    info.Status = r[o + 9];
+                    info.StatusFlags = BitConverter.ToUInt16(r, o + 10);
+                    info.QueryTick = BitConverter.ToUInt32(r, o + 12);
+                    info.QueryingEntity = SafeIdentityFromPk(r, o + 16);
+                    info.Timeout = DecodeDateAndTime(BitConverter.ToUInt64(r, o + 48));
+                    info.InterfaceIndex = BitConverter.ToUInt32(r, o + 56);
+                    info.SubscriptionId = BitConverter.ToInt32(r, o + 60);
+                    info.RevealTick = BitConverter.ToUInt32(r, o + 64);
+                    info.TotalCommits = BitConverter.ToUInt16(r, o + 68);
+                    info.AgreeingCommits = BitConverter.ToUInt16(r, o + 70);
+                    info.HasMetadata = true;
+                    break;
+                }
+                case 2: // respondQueryData
+                {
+                    info.QueryData = r.AsSpan(4).ToArray();
+                    break;
+                }
+                case 3: // respondReplyData
+                {
+                    info.ReplyData = r.AsSpan(4).ToArray();
+                    break;
+                }
+                case 9 when r.Length >= 4 + 8: // respondTickRange
+                {
+                    info.ValidFirstTick = BitConverter.ToUInt32(r, 4);
+                    info.ValidCurrentTick = BitConverter.ToUInt32(r, 8);
+                    break;
+                }
+            }
+        }
+
+        if (!info.HasMetadata && info.ValidFirstTick > 0)
+            info.Error = $"Query not found. Valid tick range: {info.ValidFirstTick:N0} - {info.ValidCurrentTick:N0}";
+
+        return info;
+    }
+
+    // ── Records ──
+
+    private sealed class OracleQueryInfo
+    {
+        public bool HasMetadata;
+        public long QueryId;
+        public byte Type;
+        public byte Status;
+        public ushort StatusFlags;
+        public uint QueryTick;
+        public string QueryingEntity = "";
+        public DateTime Timeout;
+        public uint InterfaceIndex;
+        public int SubscriptionId;
+        public uint RevealTick;
+        public ushort TotalCommits;
+        public ushort AgreeingCommits;
+        public byte[]? QueryData;
+        public byte[]? ReplyData;
+        public uint ValidFirstTick;
+        public uint ValidCurrentTick;
+        public string? Error;
+    }
+
+    private enum PendingQueryState { WaitingForTx, DiscoveringQueryId, Polling, Complete, Failed }
+
+    private sealed class PendingOracleQuery
+    {
+        public string TxHash = "";
+        public uint TargetTick;
+        public string Description = "";
+        public uint InterfaceIndex;
+        public PendingQueryState State;
+        public string StatusText = "";
+        public long? QueryId;
+        public OracleQueryInfo? Result;
+        public DateTime SubmittedUtc;
+        public int DiscoverAttempts;
+    }
+
+    private sealed class OracleStats
+    {
+        public ulong PendingCount, PendingOracleMachineCount, PendingCommitCount, PendingRevealCount;
+        public ulong SuccessfulCount, RevealTxCount;
+        public ulong UnresolvableCount;
+        public ulong TimeoutCount, TimeoutNoReplyCount, TimeoutNoCommitCount, TimeoutNoRevealCount;
+        public ulong OmRepliesDisagreeCount;
+        public ulong OmReplyAvgMilliTicks, CommitAvgMilliTicks, SuccessAvgMilliTicks, TimeoutAvgMilliTicks;
+        public ulong WrongKnowledgeProofCount;
+    }
+
+    // ── Render helpers ──
+
+    private RenderFragment RenderQueryTab() => __builder =>
+    {
+        if (!CanBroadcast)
+        {
+            <div class="alert alert-warning">Sending oracle queries requires the <strong>RPC</strong> or <strong>DirectNetwork</strong> backend. Switch in <a href="/settings">Settings</a>.</div>
+            return;
+        }
+
+        if (!Seed.HasSeed)
+        {
+            <div class="alert alert-info">Enter your seed in the top bar to sign oracle query transactions.</div>
+        }
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Send Oracle Query</span>
+                <span class="badge bg-secondary">Fee: 10 QU</span>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Interface</label>
+                    <select class="form-select" value="@_interface" @onchange="e => _interface = int.TryParse(e.Value?.ToString(), out var v) ? v : 0">
+                        <option value="0">Price Oracle</option>
+                        <option value="1">Mock Oracle (Testing)</option>
+                    </select>
+                </div>
+
+                @if (_interface == 0)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Oracle Source</label>
+                        <select class="form-select" value="@_oracleSource" @onchange="OnOracleSourceChanged">
+                            @foreach (var src in OracleSources)
+                            {
+                                <option value="@src.Value">@src.Label</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Currency Pair</label>
+                        <select class="form-select" @bind="_pairPreset">
+                            @foreach (var pair in CurrentPresets)
+                            {
+                                <option value="@pair">@pair</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (_pairPreset == "Custom")
+                    {
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label class="form-label">Currency 1</label>
+                                <input type="text" class="form-control" @bind="_customCurrency1" placeholder="e.g. BTC" />
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Currency 2</label>
+                                <input type="text" class="form-control" @bind="_customCurrency2" placeholder="e.g. USDT" />
+                            </div>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">Timestamp (UTC)</label>
+                        <input type="datetime-local" class="form-control" value="@_timestamp.ToString("yyyy-MM-ddTHH:mm:ss")"
+                               @onchange="OnTimestampChanged" />
+                        <div class="form-text">The exact time the price should be for. Default: now.</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Value (uint64)</label>
+                        <input type="number" class="form-control" min="0" @bind="_mockValue" />
+                        <div class="form-text">The mock oracle will echo this value and return double.</div>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label">Timeout (seconds)</label>
+                    <input type="number" class="form-control" min="1" max="3600" @bind="_timeoutSeconds" />
+                    <div class="form-text">Max wait time for oracle response (1-3600 seconds).</div>
+                </div>
+
+                <button class="btn btn-primary" @onclick="SubmitQuery" disabled="@(_sending || !Seed.HasSeed)">
+                    @(_sending ? "Broadcasting..." : "Send Oracle Query (10 QU)")
+                </button>
+            </div>
+        </div>
+    };
+
+    private void OnTimestampChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+            _timestamp = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+    }
+
+    private RenderFragment RenderLookupTab() => __builder =>
+    {
+        if (!IsDirectNetwork)
+        {
+            <div class="alert alert-warning">Oracle query lookup requires the <strong>DirectNetwork</strong> backend. Switch in <a href="/settings">Settings</a>.</div>
+            return;
+        }
+
+        <div class="card">
+            <div class="card-header">Get Oracle Query</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Query ID</label>
+                    <input type="text" class="form-control" @bind="_lookupQueryId" placeholder="Enter oracle query ID" />
+                </div>
+                <button class="btn btn-primary" @onclick="LoadOracleQuery" disabled="@_lookupLoading">
+                    @(_lookupLoading ? "Loading..." : "Load Query")
+                </button>
+            </div>
+        </div>
+
+        @if (_lookupResult != null)
+        {
+            @RenderQueryInfo(_lookupResult)
+        }
+    };
+
+    private RenderFragment RenderQueryInfo(OracleQueryInfo info) => __builder =>
+    {
+        if (info.Error != null)
+        {
+            <div class="alert alert-warning mt-3">@info.Error</div>
+            return;
+        }
+
+        if (!info.HasMetadata) return;
+
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Query #@info.QueryId</span>
+                <span class="badge bg-@GetStatusClass(info.Status)">@GetStatusLabel(info.Status)</span>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><td class="text-muted" style="width:200px">Type</td><td>@GetQueryTypeLabel(info.Type)</td></tr>
+                        <tr><td class="text-muted">Interface</td><td>@(info.InterfaceIndex == 0 ? "Price" : info.InterfaceIndex == 1 ? "Mock" : $"#{info.InterfaceIndex}")</td></tr>
+                        <tr><td class="text-muted">Query Tick</td><td>@info.QueryTick.ToString("N0")</td></tr>
+                        <tr><td class="text-muted">Querying Entity</td><td><code class="mono small">@info.QueryingEntity</code></td></tr>
+                        <tr><td class="text-muted">Timeout</td><td>@(info.Timeout != DateTime.MinValue ? info.Timeout.ToString("yyyy-MM-dd HH:mm:ss UTC") : "N/A")</td></tr>
+                        @if (info.Status == 3)
+                        {
+                            <tr><td class="text-muted">Reveal Tick</td><td>@info.RevealTick.ToString("N0")</td></tr>
+                        }
+                        @if (info.Status != 3 && info.TotalCommits > 0)
+                        {
+                            <tr><td class="text-muted">Commits</td><td>@info.AgreeingCommits / @info.TotalCommits agreeing</td></tr>
+                        }
+                        @if (info.SubscriptionId >= 0)
+                        {
+                            <tr><td class="text-muted">Subscription ID</td><td>@info.SubscriptionId</td></tr>
+                        }
+                        @if (info.StatusFlags != 0)
+                        {
+                            <tr><td class="text-muted">Status Flags</td><td><code>0x@info.StatusFlags.ToString("X4")</code></td></tr>
+                        }
+                    </tbody>
+                </table>
+
+                @* Query data *@
+                @if (info.QueryData != null && info.InterfaceIndex == 0 && info.QueryData.Length >= 104)
+                {
+                    <h6 class="mt-3 mb-2">Query Data (Price)</h6>
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr><td class="text-muted" style="width:200px">Oracle</td><td><strong>@DecodeId(info.QueryData, 0)</strong></td></tr>
+                            <tr><td class="text-muted">Timestamp</td><td>@DecodeDateAndTime(BitConverter.ToUInt64(info.QueryData, 32)).ToString("yyyy-MM-dd HH:mm:ss UTC")</td></tr>
+                            <tr><td class="text-muted">Currency 1</td><td><strong>@DecodeId(info.QueryData, 40)</strong></td></tr>
+                            <tr><td class="text-muted">Currency 2</td><td><strong>@DecodeId(info.QueryData, 72)</strong></td></tr>
+                        </tbody>
+                    </table>
+                }
+                else if (info.QueryData != null && info.InterfaceIndex == 1 && info.QueryData.Length >= 8)
+                {
+                    <h6 class="mt-3 mb-2">Query Data (Mock)</h6>
+                    <p>Value: <strong>@BitConverter.ToUInt64(info.QueryData, 0)</strong></p>
+                }
+                else if (info.QueryData != null)
+                {
+                    <h6 class="mt-3 mb-2">Query Data (Raw)</h6>
+                    <code class="mono small">@Convert.ToHexString(info.QueryData)</code>
+                }
+
+                @* Reply data *@
+                @if (info.ReplyData != null && info.InterfaceIndex == 0 && info.ReplyData.Length >= 16)
+                {
+                    var num = BitConverter.ToInt64(info.ReplyData, 0);
+                    var den = BitConverter.ToInt64(info.ReplyData, 8);
+                    <h6 class="mt-3 mb-2">Reply (Price)</h6>
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr><td class="text-muted" style="width:200px">Numerator</td><td>@num.ToString("N0")</td></tr>
+                            <tr><td class="text-muted">Denominator</td><td>@den.ToString("N0")</td></tr>
+                            @if (den > 0)
+                            {
+                                <tr><td class="text-muted">Price</td><td><strong>@((double)num / den)</strong></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else if (info.ReplyData != null && info.InterfaceIndex == 1 && info.ReplyData.Length >= 16)
+                {
+                    <h6 class="mt-3 mb-2">Reply (Mock)</h6>
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr><td class="text-muted" style="width:200px">Echoed Value</td><td>@BitConverter.ToUInt64(info.ReplyData, 0)</td></tr>
+                            <tr><td class="text-muted">Doubled Value</td><td>@BitConverter.ToUInt64(info.ReplyData, 8)</td></tr>
+                        </tbody>
+                    </table>
+                }
+                else if (info.ReplyData != null)
+                {
+                    <h6 class="mt-3 mb-2">Reply (Raw)</h6>
+                    <code class="mono small">@Convert.ToHexString(info.ReplyData)</code>
+                }
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderBrowseTab() => __builder =>
+    {
+        if (!IsDirectNetwork)
+        {
+            <div class="alert alert-warning">Browsing oracle queries requires the <strong>DirectNetwork</strong> backend. Switch in <a href="/settings">Settings</a>.</div>
+            return;
+        }
+
+        <div class="card">
+            <div class="card-header">Browse Oracle Queries by Tick</div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">Tick</label>
+                        <input type="text" class="form-control" @bind="_browseTick" placeholder="Current tick" />
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Filter</label>
+                        <select class="form-select" @bind="_browseFilter">
+                            <option value="0">All Queries</option>
+                            <option value="1">User Queries</option>
+                            <option value="2">Contract Queries</option>
+                            <option value="3">Subscription Queries</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-primary" @onclick="LoadBrowseQueries" disabled="@_browseLoading">
+                    @(_browseLoading ? "Loading..." : "Load Queries")
+                </button>
+            </div>
+        </div>
+
+        @if (_browseQueryIds != null)
+        {
+            <div class="card mt-3">
+                <div class="card-header">@_browseQueryIds.Count Query ID(s)</div>
+                @if (_browseQueryIds.Count == 0)
+                {
+                    <div class="card-body text-muted">No queries found for this tick.</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var qid in _browseQueryIds)
+                        {
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <code class="mono">@qid</code>
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ExpandBrowseQuery(qid)">
+                                        @(_browseExpandedId == qid ? "Collapse" : "Details")
+                                    </button>
+                                </div>
+                                @if (_browseExpandedId == qid && _browseExpandedInfo != null)
+                                {
+                                    @RenderQueryInfo(_browseExpandedInfo)
+                                }
+                                else if (_browseExpandedId == qid)
+                                {
+                                    <div class="mt-2 text-muted">Loading...</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    };
+
+    private RenderFragment RenderStatsTab() => __builder =>
+    {
+        if (!IsDirectNetwork)
+        {
+            <div class="alert alert-warning">Oracle statistics require the <strong>DirectNetwork</strong> backend. Switch in <a href="/settings">Settings</a>.</div>
+            return;
+        }
+
+        <button class="btn btn-primary mb-3" @onclick="LoadStatistics" disabled="@_statsLoading">
+            @(_statsLoading ? "Loading..." : "Load Statistics")
+        </button>
+
+        @if (_stats != null)
+        {
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Pending Queries</div>
+                        <div class="card-body">
+                            <table class="table table-sm mb-0">
+                                <tbody>
+                                    <tr><td class="text-muted">Total Pending</td><td class="text-end">@_stats.PendingCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Awaiting OM Reply</td><td class="text-end">@_stats.PendingOracleMachineCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Awaiting Commits</td><td class="text-end">@_stats.PendingCommitCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Awaiting Reveal</td><td class="text-end">@_stats.PendingRevealCount.ToString("N0")</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Completed Queries</div>
+                        <div class="card-body">
+                            <table class="table table-sm mb-0">
+                                <tbody>
+                                    <tr><td class="text-muted">Successful</td><td class="text-end text-success">@_stats.SuccessfulCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Reveal Transactions</td><td class="text-end">@_stats.RevealTxCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Unresolvable</td><td class="text-end text-danger">@_stats.UnresolvableCount.ToString("N0")</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Timeouts</div>
+                        <div class="card-body">
+                            <table class="table table-sm mb-0">
+                                <tbody>
+                                    <tr><td class="text-muted">Total Timeouts</td><td class="text-end text-warning">@_stats.TimeoutCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">No OM Reply</td><td class="text-end">@_stats.TimeoutNoReplyCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">No Commit</td><td class="text-end">@_stats.TimeoutNoCommitCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">No Reveal</td><td class="text-end">@_stats.TimeoutNoRevealCount.ToString("N0")</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">Performance</div>
+                        <div class="card-body">
+                            <table class="table table-sm mb-0">
+                                <tbody>
+                                    <tr><td class="text-muted">Avg OM Reply (milli-ticks)</td><td class="text-end">@_stats.OmReplyAvgMilliTicks.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Avg Commit (milli-ticks)</td><td class="text-end">@_stats.CommitAvgMilliTicks.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Avg Success (milli-ticks)</td><td class="text-end">@_stats.SuccessAvgMilliTicks.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Avg Timeout (milli-ticks)</td><td class="text-end">@_stats.TimeoutAvgMilliTicks.ToString("N0")</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">Other</div>
+                        <div class="card-body">
+                            <table class="table table-sm mb-0">
+                                <tbody>
+                                    <tr><td class="text-muted">OM Replies Disagree</td><td class="text-end">@_stats.OmRepliesDisagreeCount.ToString("N0")</td></tr>
+                                    <tr><td class="text-muted">Wrong Knowledge Proofs</td><td class="text-end">@_stats.WrongKnowledgeProofCount.ToString("N0")</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    };
+
+    private RenderFragment RenderPendingQueries() => __builder =>
+    {
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Oracle Query Queue</span>
+                @if (_pendingQueries.All(q => q.State is PendingQueryState.Complete or PendingQueryState.Failed))
+                {
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _pendingQueries.Clear()">Clear</button>
+                }
+            </div>
+            <div class="list-group list-group-flush">
+                @foreach (var pq in _pendingQueries)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <div>
+                                <strong>@pq.Description</strong>
+                                <span class="text-muted small ms-2">Tick @pq.TargetTick.ToString("N0")</span>
+                            </div>
+                            @RenderPendingQueryBadge(pq)
+                        </div>
+
+                        <div class="small text-muted mb-1">@pq.StatusText</div>
+
+                        @if (pq.QueryId.HasValue)
+                        {
+                            <div class="small">Query ID: <code class="mono">@pq.QueryId.Value</code></div>
+                        }
+
+                        @* Show result for completed price queries *@
+                        @if (pq.State == PendingQueryState.Complete && pq.Result is { HasMetadata: true, Status: 3 })
+                        {
+                            @RenderPendingQueryResult(pq)
+                        }
+                        else if (pq.State == PendingQueryState.Complete && pq.Result is { HasMetadata: true, Status: 4 or 5 })
+                        {
+                            <div class="alert alert-warning mt-2 mb-0 py-1 px-2 small">
+                                Query @GetStatusLabel(pq.Result.Status).ToLower(). No result data available.
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderPendingQueryBadge(PendingOracleQuery pq) => __builder =>
+    {
+        var (badgeClass, icon) = pq.State switch
+        {
+            PendingQueryState.WaitingForTx => ("bg-secondary", "bi-hourglass-split"),
+            PendingQueryState.DiscoveringQueryId => ("bg-info", "bi-search"),
+            PendingQueryState.Polling => ("bg-primary", "bi-arrow-repeat"),
+            PendingQueryState.Complete => (pq.Result?.Status == 3 ? "bg-success" : "bg-warning", pq.Result?.Status == 3 ? "bi-check-circle" : "bi-exclamation-triangle"),
+            PendingQueryState.Failed => ("bg-danger", "bi-x-circle"),
+            _ => ("bg-secondary", "bi-question-circle")
+        };
+        <span class="badge @badgeClass"><i class="bi @icon me-1"></i>@(pq.State switch
+        {
+            PendingQueryState.WaitingForTx => "Confirming",
+            PendingQueryState.DiscoveringQueryId => "Finding ID",
+            PendingQueryState.Polling => "Awaiting Result",
+            PendingQueryState.Complete => pq.Result?.Status switch { 3 => "Success", 4 => "Timeout", 5 => "Unresolvable", _ => "Done" },
+            PendingQueryState.Failed => "Failed",
+            _ => "Unknown"
+        })</span>
+    };
+
+    private RenderFragment RenderPendingQueryResult(PendingOracleQuery pq) => __builder =>
+    {
+        var info = pq.Result!;
+
+        @if (info.InterfaceIndex == 0 && info.ReplyData is { Length: >= 16 })
+        {
+            var num = BitConverter.ToInt64(info.ReplyData, 0);
+            var den = BitConverter.ToInt64(info.ReplyData, 8);
+            <div class="alert alert-success mt-2 mb-0 py-2 px-3">
+                @if (info.QueryData is { Length: >= 104 })
+                {
+                    <div class="small text-muted">@DecodeId(info.QueryData, 0): @DecodeId(info.QueryData, 40) / @DecodeId(info.QueryData, 72)</div>
+                }
+                @if (den > 0)
+                {
+                    <div class="fs-5 fw-bold">@((double)num / den)</div>
+                }
+                else
+                {
+                    <div>Numerator: @num, Denominator: @den</div>
+                }
+            </div>
+        }
+        else if (info.InterfaceIndex == 1 && info.ReplyData is { Length: >= 16 })
+        {
+            <div class="alert alert-success mt-2 mb-0 py-2 px-3">
+                <div>Echoed: <strong>@BitConverter.ToUInt64(info.ReplyData, 0)</strong></div>
+                <div>Doubled: <strong>@BitConverter.ToUInt64(info.ReplyData, 8)</strong></div>
+            </div>
+        }
+        else if (info.ReplyData != null)
+        {
+            <div class="alert alert-success mt-2 mb-0 py-2 px-3">
+                <div class="small">Raw reply: <code class="mono">@Convert.ToHexString(info.ReplyData)</code></div>
+            </div>
+        }
+    };
+}

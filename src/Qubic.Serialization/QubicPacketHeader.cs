@@ -60,6 +60,20 @@ public struct QubicPacketHeader
         };
     }
 
+    /// <summary>
+    /// Creates a new packet header with an explicit dejavu value.
+    /// Use dejavu=0 for broadcast messages that should be propagated to other peers.
+    /// </summary>
+    public static QubicPacketHeader Create(byte type, int payloadSize, uint dejavu)
+    {
+        return new QubicPacketHeader
+        {
+            Type = type,
+            PacketSize = Size + payloadSize,
+            Dejavu = dejavu
+        };
+    }
+
     private static uint GenerateDejavu()
     {
         return (uint)Random.Shared.Next();

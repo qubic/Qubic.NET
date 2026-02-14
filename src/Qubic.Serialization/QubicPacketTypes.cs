@@ -30,7 +30,12 @@ public static class QubicPacketTypes
     public const byte RequestContractFunction = 42;
     public const byte RespondContractFunction = 43;
 
-    // Special command
+    // Oracle
+    public const byte RequestOracleData = 66;
+    public const byte RespondOracleData = 67;
+
+    // Special
+    public const byte EndResponse = 35;
     public const byte SpecialCommand = 255;
 
     // Response types

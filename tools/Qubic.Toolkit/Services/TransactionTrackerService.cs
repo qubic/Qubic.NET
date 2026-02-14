@@ -293,6 +293,25 @@ public sealed class TransactionTrackerService : IDisposable
                     }
                 }
 
+                // Try DirectNetwork: check if tx exists in the tick's transactions
+                if (!confirmed && _backend.ActiveBackend == QueryBackend.DirectNetwork
+                    && currentTick > tx.TargetTick + 2) // wait a couple ticks for data availability
+                {
+                    var found = await _backend.CheckTransactionInTickAsync(tx.Hash, tx.TargetTick, ct);
+                    if (found)
+                    {
+                        tx.Status = TrackedTxStatus.Confirmed;
+                        confirmed = true;
+                    }
+                    else
+                    {
+                        // Tx not found in tick — it was not included
+                        tx.Status = TrackedTxStatus.Failed;
+                    }
+                    tx.ResolvedUtc = DateTime.UtcNow;
+                    changed = true;
+                }
+
                 if (confirmed) continue;
 
                 // If tick passed significantly and still no info, mark unknown

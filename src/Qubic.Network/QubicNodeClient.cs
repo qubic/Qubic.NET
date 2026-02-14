@@ -149,6 +149,53 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
         await _stream.FlushAsync(cancellationToken);
     }
 
+    // ── Tick Transactions ──
+
+    /// <summary>
+    /// Requests all transactions for a given tick.
+    /// Returns a list of raw transaction byte arrays (each is the full signed transaction without header).
+    /// </summary>
+    public async Task<List<byte[]>> GetTickTransactionsAsync(uint tick, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestTickTransactions(tick);
+        return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.BroadcastTransaction, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    // ── Oracle Data ──
+
+    /// <summary>
+    /// Requests oracle query data by query ID (reqType=5).
+    /// Returns list of response payloads (metadata, query data, reply data).
+    /// </summary>
+    public async Task<List<byte[]>> GetOracleQueryAsync(long queryId, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestOracleData(5, queryId);
+        return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.RespondOracleData, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Requests oracle query IDs by tick (reqType 0-3).
+    /// filterType: 0=all, 1=user, 2=contract, 3=subscription.
+    /// </summary>
+    public async Task<List<byte[]>> GetOracleQueryIdsByTickAsync(uint tick, uint filterType = 0, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestOracleData(filterType, tick);
+        return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.RespondOracleData, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Requests oracle statistics (reqType=7).
+    /// </summary>
+    public async Task<List<byte[]>> GetOracleStatisticsAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestOracleData(7, 0);
+        return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.RespondOracleData, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
     /// <summary>
     /// Broadcasts a signed transaction to the network.
     /// </summary>
@@ -161,6 +208,47 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
 
         var packet = _writer.WriteBroadcastTransaction(transaction);
         await SendAsync(packet, cancellationToken);
+    }
+
+    private async Task<List<byte[]>> SendAndReceiveMultiAsync(byte[] packet, byte expectedType, byte endType, CancellationToken cancellationToken)
+    {
+        await _sendLock.WaitAsync(cancellationToken);
+        try
+        {
+            await SendAsync(packet, cancellationToken);
+
+            var results = new List<byte[]>();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(_timeoutMs * 3); // longer timeout for multi-response
+
+            while (true)
+            {
+                var headerBuffer = new byte[QubicPacketHeader.Size];
+                await ReadExactAsync(headerBuffer, cts.Token);
+                var header = _reader.ReadHeader(headerBuffer);
+
+                if (header.PacketSize > MaxPacketSize)
+                    throw new InvalidOperationException($"Packet too large: {header.PacketSize} bytes.");
+
+                var packetBuffer = new byte[header.PacketSize];
+                Array.Copy(headerBuffer, packetBuffer, QubicPacketHeader.Size);
+
+                if (header.PayloadSize > 0)
+                    await ReadExactAsync(packetBuffer.AsMemory(QubicPacketHeader.Size, header.PayloadSize), cts.Token);
+
+                if (header.Type == endType)
+                    break;
+
+                if (header.Type == expectedType && header.PayloadSize > 0)
+                    results.Add(packetBuffer.AsSpan(QubicPacketHeader.Size, header.PayloadSize).ToArray());
+            }
+
+            return results;
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     private async Task<byte[]> SendAndReceiveAsync(byte[] packet, byte expectedType, CancellationToken cancellationToken)

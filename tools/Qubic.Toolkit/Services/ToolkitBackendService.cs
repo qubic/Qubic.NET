@@ -1,6 +1,7 @@
 using Qubic.Bob;
 using Qubic.Bob.Models;
 using Qubic.Core.Entities;
+using Qubic.Crypto;
 using Qubic.Network;
 using Qubic.Rpc;
 using Qubic.Rpc.Models;
@@ -262,6 +263,59 @@ public class ToolkitBackendService : IDisposable
             throw new InvalidOperationException("Raw packet sending is only available with DirectNetwork backend.");
         var node = await GetNodeClientAsync();
         await node.SendRawPacketAsync(data, ct);
+    }
+
+    // ── Transaction Verification (DirectNetwork) ──
+
+    /// <summary>
+    /// Checks if a transaction with the given hash exists in a tick via DirectNetwork.
+    /// Returns true if the transaction was found in the tick's transactions.
+    /// </summary>
+    public async Task<bool> CheckTransactionInTickAsync(string txHash, uint tick, CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Tick transaction check is only available with DirectNetwork backend.");
+
+        var node = await GetNodeClientAsync();
+        var rawTransactions = await node.GetTickTransactionsAsync(tick, ct);
+
+        var crypt = new QubicCrypt();
+        foreach (var rawTx in rawTransactions)
+        {
+            // K12 hash of the full signed transaction bytes → identity-format string
+            var digest = crypt.KangarooTwelve(rawTx);
+            var hash = crypt.GetHumanReadableBytes(digest);
+            if (string.Equals(hash, txHash, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    // ── Oracle Data (DirectNetwork) ──
+
+    public async Task<List<byte[]>> GetOracleQueryAsync(long queryId, CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Oracle data is only available with DirectNetwork backend.");
+        var node = await GetNodeClientAsync();
+        return await node.GetOracleQueryAsync(queryId, ct);
+    }
+
+    public async Task<List<byte[]>> GetOracleQueryIdsByTickAsync(uint tick, uint filterType = 0, CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Oracle data is only available with DirectNetwork backend.");
+        var node = await GetNodeClientAsync();
+        return await node.GetOracleQueryIdsByTickAsync(tick, filterType, ct);
+    }
+
+    public async Task<List<byte[]>> GetOracleStatisticsAsync(CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Oracle data is only available with DirectNetwork backend.");
+        var node = await GetNodeClientAsync();
+        return await node.GetOracleStatisticsAsync(ct);
     }
 
     // ── Raw JSON-RPC (Bob Playground) ──

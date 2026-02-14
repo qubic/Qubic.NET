@@ -62,6 +62,7 @@ public sealed class QubicPacketWriter
 
     /// <summary>
     /// Writes a transaction broadcast packet.
+    /// Uses dejavu=0 so the receiving node propagates the transaction to other peers.
     /// </summary>
     public byte[] WriteBroadcastTransaction(QubicTransaction transaction)
     {
@@ -71,7 +72,7 @@ public sealed class QubicPacketWriter
         var txBytes = GetTransactionBytes(transaction);
 
         Reset();
-        WriteHeader(QubicPacketTypes.BroadcastTransaction, txBytes.Length);
+        WriteBroadcastHeader(QubicPacketTypes.BroadcastTransaction, txBytes.Length);
         _writer.Write(txBytes);
         return GetPacketBytes();
     }
@@ -137,6 +138,34 @@ public sealed class QubicPacketWriter
         return GetPacketBytes();
     }
 
+    /// <summary>
+    /// Writes a RequestTickTransactions packet.
+    /// Requests all transactions in a tick (flags all zero = request everything).
+    /// </summary>
+    public byte[] WriteRequestTickTransactions(uint tick)
+    {
+        Reset();
+        // Payload: 4 bytes tick + 128 bytes flags (1024 transactions / 8 bits)
+        const int flagsSize = 1024 / 8; // 128
+        WriteHeader(QubicPacketTypes.RequestTickTransactions, 4 + flagsSize);
+        _writer.Write(tick);
+        _writer.Write(new byte[flagsSize]); // all zeros = request all transactions
+        return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Writes a RequestOracleData packet.
+    /// </summary>
+    public byte[] WriteRequestOracleData(uint reqType, long reqTickOrId)
+    {
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestOracleData, 16);
+        _writer.Write(reqType);
+        _writer.Write(0u); // padding
+        _writer.Write(reqTickOrId);
+        return GetPacketBytes();
+    }
+
     private void Reset()
     {
         _stream.SetLength(0);
@@ -148,6 +177,18 @@ public sealed class QubicPacketWriter
         var header = QubicPacketHeader.Create(type, payloadSize);
 
         // Write size and protocol (little-endian uint with type in high byte)
+        uint sizeAndType = (uint)header.PacketSize | ((uint)type << 24);
+        _writer.Write(sizeAndType);
+        _writer.Write(header.Dejavu);
+    }
+
+    /// <summary>
+    /// Writes a header with dejavu=0, signaling the node to propagate the message to other peers.
+    /// </summary>
+    private void WriteBroadcastHeader(byte type, int payloadSize)
+    {
+        var header = QubicPacketHeader.Create(type, payloadSize, dejavu: 0);
+
         uint sizeAndType = (uint)header.PacketSize | ((uint)type << 24);
         _writer.Write(sizeAndType);
         _writer.Write(header.Dejavu);
