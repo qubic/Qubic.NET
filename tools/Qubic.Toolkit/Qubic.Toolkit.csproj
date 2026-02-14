@@ -1,11 +1,35 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!-- Ensure Photino native libs are bundled inside single-file publish -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Windows exe icon -->
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <AssemblyName>Qubic.Net.Toolkit</AssemblyName>
   </PropertyGroup>
+
+  <!-- ASP.NET Core global usings (not included by Razor SDK unlike Web SDK) -->
+  <ItemGroup>
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Hosting" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Photino.Blazor" Version="4.0.13" />
+  </ItemGroup>
+
+  <!-- Required for server mode (WebApplication, Blazor Server, etc.) -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Qubic.Core\Qubic.Core.csproj" />
@@ -14,5 +38,30 @@
     <ProjectReference Include="..\..\src\Qubic.Crypto\Qubic.Crypto.csproj" />
     <ProjectReference Include="..\..\src\Qubic.Network\Qubic.Network.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="wwwroot\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Update="icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <EmbeddedResource Include="icon.ico">
+      <LogicalName>icon.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Embed wwwroot as a zip for single-file publish support -->
+  <Target Name="EmbedWwwrootZip" BeforeTargets="PrepareForBuild">
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/wwwroot"
+                  DestinationFile="$(IntermediateOutputPath)wwwroot.zip"
+                  Overwrite="true" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(IntermediateOutputPath)wwwroot.zip">
+        <LogicalName>wwwroot.zip</LogicalName>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
 
 </Project>

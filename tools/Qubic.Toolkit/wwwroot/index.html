@@ -1,5 +1,3 @@
-@using Microsoft.AspNetCore.Components.Web
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,12 +8,11 @@
     <link rel="icon" href="data:," />
     <link href="lib/bootstrap/bootstrap.min.css" rel="stylesheet" />
     <link href="lib/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet" />
-    <link href="/app.css" rel="stylesheet" />
-    <HeadOutlet @rendermode="RenderMode.InteractiveServer" />
+    <link href="app.css" rel="stylesheet" />
 </head>
 <body>
-    <Routes @rendermode="RenderMode.InteractiveServer" />
-    <script src="/_framework/blazor.web.js"></script>
+    <app>Loading...</app>
+    <script src="_framework/blazor.webview.js"></script>
     <script>
         window.downloadFile = (filename, contentType, base64) => {
             const link = document.createElement('a');
