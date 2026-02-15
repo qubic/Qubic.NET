@@ -173,3 +173,18 @@ dotnet publish tools/Qubic.Toolkit -c Release -r linux-x64 --self-contained -p:P
 - **Server**: Standard Blazor Server with interactive server-side rendering
 - **Static assets**: Bootstrap 5.3.2 and Bootstrap Icons 1.11.3 bundled locally (no CDN)
 - **Single-file publish**: wwwroot is embedded as a zip resource and extracted to `%LOCALAPPDATA%/Qubic.Toolkit` on first run (auto-refreshes when the build changes)
+
+## Screenshots
+<img width="500"  alt="image" src="https://github.com/user-attachments/assets/37a05bb2-3471-4fa9-9e9b-247af50b34c5" />
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/e0e6654c-5c1c-48c1-af31-ad5795c1e4ae" />
+<img width="500"  alt="image" src="https://github.com/user-attachments/assets/28fb6a7c-fb30-4c97-a83d-d8cc9130f2e7" />
+<img width="800"  alt="image" src="https://github.com/user-attachments/assets/eb60147a-5bab-418c-8a22-2e5d48941337" />
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/33f8649c-76b2-4901-aa6b-2b2b2efa9353" />
+<img width="500"  alt="image" src="https://github.com/user-attachments/assets/379ddd39-1c5c-463a-b693-170356872ef8" />
+
+
+
+
+
+
+
