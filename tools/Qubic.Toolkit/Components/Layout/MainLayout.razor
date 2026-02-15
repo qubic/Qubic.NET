@@ -52,8 +52,15 @@
             }
             else
             {
-                <input class="form-control form-control-sm bg-dark text-light border-secondary" style="width:260px"
-                       placeholder="URL" @bind="CurrentUrl" @bind:event="oninput" />
+                <select class="form-select form-select-sm bg-dark text-light border-secondary" style="width:80px"
+                        @bind="CurrentScheme">
+                    <option value="https">https</option>
+                    <option value="http">http</option>
+                </select>
+                <input class="form-control form-control-sm bg-dark text-light border-secondary" style="width:160px"
+                       placeholder="Host" @bind="CurrentHost" @bind:event="oninput" />
+                <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" style="width:70px"
+                       placeholder="Port" @bind="CurrentPort" />
             }
             @if (TickMonitor.IsConnected)
             {
@@ -104,16 +111,22 @@
     private string? _discoveryMessage;
     private bool _discoveryIsSwitch;
 
-    private string CurrentUrl
+    private string CurrentScheme
     {
-        get => Backend.ActiveBackend == QueryBackend.Rpc ? Backend.RpcUrl : Backend.BobUrl;
-        set
-        {
-            if (Backend.ActiveBackend == QueryBackend.Rpc)
-                Backend.RpcUrl = value;
-            else
-                Backend.BobUrl = value;
-        }
+        get => Backend.ActiveBackend == QueryBackend.Rpc ? Backend.RpcScheme : Backend.BobScheme;
+        set { if (Backend.ActiveBackend == QueryBackend.Rpc) Backend.RpcScheme = value; else Backend.BobScheme = value; }
+    }
+
+    private string CurrentHost
+    {
+        get => Backend.ActiveBackend == QueryBackend.Rpc ? Backend.RpcHost : Backend.BobHost;
+        set { if (Backend.ActiveBackend == QueryBackend.Rpc) Backend.RpcHost = value; else Backend.BobHost = value; }
+    }
+
+    private int CurrentPort
+    {
+        get => Backend.ActiveBackend == QueryBackend.Rpc ? Backend.RpcPort : Backend.BobPort;
+        set { if (Backend.ActiveBackend == QueryBackend.Rpc) Backend.RpcPort = value; else Backend.BobPort = value; }
     }
 
     protected override async Task OnInitializedAsync()

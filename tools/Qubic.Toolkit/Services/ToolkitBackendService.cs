@@ -44,6 +44,65 @@ public class ToolkitBackendService : IDisposable
         ResetClients();
     }
 
+    // ── URL part accessors (decompose/recompose full URLs) ──
+
+    public string RpcScheme
+    {
+        get => GetScheme(RpcUrl);
+        set => RpcUrl = BuildUrl(value, RpcHost, RpcPort);
+    }
+
+    public string RpcHost
+    {
+        get => GetHost(RpcUrl);
+        set => RpcUrl = BuildUrl(RpcScheme, value, RpcPort);
+    }
+
+    public int RpcPort
+    {
+        get => GetPort(RpcUrl);
+        set => RpcUrl = BuildUrl(RpcScheme, RpcHost, value);
+    }
+
+    public string BobScheme
+    {
+        get => GetScheme(BobUrl);
+        set => BobUrl = BuildUrl(value, BobHost, BobPort);
+    }
+
+    public string BobHost
+    {
+        get => GetHost(BobUrl);
+        set => BobUrl = BuildUrl(BobScheme, value, BobPort);
+    }
+
+    public int BobPort
+    {
+        get => GetPort(BobUrl);
+        set => BobUrl = BuildUrl(BobScheme, BobHost, value);
+    }
+
+    private static string GetScheme(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Scheme : "https";
+
+    private static string GetHost(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : url;
+
+    private static int GetPort(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return 443;
+        // If port was explicitly in URL, return it; otherwise return the default for the scheme
+        return u.IsDefaultPort ? (u.Scheme == "https" ? 443 : 80) : u.Port;
+    }
+
+    private static string BuildUrl(string scheme, string host, int port)
+    {
+        if (string.IsNullOrWhiteSpace(scheme)) scheme = "https";
+        if (string.IsNullOrWhiteSpace(host)) host = "localhost";
+        bool isDefault = (scheme == "https" && port == 443) || (scheme == "http" && port == 80);
+        return isDefault ? $"{scheme}://{host}" : $"{scheme}://{host}:{port}";
+    }
+
     private QubicRpcClient? _rpcClient;
     private BobClient? _bobClient;
     private QubicNodeClient? _nodeClient;

@@ -24,28 +24,50 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">RPC URL</label>
-                    <input type="text" class="form-control" value="@Backend.RpcUrl"
-                           @onchange="OnRpcUrlChanged" />
+                    <label class="form-label">RPC Connection</label>
+                    <div class="input-group">
+                        <select class="form-select" style="max-width:100px"
+                                value="@Backend.RpcScheme" @onchange="OnRpcSchemeChanged">
+                            <option value="https">https</option>
+                            <option value="http">http</option>
+                        </select>
+                        <input type="text" class="form-control" placeholder="Host"
+                               value="@Backend.RpcHost" @onchange="OnRpcHostChanged" />
+                        <input type="number" class="form-control" style="max-width:100px"
+                               placeholder="Port" min="1" max="65535"
+                               value="@Backend.RpcPort" @onchange="OnRpcPortChanged" />
+                    </div>
+                    <div class="form-text">Current URL: <code>@Backend.RpcUrl</code></div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Bob URL</label>
-                    <input type="text" class="form-control" value="@Backend.BobUrl"
-                           @onchange="OnBobUrlChanged" />
+                    <label class="form-label">Bob Connection</label>
+                    <div class="input-group">
+                        <select class="form-select" style="max-width:100px"
+                                value="@Backend.BobScheme" @onchange="OnBobSchemeChanged">
+                            <option value="https">https</option>
+                            <option value="http">http</option>
+                        </select>
+                        <input type="text" class="form-control" placeholder="Host"
+                               value="@Backend.BobHost" @onchange="OnBobHostChanged" />
+                        <input type="number" class="form-control" style="max-width:100px"
+                               placeholder="Port" min="1" max="65535"
+                               value="@Backend.BobPort" @onchange="OnBobPortChanged" />
+                    </div>
+                    <div class="form-text">Current URL: <code>@Backend.BobUrl</code></div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Node Host</label>
-                    <input type="text" class="form-control" value="@Backend.NodeHost"
-                           @onchange="OnNodeHostChanged" />
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Node Port</label>
-                    <input type="number" class="form-control" min="1" max="65535"
-                           value="@Backend.NodePort"
-                           @onchange="OnNodePortChanged" />
+                    <label class="form-label">Node Connection</label>
+                    <div class="input-group">
+                        <span class="input-group-text" style="min-width:100px;justify-content:center">TCP</span>
+                        <input type="text" class="form-control" placeholder="Host"
+                               value="@Backend.NodeHost" @onchange="OnNodeHostChanged" />
+                        <input type="number" class="form-control" style="max-width:100px"
+                               placeholder="Port" min="1" max="65535"
+                               value="@Backend.NodePort" @onchange="OnNodePortChanged" />
+                    </div>
+                    <div class="form-text">Current: <code>tcp://@(Backend.NodeHost):@(Backend.NodePort)</code></div>
                 </div>
 
                 <div class="mb-3">
@@ -129,15 +151,39 @@
         }
     }
 
-    private void OnRpcUrlChanged(ChangeEventArgs e)
+    private void OnRpcSchemeChanged(ChangeEventArgs e)
     {
-        Backend.RpcUrl = e.Value?.ToString() ?? "";
+        Backend.RpcScheme = e.Value?.ToString() ?? "https";
         Backend.ApplySettings();
     }
 
-    private void OnBobUrlChanged(ChangeEventArgs e)
+    private void OnRpcHostChanged(ChangeEventArgs e)
     {
-        Backend.BobUrl = e.Value?.ToString() ?? "";
+        Backend.RpcHost = e.Value?.ToString() ?? "";
+        Backend.ApplySettings();
+    }
+
+    private void OnRpcPortChanged(ChangeEventArgs e)
+    {
+        Backend.RpcPort = int.TryParse(e.Value?.ToString(), out var v) ? v : 443;
+        Backend.ApplySettings();
+    }
+
+    private void OnBobSchemeChanged(ChangeEventArgs e)
+    {
+        Backend.BobScheme = e.Value?.ToString() ?? "https";
+        Backend.ApplySettings();
+    }
+
+    private void OnBobHostChanged(ChangeEventArgs e)
+    {
+        Backend.BobHost = e.Value?.ToString() ?? "";
+        Backend.ApplySettings();
+    }
+
+    private void OnBobPortChanged(ChangeEventArgs e)
+    {
+        Backend.BobPort = int.TryParse(e.Value?.ToString(), out var v) ? v : 443;
         Backend.ApplySettings();
     }
 
