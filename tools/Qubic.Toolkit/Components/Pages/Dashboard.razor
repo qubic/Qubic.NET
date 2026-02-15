@@ -106,50 +106,52 @@
                     </thead>
                     <tbody>
                         <tr class="table-secondary"><td colspan="4"><strong>Wallet</strong></td></tr>
-                        @BackendRow("Balance Lookup", "/wallet/balance", true, true, true)
-                        @BackendRow("Asset Portfolio", "/wallet/assets", true, false, false)
-                        @BackendRow("Transfer History", "/wallet/transfers", false, true, false)
-                        @BackendRow("Identity Generator", "/wallet/identity", true, true, true, "Offline")
+                        @BackendRow("Balance Lookup", "/wallet/balance", true, true, true, icon: "bi-currency-exchange")
+                        @BackendRow("Asset Portfolio", "/wallet/assets", true, false, false, icon: "bi-grid-3x3-gap")
+                        @BackendRow("Transfer History", "/wallet/transfers", false, true, false, icon: "bi-clock-history")
+                        @BackendRow("Identity Generator", "/wallet/identity", true, true, true, "Offline", "bi-person-badge")
 
                         <tr class="table-secondary"><td colspan="4"><strong>Transactions</strong></td></tr>
-                        @BackendRow("Send QU", "/tx/send", true, true, true)
-                        @BackendRow("Send to Many", "/tx/send-many", true, true, true)
-                        @BackendRow("Offline Builder", "/tx/offline", true, true, true, "Offline")
-                        @BackendRow("Transaction Lookup", "/tx/lookup", true, true, false, "RPC + Bob")
-                        @BackendRow("Import & Broadcast", "/tx/import", true, false, false)
-                        @BackendRow("Transaction History", "/tx/history", true, true, true, "Local")
+                        @BackendRow("Send QU", "/tx/send", true, true, true, icon: "bi-send")
+                        @BackendRow("Send to Many", "/tx/send-many", true, true, true, icon: "bi-send-plus")
+                        @BackendRow("Offline Builder", "/tx/offline", true, true, true, "Offline", "bi-file-earmark-lock")
+                        @BackendRow("Transaction Lookup", "/tx/lookup", true, true, false, "RPC + Bob", "bi-search")
+                        @BackendRow("Import & Broadcast", "/tx/import", true, false, false, icon: "bi-broadcast")
+                        @BackendRow("Transaction History", "/tx/history", true, true, true, "Local", "bi-list-ul")
 
                         <tr class="table-secondary"><td colspan="4"><strong>Smart Contracts</strong></td></tr>
-                        @BackendRow("Contract Browser", "/contracts/browser", true, true, true)
-                        @BackendRow("Qx Assets", "/tx/qx", true, true, true)
-                        @BackendRow("QSwap", "/tx/qswap", true, true, true)
-                        @BackendRow("QEarn Staking", "/tx/qearn", true, true, true)
-                        @BackendRow("QBond", "/tx/qbond", true, true, true)
-                        @BackendRow("Quottery", "/tx/quottery", true, true, true)
-                        @BackendRow("QUtil", "/tx/qutil", true, true, true)
-                        @BackendRow("QVault", "/tx/qvault", true, true, true)
-                        @BackendRow("MSVault", "/tx/msvault", true, true, true)
-                        @BackendRow("Nostromo", "/tx/nostromo", true, true, true)
-                        @BackendRow("IPO Bid", "/tx/ipobid", true, true, true)
-                        @BackendRow("Burn QU", "/tx/burn", true, true, true)
+                        @BackendRow("Contract Browser", "/contracts/browser", true, true, true, icon: "bi-box-seam")
+                        @BackendRow("QX", "/tx/qx", true, true, true, icon: "bi-shop")
+                        @BackendRow("QSwap", "/tx/qswap", true, true, true, icon: "bi-arrow-left-right")
+                        @BackendRow("QEarn", "/tx/qearn", true, true, true, icon: "bi-piggy-bank")
+                        @BackendRow("QBond", "/tx/qbond", true, true, true, icon: "bi-coin")
+                        @BackendRow("Quottery", "/tx/quottery", true, true, true, icon: "bi-ticket-perforated")
+                        @BackendRow("QUtil", "/tx/qutil", true, true, true, icon: "bi-bar-chart")
+                        @BackendRow("QVault", "/tx/qvault", true, true, true, icon: "bi-safe")
+                        @BackendRow("MSVault", "/tx/msvault", true, true, true, icon: "bi-people")
+                        @BackendRow("Nostromo", "/tx/nostromo", true, true, true, icon: "bi-rocket-takeoff")
+                        @BackendRow("IPO Bid", "/tx/ipobid", true, true, true, icon: "bi-cash-stack")
+                        @BackendRow("Burn QU", "/tx/burn", true, true, true, icon: "bi-fire")
 
                         <tr class="table-secondary"><td colspan="4"><strong>Explorer</strong></td></tr>
-                        @BackendRow("Tick Data", "/explorer/tick", true, false, false)
-                        @BackendRow("Computor List", "/explorer/computors", true, false, false)
-                        @BackendRow("Active IPOs", "/explorer/ipos", true, false, false)
-                        @BackendRow("Check Tx in Tick", "/explorer/checktx", true, false, false)
-                        @BackendRow("IPO Status", "/explorer/ipostatus", false, false, true)
-                        @BackendRow("Log Viewer", "/explorer/logs", false, true, false)
+                        @BackendRow("Tick Data", "/explorer/tick", true, false, false, icon: "bi-graph-up")
+                        @BackendRow("Computor List", "/explorer/computors", true, false, false, icon: "bi-hdd-network")
+                        @BackendRow("Active IPOs", "/explorer/ipos", true, false, false, icon: "bi-rocket")
+                        @BackendRow("Check Tx in Tick", "/explorer/checktx", true, false, false, icon: "bi-check2-square")
+                        @BackendRow("IPO Status", "/explorer/ipostatus", false, false, true, icon: "bi-bar-chart-steps")
+                        @BackendRow("Log Viewer", "/explorer/logs", false, true, false, icon: "bi-file-text")
 
                         <tr class="table-secondary"><td colspan="4"><strong>Tools</strong></td></tr>
-                        @BackendRow("Sign / Verify Message", "/tools/sign-verify", true, true, true, "Offline")
-                        @BackendRow("Crypto Toolkit", "/tools/crypto", true, true, true, "Offline")
-                        @BackendRow("Oracle Machine", "/tools/oracle", true, false, true, "Lookup: Direct only")
-                        @BackendRow("Bob Playground", "/tools/bob-playground", false, true, false)
+                        @BackendRow("Sign / Verify Message", "/tools/sign-verify", true, true, true, "Offline", "bi-shield-check")
+                        @BackendRow("Crypto Toolkit", "/tools/crypto", true, true, true, "Offline", "bi-key")
+                        @BackendRow("Oracle Machine", "/tools/oracle", true, false, true, "Lookup: Direct only", "bi-cloud-arrow-down")
+                        @BackendRow("Bob Playground", "/tools/bob-playground", false, true, false, icon: "bi-terminal")
 
-                        <tr class="table-secondary"><td colspan="4"><strong>Node Operations</strong></td></tr>
-                        @BackendRow("Node Peers", "/node/peers", false, false, true)
-                        @BackendRow("Node Management", "/node/management", false, false, true)
+                        <tr class="table-secondary"><td colspan="4"><strong>Computor Operation</strong></td></tr>
+                        @BackendRow("Governance", "/tx/governance", true, false, false, icon: "bi-bank")
+                        @BackendRow("CCF", "/tx/ccf", true, false, false, icon: "bi-currency-exchange")
+                        @BackendRow("Node Peers", "/node/peers", false, false, true, icon: "bi-diagram-3")
+                        @BackendRow("Node Management", "/node/management", false, false, true, icon: "bi-sliders")
                     </tbody>
                 </table>
             </div>
@@ -158,11 +160,17 @@
 </div>
 
 @code {
-    private static RenderFragment BackendRow(string name, string href, bool rpc, bool bob, bool direct, string? note = null) => __builder =>
+    private static RenderFragment BackendRow(string name, string href, bool rpc, bool bob, bool direct, string? note = null, string? icon = null) => __builder =>
     {
         <tr>
             <td>
-                <a href="@href">@name</a>
+                <a href="@href">
+                    @if (icon != null)
+                    {
+                        <i class="bi @icon me-1"></i>
+                    }
+                    @name
+                </a>
                 @if (note != null)
                 {
                     <span class="text-muted small ms-1">(@note)</span>

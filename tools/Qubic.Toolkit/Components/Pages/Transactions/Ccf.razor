@@ -1051,6 +1051,7 @@
                     SafeIdentityFromPk(e.Destination),
                     SafeUrlFromBytes(e.Url),
                     e.Amount, e.Tick, e.Success))
+                .OrderByDescending(e => e.Tick)
                 .ToList();
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -1074,6 +1075,7 @@
                     SafeIdentityFromPk(e.Destination),
                     SafeUrlFromBytes(e.Url),
                     e.Amount, e.Tick, e.PeriodIndex, e.Success))
+                .OrderByDescending(e => e.Tick)
                 .ToList();
         }
         catch (Exception ex) { _error = ex.Message; }
