@@ -1,0 +1,344 @@
+@page "/sync"
+@implements IDisposable
+@inject Qubic.Services.Storage.WalletStorageService WalletStorage
+
+<h4>Sync Manager</h4>
+<p class="text-muted">Monitor and control data synchronization from RPC and Bob WebSocket.</p>
+
+@if (!WalletStorage.IsOpen)
+{
+    <div class="alert alert-info">Enter your seed to open the wallet database and start syncing.</div>
+}
+else
+{
+    @* ── Connection Info ── *@
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Connection</span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary" @onclick="RestartSync">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Restart Sync
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <table class="table table-sm table-borderless mb-0">
+                <tr><td class="text-muted" style="width:140px">Identity</td><td class="mono small" style="word-break:break-all">@Sync.CurrentIdentity</td></tr>
+                <tr><td class="text-muted">RPC URL</td><td class="mono small">@Sync.CurrentRpcUrl</td></tr>
+                <tr><td class="text-muted">Bob URL</td><td class="mono small">@Sync.CurrentBobUrl</td></tr>
+                <tr><td class="text-muted">Overall State</td><td>@Sync.State</td></tr>
+                <tr><td class="text-muted">Initial Sync</td><td>@(Sync.InitialSyncComplete ? "Complete" : "In progress...")</td></tr>
+            </table>
+        </div>
+    </div>
+
+    @* ── Stream Status ── *@
+    <div class="row mb-3">
+        @* RPC *@
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>@StreamIcon(Sync.RpcStatus) RPC Transactions</span>
+                    <span class="badge @StatusBadgeClass(Sync.RpcStatus)">@Sync.RpcStatus</span>
+                </div>
+                <div class="card-body small">
+                    <p class="mb-1">@(Sync.RpcStatusMessage ?? "Idle")</p>
+                    <p class="mb-1 text-muted">Synced: @Sync.TransactionsSynced tx @(Sync.RpcTotal > 0 ? $"/ {Sync.RpcTotal} total" : "")</p>
+                    @if (Sync.SyncProgress > 0)
+                    {
+                        <div class="progress" style="height:4px">
+                            <div class="progress-bar" style="width:@Sync.SyncProgress.ToString("F0")%"></div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        @* Bob Transfers *@
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>@StreamIcon(Sync.BobTransferStatus) Bob Transfers</span>
+                    <span class="badge @StatusBadgeClass(Sync.BobTransferStatus)">@Sync.BobTransferStatus</span>
+                </div>
+                <div class="card-body small">
+                    <p class="mb-0">@(Sync.BobTransferStatusMessage ?? "Idle")</p>
+                </div>
+            </div>
+        </div>
+        @* Bob Logs *@
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>@StreamIcon(Sync.BobLogStatus) Bob Logs</span>
+                    <span class="badge @StatusBadgeClass(Sync.BobLogStatus)">@Sync.BobLogStatus</span>
+                </div>
+                <div class="card-body small">
+                    <p class="mb-1">@(Sync.BobLogStatusMessage ?? "Idle")</p>
+                    <p class="mb-0 text-muted">Synced: @Sync.LogEventsSynced log events</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Database Stats ── *@
+    <div class="card mb-3">
+        <div class="card-header">Database</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <p class="mb-1"><strong>@WalletStorage.TransactionCount</strong> transactions stored</p>
+                </div>
+                <div class="col-md-4">
+                    <p class="mb-1"><strong>@WalletStorage.LogEventCount</strong> log events stored</p>
+                </div>
+                <div class="col-md-4">
+                    <p class="mb-0">Watermarks:</p>
+                    @foreach (var wm in _watermarks)
+                    {
+                        <div class="mono small text-muted">@wm.Key = @wm.Value</div>
+                    }
+                    @if (_watermarks.Count == 0)
+                    {
+                        <span class="small text-muted">None</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Sync.LastError != null)
+    {
+        <div class="alert alert-danger small">
+            <i class="bi bi-exclamation-triangle me-1"></i><strong>Last error:</strong> @Sync.LastError
+        </div>
+    }
+
+    @* ── Advanced Controls ── *@
+    <div class="card mb-3">
+        <div class="card-header">
+            <button class="btn btn-sm btn-link text-decoration-none p-0" @onclick="() => _showAdvanced = !_showAdvanced">
+                <i class="bi @(_showAdvanced ? "bi-chevron-down" : "bi-chevron-right") me-1"></i>Advanced Controls
+            </button>
+        </div>
+        @if (_showAdvanced)
+        {
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6>Reset & Re-sync</h6>
+                        <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-sm btn-outline-warning" @onclick="ResetRpc">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset RPC watermark & re-sync
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" @onclick="ResetBobTransfers">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Bob Transfers watermark & re-sync
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" @onclick="ResetBobLogs">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Bob Logs watermark & re-sync
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" @onclick="ResetAll">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset ALL watermarks & re-sync
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Clear Data</h6>
+                        <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-sm btn-outline-danger" @onclick="ConfirmClearLogs" disabled="@_confirmingClear">
+                                <i class="bi bi-trash me-1"></i>Clear all log events & re-sync
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="ConfirmClearTx" disabled="@_confirmingClear">
+                                <i class="bi bi-trash me-1"></i>Clear all transactions & re-sync
+                            </button>
+                            @if (_confirmingClear)
+                            {
+                                <div class="alert alert-danger py-2 small">
+                                    <strong>Are you sure?</strong> This will delete @(_clearTarget == "logs" ? "all log events" : "all transactions") and re-sync from scratch.
+                                    <div class="mt-2 d-flex gap-2">
+                                        <button class="btn btn-sm btn-danger" @onclick="ExecuteClear">Yes, clear</button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="CancelClear">Cancel</button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @* ── Sync Log ── *@
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Sync Log</span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshLog">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ClearLog">Clear</button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <pre class="mb-0 p-2 small mono" style="max-height:300px; overflow:auto; background:var(--bs-body-bg); white-space:pre-wrap">@if (_logLines.Count == 0)
+            {
+                @:No log entries yet.
+            }
+            else
+            {
+                @foreach (var line in _logLines)
+                {
+                    @line@("\n")
+                }
+            }</pre>
+        </div>
+    </div>
+}
+
+@code {
+    private Qubic.Services.Storage.WalletSyncService Sync => WalletStorage.Sync;
+
+    private Dictionary<string, string> _watermarks = new();
+    private List<string> _logLines = new();
+    private bool _showAdvanced;
+    private bool _confirmingClear;
+    private string? _clearTarget;
+    private bool _disposed;
+    private System.Threading.Timer? _refreshTimer;
+
+    protected override void OnInitialized()
+    {
+        WalletStorage.Sync.OnSyncStateChanged += OnSyncChanged;
+        if (WalletStorage.IsOpen)
+        {
+            RefreshData();
+        }
+        // Auto-refresh the sync log every 2 seconds
+        _refreshTimer = new System.Threading.Timer(_ =>
+        {
+            if (_disposed) return;
+            InvokeAsync(() =>
+            {
+                if (_disposed) return;
+                RefreshLog();
+                StateHasChanged();
+            });
+        }, null, 2000, 2000);
+    }
+
+    private void OnSyncChanged()
+    {
+        if (_disposed) return;
+        InvokeAsync(() =>
+        {
+            if (_disposed) return;
+            RefreshData();
+            StateHasChanged();
+        });
+    }
+
+    private void RefreshData()
+    {
+        _watermarks = WalletStorage.GetWatermarks();
+        RefreshLog();
+    }
+
+    private void RefreshLog()
+    {
+        lock (WalletStorage.Sync.SyncLog)
+        {
+            _logLines = new List<string>(WalletStorage.Sync.SyncLog);
+        }
+    }
+
+    private void RestartSync()
+    {
+        WalletStorage.RestartSync();
+        RefreshData();
+    }
+
+    private void ResetRpc()
+    {
+        WalletStorage.ResetWatermarkAndResync("rpc_last_offset");
+        RefreshData();
+    }
+
+    private void ResetBobTransfers()
+    {
+        WalletStorage.ResetWatermarkAndResync("bob_transfer_last_logid");
+        RefreshData();
+    }
+
+    private void ResetBobLogs()
+    {
+        WalletStorage.ResetWatermarkAndResync("bob_log_last_logid");
+        RefreshData();
+    }
+
+    private void ResetAll()
+    {
+        WalletStorage.ResetAllWatermarksAndResync();
+        RefreshData();
+    }
+
+    private void ConfirmClearLogs()
+    {
+        _confirmingClear = true;
+        _clearTarget = "logs";
+    }
+
+    private void ConfirmClearTx()
+    {
+        _confirmingClear = true;
+        _clearTarget = "tx";
+    }
+
+    private void ExecuteClear()
+    {
+        if (_clearTarget == "logs")
+            WalletStorage.ClearLogEventsAndResync();
+        else if (_clearTarget == "tx")
+            WalletStorage.ClearTransactionsAndResync();
+
+        _confirmingClear = false;
+        _clearTarget = null;
+        RefreshData();
+    }
+
+    private void CancelClear()
+    {
+        _confirmingClear = false;
+        _clearTarget = null;
+    }
+
+    private void ClearLog()
+    {
+        WalletStorage.Sync.ClearLog();
+        _logLines.Clear();
+    }
+
+    private static MarkupString StreamIcon(Qubic.Services.Storage.StreamStatus status) => status switch
+    {
+        Qubic.Services.Storage.StreamStatus.Connecting or Qubic.Services.Storage.StreamStatus.CatchingUp =>
+            new MarkupString("<span class=\"spinner-border spinner-border-sm text-primary\" style=\"width:.7em;height:.7em\"></span>"),
+        Qubic.Services.Storage.StreamStatus.Live =>
+            new MarkupString("<i class=\"bi bi-check-circle-fill text-success\"></i>"),
+        Qubic.Services.Storage.StreamStatus.Error =>
+            new MarkupString("<i class=\"bi bi-exclamation-triangle-fill text-danger\"></i>"),
+        _ => new MarkupString("<i class=\"bi bi-circle text-muted\"></i>"),
+    };
+
+    private static string StatusBadgeClass(Qubic.Services.Storage.StreamStatus status) => status switch
+    {
+        Qubic.Services.Storage.StreamStatus.Connecting or Qubic.Services.Storage.StreamStatus.CatchingUp => "bg-primary",
+        Qubic.Services.Storage.StreamStatus.Live => "bg-success",
+        Qubic.Services.Storage.StreamStatus.Error => "bg-danger",
+        _ => "bg-secondary",
+    };
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _refreshTimer?.Dispose();
+        WalletStorage.Sync.OnSyncStateChanged -= OnSyncChanged;
+    }
+}

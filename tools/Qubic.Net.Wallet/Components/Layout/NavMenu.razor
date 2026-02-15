@@ -3,7 +3,7 @@
 @inject NavigationManager Nav
 @implements IDisposable
 
-<div class="sidebar bg-body-tertiary border-end p-2" style="width:200px; min-width:200px; max-width:200px; flex-shrink:0; overflow-y:auto">
+<div class="qb-sidebar p-2">
     <nav class="nav flex-column">
         <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
             <i class="bi bi-house me-2"></i>Home
@@ -39,6 +39,11 @@
         <NavLink class="nav-link" href="/assets">
             <i class="bi bi-grid-3x3-gap me-2"></i>Assets
         </NavLink>
+
+        @* ── DEFI ── *@
+        <div class="nav-section-header mt-2">
+            <span class="nav-section-label">DEFI</span>
+        </div>
         <NavLink class="nav-link" href="/qx">
             <i class="bi bi-shop me-2"></i>QX Trading
         </NavLink>
@@ -48,6 +53,9 @@
         <NavLink class="nav-link" href="/qearn">
             <i class="bi bi-piggy-bank me-2"></i>QEarn
         </NavLink>
+        <NavLink class="nav-link" href="/msvault">
+            <i class="bi bi-safe me-2"></i>MSVault
+        </NavLink>
 
         @* ── HISTORY ── *@
         <div class="nav-section-header mt-2">
@@ -55,6 +63,9 @@
         </div>
         <NavLink class="nav-link" href="/history">
             <i class="bi bi-list-ul me-2"></i>Tx History
+        </NavLink>
+        <NavLink class="nav-link" href="/logs">
+            <i class="bi bi-journal-text me-2"></i>Log Events
         </NavLink>
         @if (Backend.ActiveBackend == QueryBackend.Bob)
         {
@@ -64,6 +75,9 @@
         }
 
         <hr class="my-2" />
+        <NavLink class="nav-link" href="/sync">
+            <i class="bi bi-arrow-repeat me-2"></i>Sync Manager
+        </NavLink>
         <NavLink class="nav-link" href="/settings">
             <i class="bi bi-gear me-2"></i>Settings
         </NavLink>

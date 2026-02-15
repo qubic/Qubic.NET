@@ -1,9 +1,12 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.FileProviders;
 using Photino.Blazor;
 using Qubic.Services;
+using Qubic.Services.Storage;
 using Qubic.Toolkit;
 using Qubic.Toolkit.Components;
 
@@ -45,11 +48,16 @@ class Program
 
     static void RegisterServices(IServiceCollection services)
     {
+        SQLitePCL.Batteries_V2.Init();
+
         services.AddSingleton(new QubicSettingsService("QubicToolkit"));
         services.AddSingleton<ContractDiscovery>();
         services.AddSingleton<QubicBackendService>();
         services.AddSingleton<SeedSessionService>();
         services.AddSingleton<TickMonitorService>();
+        services.AddSingleton<WalletDatabase>();
+        services.AddSingleton<WalletSyncService>();
+        services.AddSingleton<WalletStorageService>();
         services.AddSingleton<TransactionTrackerService>();
         services.AddSingleton<AssetRegistryService>();
         services.AddSingleton<PeerAutoDiscoverService>();
@@ -81,9 +89,12 @@ class Program
         app.Run();
     }
 
+    const string SessionCookieName = ".QubicToolkit.Session";
+
     static void RunServer(string[] args)
     {
         var wwwrootPath = GetWwwrootPath();
+        var sessionToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
         var builder = WebApplication.CreateBuilder(args);
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -92,6 +103,46 @@ class Program
         builder.Environment.WebRootPath = wwwrootPath;
 
         var app = builder.Build();
+
+        // Session token middleware: validates every request before anything else.
+        // First request arrives with ?token=xxx — we set an HttpOnly cookie and redirect
+        // to strip the token from the URL. All subsequent requests are validated via cookie.
+        app.Use(async (context, next) =>
+        {
+            // Allow the SignalR negotiate/connect paths to use cookie auth
+            var path = context.Request.Path.Value ?? "";
+
+            // Check for token in query string (initial browser open)
+            if (context.Request.Query.TryGetValue("token", out var tokenValue)
+                && tokenValue.ToString() == sessionToken)
+            {
+                context.Response.Cookies.Append(SessionCookieName, sessionToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    SameSite = SameSiteMode.Strict,
+                    Secure = false, // localhost HTTP
+                    Path = "/",
+                    IsEssential = true
+                });
+
+                // Redirect to root to strip token from URL / browser history
+                context.Response.Redirect("/");
+                return;
+            }
+
+            // Validate cookie on all requests
+            if (!context.Request.Cookies.TryGetValue(SessionCookieName, out var cookie)
+                || cookie != sessionToken)
+            {
+                context.Response.StatusCode = 403;
+                context.Response.ContentType = "text/plain";
+                await context.Response.WriteAsync("Access denied. Open the app from the URL shown in the console.");
+                return;
+            }
+
+            await next();
+        });
+
         app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = new PhysicalFileProvider(wwwrootPath)
@@ -102,15 +153,19 @@ class Program
         app.Lifetime.ApplicationStarted.Register(() =>
         {
             var address = app.Urls.FirstOrDefault() ?? "http://127.0.0.1:5060";
+            var authUrl = $"{address}?token={sessionToken}";
             Console.WriteLine($"Qubic.Net Toolkit running at {address}");
+            Console.WriteLine($"Session token: {sessionToken}");
+            Console.WriteLine();
+            Console.WriteLine($"Open in browser: {authUrl}");
             try
             {
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                    Process.Start(new ProcessStartInfo(address) { UseShellExecute = true });
+                    Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                    Process.Start("open", address);
+                    Process.Start("open", authUrl);
                 else
-                    Process.Start("xdg-open", address);
+                    Process.Start("xdg-open", authUrl);
             }
             catch { /* Browser auto-open is best-effort */ }
         });

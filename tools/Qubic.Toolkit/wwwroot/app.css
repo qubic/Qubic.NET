@@ -1,3 +1,37 @@
+/* ── Fonts ── */
+@font-face {
+    font-family: "Space Grotesk";
+    src: url("fonts/SpaceGrotesk-Variable.ttf") format("truetype");
+    font-weight: 300 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Inter";
+    src: url("fonts/Inter-Variable.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Fira Code";
+    src: url("fonts/FiraCode-Variable.ttf") format("truetype");
+    font-weight: 300 700;
+    font-display: swap;
+}
+
+/* ── Base Font Application ── */
+html, body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: "Space Grotesk", "Inter", sans-serif;
+    letter-spacing: -0.02em;
+}
+
 /* Sidebar */
 .sidebar .nav-link {
     padding: 0.3rem 0.5rem;
@@ -95,8 +129,11 @@ a.nav-section-label:hover {
 }
 
 /* Monospace values */
+.mono, code, pre {
+    font-family: "Fira Code", "Cascadia Mono", "SF Mono", "Consolas", monospace;
+}
+
 .mono {
-    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
     font-size: 0.85em;
     word-break: break-all;
 }

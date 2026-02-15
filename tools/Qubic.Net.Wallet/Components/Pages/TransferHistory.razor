@@ -74,9 +74,8 @@
                                     <td>
                                         <span class="badge @(isSender ? "bg-danger" : "bg-success")">@(isSender ? "OUT" : "IN")</span>
                                     </td>
-                                    <td class="mono small" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-                                        title="@(isSender ? t.Destination.Identity : t.Source.Identity)">
-                                        @(isSender ? t.Destination.Identity : t.Source.Identity)
+                                    <td>
+                                        <AddressDisplay Address="@(isSender ? t.Destination.Identity : t.Source.Identity)" TruncateChars="6" />
                                     </td>
                                     <td class="mono">@t.Amount.ToString("N0")</td>
                                     <td class="mono small" style="max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"

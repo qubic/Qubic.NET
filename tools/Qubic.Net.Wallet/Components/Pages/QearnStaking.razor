@@ -8,6 +8,48 @@
 <h4>QEarn Staking</h4>
 <p class="text-muted">Lock QU to earn rewards, unlock, and query staking information.</p>
 
+@if (_autoLoading)
+{
+    <div class="text-muted mb-3"><span class="spinner-border spinner-border-sm me-1"></span> Loading your staking info...</div>
+}
+else if (_autoLockStatus != null || _autoEndedStatus != null)
+{
+    <div class="card mb-3 border-primary">
+        <div class="card-header bg-primary text-white">Your Staking Summary</div>
+        <div class="card-body">
+            @if (_autoLockStatus != null)
+            {
+                <div class="mb-2">
+                    <strong>Lock Status:</strong> @_autoLockedWeeks / 52 weeks locked
+                </div>
+                <div class="d-flex flex-wrap gap-1 mb-2">
+                    @for (int i = 0; i < 52; i++)
+                    {
+                        var bit = i;
+                        var locked = (_autoLockStatus.Value >> bit & 1) == 1;
+                        <span class="badge @(locked ? "bg-success" : "bg-secondary")" title="Week @(bit + 1)"
+                              style="width:24px; font-size:0.65rem">@(bit + 1)</span>
+                    }
+                </div>
+                <div class="small text-muted">
+                    <span class="badge bg-success">N</span> = locked &nbsp;
+                    <span class="badge bg-secondary">N</span> = not locked
+                </div>
+            }
+            @if (_autoEndedStatus != null)
+            {
+                <hr />
+                <div class="row small">
+                    <div class="col-md-6"><strong>Fully Unlocked:</strong> @_autoEndedStatus.Value.fullyUnlocked.ToString("N0") QU</div>
+                    <div class="col-md-6"><strong>Fully Rewarded:</strong> @_autoEndedStatus.Value.fullyRewarded.ToString("N0") QU</div>
+                    <div class="col-md-6"><strong>Early Unlocked:</strong> @_autoEndedStatus.Value.earlyUnlocked.ToString("N0") QU</div>
+                    <div class="col-md-6"><strong>Early Rewarded:</strong> @_autoEndedStatus.Value.earlyRewarded.ToString("N0") QU</div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 <ul class="nav nav-tabs mb-3">
     @foreach (var tab in _tabs)
     {
@@ -151,6 +193,12 @@
     private string? _error;
     private const int ContractIndex = 9;
 
+    // Auto-query
+    private bool _autoLoading;
+    private ulong? _autoLockStatus;
+    private int _autoLockedWeeks;
+    private (ulong fullyUnlocked, ulong fullyRewarded, ulong earlyUnlocked, ulong earlyRewarded)? _autoEndedStatus;
+
     // Lock
     private long _lockAmount;
     // Unlock
@@ -164,6 +212,40 @@
     private bool _querying;
     private List<KeyValuePair<string, string>>? _queryResult;
     private ulong? _lockStatusBits;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Seed.HasSeed)
+        {
+            _autoLoading = true;
+            try
+            {
+                var pk = Seed.Identity!.Value.PublicKey;
+
+                // Query lock status (function 4)
+                var lockInput = new Qubic.Core.Contracts.Qearn.GetUserLockStatusInput { User = pk }.ToBytes();
+                var lockResult = await Backend.QuerySmartContractAsync(ContractIndex, 4, lockInput);
+                if (lockResult.Length >= 8)
+                {
+                    var ls = Qubic.Core.Contracts.Qearn.GetUserLockStatusOutput.FromBytes(lockResult);
+                    _autoLockStatus = ls.Status;
+                    _autoLockedWeeks = 0;
+                    for (int i = 0; i < 52; i++) if ((ls.Status >> i & 1) == 1) _autoLockedWeeks++;
+                }
+
+                // Query ended status (function 5)
+                var endedInput = new Qubic.Core.Contracts.Qearn.GetEndedStatusInput { User = pk }.ToBytes();
+                var endedResult = await Backend.QuerySmartContractAsync(ContractIndex, 5, endedInput);
+                if (endedResult.Length >= 32)
+                {
+                    var es = Qubic.Core.Contracts.Qearn.GetEndedStatusOutput.FromBytes(endedResult);
+                    _autoEndedStatus = (es.FullyUnlockedAmount, es.FullyRewardedAmount, es.EarlyUnlockedAmount, es.EarlyRewardedAmount);
+                }
+            }
+            catch { }
+            finally { _autoLoading = false; }
+        }
+    }
 
     private async Task<uint> GetTick() => TickMonitor.IsConnected
         ? TickMonitor.Tick + (uint)Settings.TickOffset

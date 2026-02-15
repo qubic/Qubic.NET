@@ -5,12 +5,16 @@
 @inject SeedSessionService Seed
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
+@inject Qubic.Services.Storage.WalletStorageService WalletStorage
 @inject PeerAutoDiscoverService PeerAutoDiscover
 @inject LabelService Labels
 
 <div class="d-flex flex-column vh-100">
     <nav class="navbar navbar-dark bg-dark px-3">
-        <a class="navbar-brand mb-0 h1" href="/">Qubic.Net Toolkit</a>
+        <a class="navbar-brand mb-0 h1" href="/">
+            <img src="qubic-logo.svg" alt="Qubic" />
+            <span>Toolkit</span>
+        </a>
         <div class="d-flex align-items-center gap-2">
             @if (Seed.HasSeed)
             {
@@ -202,6 +206,7 @@
             try
             {
                 Seed.SetSeed(_seedInput);
+                WalletStorage.SetSeed(_seedInput, Seed.Identity!.Value.ToString());
                 TxTracker.SetEncryptionKey(_seedInput);
                 _seedInput = null;
             }
@@ -212,6 +217,7 @@
     private void ClearSeed()
     {
         Seed.ClearSeed();
+        WalletStorage.ClearSeed();
         TxTracker.ClearEncryptionKey();
         _seedInput = null;
     }

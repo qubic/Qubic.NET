@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Qubic.Core.Entities;
+using Qubic.Services.Storage;
 
 namespace Qubic.Services;
 
@@ -39,6 +40,7 @@ public sealed class TransactionTrackerService : IDisposable
     private readonly TickMonitorService _tickMonitor;
     private readonly QubicSettingsService _settings;
     private readonly SeedSessionService _seed;
+    private readonly WalletStorageService _storage;
     private readonly List<TrackedTransaction> _transactions = [];
     private readonly object _lock = new();
     private string? _storageKey;
@@ -46,9 +48,16 @@ public sealed class TransactionTrackerService : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _monitorTask;
 
+    private bool UseDb => _storage.IsOpen;
+
     public IReadOnlyList<TrackedTransaction> Transactions
     {
-        get { lock (_lock) return _transactions.ToList(); }
+        get
+        {
+            if (UseDb)
+                return _storage.Database.GetTrackedTransactions();
+            lock (_lock) return _transactions.ToList();
+        }
     }
 
     public event Action? OnChanged;
@@ -65,12 +74,13 @@ public sealed class TransactionTrackerService : IDisposable
     }
 
     public TransactionTrackerService(QubicBackendService backend, TickMonitorService tickMonitor,
-        QubicSettingsService settings, SeedSessionService seed)
+        QubicSettingsService settings, SeedSessionService seed, WalletStorageService storage)
     {
         _backend = backend;
         _tickMonitor = tickMonitor;
         _settings = settings;
         _seed = seed;
+        _storage = storage;
         _storageDir = settings.StorageDirectory;
 
         _cts = new CancellationTokenSource();
@@ -79,6 +89,7 @@ public sealed class TransactionTrackerService : IDisposable
 
     public void SetEncryptionKey(string seed)
     {
+        if (UseDb) return; // DB handles persistence now
         using var sha = SHA256.Create();
         _storageKey = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes("qubic-toolkit-tx-" + seed))).ToLowerInvariant();
         LoadFromDisk();
@@ -93,6 +104,13 @@ public sealed class TransactionTrackerService : IDisposable
 
     public void Track(TrackedTransaction tx)
     {
+        if (UseDb)
+        {
+            _storage.Database.UpsertTrackedTransaction(tx);
+            RaiseChanged();
+            return;
+        }
+
         lock (_lock)
         {
             // Avoid duplicates
@@ -105,6 +123,13 @@ public sealed class TransactionTrackerService : IDisposable
 
     public void Remove(string hash)
     {
+        if (UseDb)
+        {
+            _storage.Database.DeleteTrackedTransaction(hash);
+            RaiseChanged();
+            return;
+        }
+
         lock (_lock) _transactions.RemoveAll(t => t.Hash == hash);
         SaveToDisk();
         RaiseChanged();
@@ -112,6 +137,13 @@ public sealed class TransactionTrackerService : IDisposable
 
     public void Clear()
     {
+        if (UseDb)
+        {
+            _storage.Database.ClearTrackedTransactions();
+            RaiseChanged();
+            return;
+        }
+
         lock (_lock) _transactions.Clear();
         SaveToDisk();
         RaiseChanged();
@@ -222,9 +254,17 @@ public sealed class TransactionTrackerService : IDisposable
     private async Task CheckPendingTransactions(CancellationToken ct)
     {
         List<TrackedTransaction> pending;
-        lock (_lock)
+        if (UseDb)
         {
-            pending = _transactions.Where(t => t.Status == TrackedTxStatus.Pending).ToList();
+            pending = _storage.Database.GetTrackedTransactions()
+                .Where(t => t.Status == TrackedTxStatus.Pending).ToList();
+        }
+        else
+        {
+            lock (_lock)
+            {
+                pending = _transactions.Where(t => t.Status == TrackedTxStatus.Pending).ToList();
+            }
         }
 
         if (pending.Count == 0 || !_tickMonitor.IsConnected) return;
@@ -334,7 +374,15 @@ public sealed class TransactionTrackerService : IDisposable
 
         if (changed)
         {
-            SaveToDisk();
+            if (UseDb)
+            {
+                foreach (var tx in pending)
+                    _storage.Database.UpsertTrackedTransaction(tx);
+            }
+            else
+            {
+                SaveToDisk();
+            }
             RaiseChanged();
         }
     }
@@ -377,7 +425,14 @@ public sealed class TransactionTrackerService : IDisposable
                 Description = $"[Resend #{original.ResendCount + 1}] {original.Description}"
             };
 
-            lock (_lock) _transactions.Insert(0, resend);
+            if (UseDb)
+            {
+                _storage.Database.UpsertTrackedTransaction(resend);
+            }
+            else
+            {
+                lock (_lock) _transactions.Insert(0, resend);
+            }
             return true;
         }
         catch

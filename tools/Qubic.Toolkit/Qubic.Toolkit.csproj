@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <PackageReference Include="Photino.Blazor" Version="4.0.13" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.*" />
   </ItemGroup>
 
   <!-- Required for server mode (WebApplication, Blazor Server, etc.) -->

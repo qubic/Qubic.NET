@@ -3,6 +3,7 @@
 @inject SeedSessionService Seed
 @inject QubicBackendService Backend
 @inject TickMonitorService TickMonitor
+@inject Qubic.Services.Storage.WalletStorageService WalletStorage
 
 <h4>Welcome to Qubic.Net Wallet</h4>
 
@@ -24,7 +25,7 @@ else
             <div class="card mb-3">
                 <div class="card-header">Identity</div>
                 <div class="card-body">
-                    <code class="mono d-block" style="word-break:break-all">@Seed.Identity</code>
+                    <AddressDisplay Address="@Seed.Identity?.ToString()" ShowFull="true" />
                 </div>
             </div>
             <div class="card mb-3">
@@ -64,6 +65,44 @@ else
                     }
                 </div>
             </div>
+            @if (WalletStorage.IsOpen)
+            {
+                <div class="card mb-3">
+                    <div class="card-header">Sync Status</div>
+                    <div class="card-body">
+                        @{ var sync = WalletStorage.Sync; }
+                        @if (sync.State == Qubic.Services.Storage.SyncState.Syncing)
+                        {
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+                                <span>Syncing...</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="mb-2">Synced: <strong>@WalletStorage.TransactionCount</strong> transactions, <strong>@WalletStorage.LogEventCount</strong> log events</p>
+                        }
+                        <div class="small">
+                            <div class="mb-1">
+                                @StreamIcon(sync.RpcStatus) <strong>RPC:</strong>
+                                <span class="text-muted">@(sync.RpcStatusMessage ?? "Idle")</span>
+                            </div>
+                            <div class="mb-1">
+                                @StreamIcon(sync.BobTransferStatus) <strong>Transfers:</strong>
+                                <span class="text-muted">@(sync.BobTransferStatusMessage ?? "Idle")</span>
+                            </div>
+                            <div>
+                                @StreamIcon(sync.BobLogStatus) <strong>Logs:</strong>
+                                <span class="text-muted">@(sync.BobLogStatusMessage ?? "Idle")</span>
+                            </div>
+                        </div>
+                        @if (sync.LastError != null)
+                        {
+                            <div class="text-danger small mt-1"><i class="bi bi-exclamation-triangle me-1"></i>@sync.LastError</div>
+                        }
+                    </div>
+                </div>
+            }
             <div class="card mb-3">
                 <div class="card-header">Quick Actions</div>
                 <div class="card-body d-flex flex-wrap gap-2">
@@ -87,12 +126,19 @@ else
     {
         TickMonitor.OnTickChanged += OnTickChanged;
         Seed.OnSeedChanged += OnSeedChanged;
+        WalletStorage.Sync.OnSyncStateChanged += OnSyncChanged;
 
         if (Seed.HasSeed)
             await LoadBalance();
     }
 
     private void OnTickChanged()
+    {
+        if (_disposed) return;
+        InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    }
+
+    private void OnSyncChanged()
     {
         if (_disposed) return;
         InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
@@ -133,10 +179,22 @@ else
         }
     }
 
+    private static MarkupString StreamIcon(Qubic.Services.Storage.StreamStatus status) => status switch
+    {
+        Qubic.Services.Storage.StreamStatus.Connecting or Qubic.Services.Storage.StreamStatus.CatchingUp =>
+            new MarkupString("<span class=\"spinner-border spinner-border-sm text-primary\" style=\"width:.7em;height:.7em\"></span>"),
+        Qubic.Services.Storage.StreamStatus.Live =>
+            new MarkupString("<i class=\"bi bi-check-circle-fill text-success\"></i>"),
+        Qubic.Services.Storage.StreamStatus.Error =>
+            new MarkupString("<i class=\"bi bi-exclamation-triangle-fill text-danger\"></i>"),
+        _ => new MarkupString("<i class=\"bi bi-circle text-muted\"></i>"),
+    };
+
     public void Dispose()
     {
         _disposed = true;
         TickMonitor.OnTickChanged -= OnTickChanged;
         Seed.OnSeedChanged -= OnSeedChanged;
+        WalletStorage.Sync.OnSyncStateChanged -= OnSyncChanged;
     }
 }

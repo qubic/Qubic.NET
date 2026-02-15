@@ -1,8 +1,12 @@
 @page "/assets"
 @inject QubicBackendService Backend
+@inject SeedSessionService Seed
+@inject TickMonitorService TickMonitor
+@inject TransactionTrackerService TxTracker
+@inject QubicSettingsService Settings
 
 <h4>Asset Portfolio</h4>
-<p class="text-muted">View owned, issued, and possessed assets for any identity. (RPC only)</p>
+<p class="text-muted">View owned, issued, and possessed assets for any identity. Transfer assets and change management rights.</p>
 
 <div class="row mb-3">
     <div class="col-md-10">
@@ -45,16 +49,31 @@
                                 <th>Units</th>
                                 <th>Contract</th>
                                 <th>Issuance</th>
+                                @if (Seed.HasSeed)
+                                {
+                                    <th>Actions</th>
+                                }
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var a in _owned)
                             {
+                                var assetName = a.Data.IssuedAsset?.Name ?? "?";
+                                var issuerIdentity = a.Data.IssuedAsset?.IssuerIdentity ?? "";
                                 <tr>
-                                    <td class="mono">@(a.Data.IssuedAsset?.Name ?? "?")</td>
+                                    <td class="mono">@assetName</td>
                                     <td class="mono">@a.Data.NumberOfUnits</td>
                                     <td>@Qubic.Core.QubicContracts.FormatContract((int)a.Data.ManagingContractIndex)</td>
                                     <td>@a.Data.IssuanceIndex</td>
+                                    @if (Seed.HasSeed)
+                                    {
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary me-1"
+                                                    @onclick="() => OpenTransfer(assetName, issuerIdentity, long.Parse(a.Data.NumberOfUnits))">Transfer</button>
+                                            <button class="btn btn-sm btn-outline-secondary"
+                                                    @onclick="() => OpenRights(assetName, issuerIdentity, long.Parse(a.Data.NumberOfUnits))">Rights</button>
+                                        </td>
+                                    }
                                 </tr>
                             }
                         </tbody>
@@ -143,6 +162,57 @@
     </div>
 }
 
+@* ── Action Panel ── *@
+@if (_actionMode != ActionMode.None && Seed.HasSeed)
+{
+    <div class="card mb-3 border-primary">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <span>@(_actionMode == ActionMode.Transfer ? "Transfer Asset" : "Change Management Rights") — @_actionAssetName</span>
+            <button class="btn btn-sm btn-outline-light" @onclick="CloseAction">Close</button>
+        </div>
+        <div class="card-body">
+            @if (_actionMode == ActionMode.Transfer)
+            {
+                <div class="mb-2"><label class="form-label-sm">Asset: <strong class="mono">@_actionAssetName</strong></label></div>
+                <div class="mb-2"><label class="form-label-sm">Issuer</label>
+                    <input class="form-control form-control-sm mono" readonly value="@_actionIssuer" /></div>
+                <div class="mb-2"><label class="form-label-sm">Destination Identity</label>
+                    <input class="form-control form-control-sm mono @IdentityValidation.CssClass(_actionDest)"
+                           @bind="_actionDest" @bind:event="oninput" placeholder="IDENTITY..." /></div>
+                <div class="mb-2"><label class="form-label-sm">Number of Shares (max: @_actionMaxShares)</label>
+                    <input type="number" class="form-control form-control-sm" min="1" max="@_actionMaxShares" @bind="_actionShares" /></div>
+                <button class="btn btn-primary" @onclick="ExecuteTransfer" disabled="@_actionSending">
+                    @(_actionSending ? "Transferring..." : "Transfer via QX")
+                </button>
+            }
+            else
+            {
+                <div class="mb-2"><label class="form-label-sm">Asset: <strong class="mono">@_actionAssetName</strong></label></div>
+                <div class="mb-2"><label class="form-label-sm">Issuer</label>
+                    <input class="form-control form-control-sm mono" readonly value="@_actionIssuer" /></div>
+                <div class="mb-2"><label class="form-label-sm">New Managing Contract Index</label>
+                    <input type="number" class="form-control form-control-sm" min="0" @bind="_actionContractIdx" /></div>
+                <div class="mb-2"><label class="form-label-sm">Number of Shares (max: @_actionMaxShares)</label>
+                    <input type="number" class="form-control form-control-sm" min="1" max="@_actionMaxShares" @bind="_actionShares" /></div>
+                <button class="btn btn-primary" @onclick="ExecuteRights" disabled="@_actionSending">
+                    @(_actionSending ? "Sending..." : "Change Rights via QX")
+                </button>
+            }
+            @if (_actionResult != null)
+            {
+                <div class="alert alert-success mt-2">
+                    Tx ID: <span class="mono">@_actionResult</span>
+                    <div class="mt-1">
+                        <a href="https://explorer.qubic.org/network/tx/@_actionResult" target="_blank" rel="noopener" class="me-3">View on Explorer</a>
+                        <a href="/history">Transaction History</a>
+                    </div>
+                </div>
+            }
+            @if (_actionError != null) { <div class="alert alert-danger mt-2">@_actionError</div> }
+        </div>
+    </div>
+}
+
 @code {
     private string? _identity;
     private IReadOnlyList<Qubic.Rpc.Models.OwnedAssetInfo>? _owned;
@@ -150,6 +220,123 @@
     private IReadOnlyList<Qubic.Rpc.Models.IssuedAssetInfo>? _issued;
     private bool _loading;
     private string? _error;
+    private const int QxContractIndex = 1;
+
+    // Action panel
+    private enum ActionMode { None, Transfer, Rights }
+    private ActionMode _actionMode;
+    private string _actionAssetName = "";
+    private string _actionIssuer = "";
+    private long _actionMaxShares;
+    private long _actionShares;
+    private string? _actionDest;
+    private int _actionContractIdx;
+    private bool _actionSending;
+    private string? _actionResult;
+    private string? _actionError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Seed.HasSeed)
+        {
+            _identity = Seed.Identity!.ToString();
+            await Lookup();
+        }
+    }
+
+    private void OpenTransfer(string assetName, string issuer, long units)
+    {
+        _actionMode = ActionMode.Transfer;
+        _actionAssetName = assetName;
+        _actionIssuer = issuer;
+        _actionMaxShares = units;
+        _actionShares = units;
+        _actionDest = null;
+        _actionResult = null;
+        _actionError = null;
+    }
+
+    private void OpenRights(string assetName, string issuer, long units)
+    {
+        _actionMode = ActionMode.Rights;
+        _actionAssetName = assetName;
+        _actionIssuer = issuer;
+        _actionMaxShares = units;
+        _actionShares = units;
+        _actionContractIdx = 0;
+        _actionResult = null;
+        _actionError = null;
+    }
+
+    private void CloseAction() => _actionMode = ActionMode.None;
+
+    private async Task<uint> GetTick() => TickMonitor.IsConnected
+        ? TickMonitor.Tick + (uint)Settings.TickOffset
+        : (await Backend.GetTickInfoAsync()).Tick + (uint)Settings.TickOffset;
+
+    private async Task ExecuteTransfer()
+    {
+        _actionSending = true; _actionError = null; _actionResult = null;
+        try
+        {
+            var destErr = IdentityValidation.Validate(_actionDest);
+            if (destErr != null) { _actionError = $"Destination: {destErr}"; return; }
+            if (_actionShares <= 0 || _actionShares > _actionMaxShares) { _actionError = "Invalid share count."; return; }
+
+            var tick = await GetTick();
+            var issuerPk = Qubic.Core.Entities.QubicIdentity.FromIdentity(_actionIssuer.Trim()).PublicKey;
+            var destPk = Qubic.Core.Entities.QubicIdentity.FromIdentity(_actionDest!.Trim()).PublicKey;
+
+            var payload = new Qubic.Core.Contracts.Qx.TransferShareOwnershipAndPossessionPayload
+            {
+                Issuer = issuerPk,
+                AssetName = AssetNameHelper.ToUlong(_actionAssetName),
+                NewOwnerAndPossessor = destPk,
+                NumberOfShares = _actionShares
+            };
+
+            var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(QxContractIndex));
+            var tx = Seed.CreateAndSignTransaction(dest, 0, tick, payload);
+            var result = await Backend.BroadcastTransactionAsync(tx);
+            _actionResult = result.TransactionId;
+            TxTracker.Track(new TrackedTransaction { Hash = result.TransactionId, Source = Seed.Identity?.ToString() ?? "",
+                Destination = dest.ToString(), Amount = 0, TargetTick = tick,
+                InputType = payload.InputType, PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()),
+                Description = $"Transfer {_actionAssetName}: {_actionShares:N0} shares" });
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _actionSending = false; }
+    }
+
+    private async Task ExecuteRights()
+    {
+        _actionSending = true; _actionError = null; _actionResult = null;
+        try
+        {
+            if (_actionShares <= 0 || _actionShares > _actionMaxShares) { _actionError = "Invalid share count."; return; }
+
+            var tick = await GetTick();
+            var issuerPk = Qubic.Core.Entities.QubicIdentity.FromIdentity(_actionIssuer.Trim()).PublicKey;
+
+            var payload = new Qubic.Core.Contracts.Qx.TransferShareManagementRightsPayload
+            {
+                Asset = new Qubic.Core.Contracts.QubicAsset { Issuer = issuerPk, AssetName = AssetNameHelper.ToUlong(_actionAssetName) },
+                NewManagingContractIndex = (uint)_actionContractIdx,
+                NumberOfShares = _actionShares
+            };
+
+            var dest = Qubic.Core.Entities.QubicIdentity.FromPublicKey(Qubic.Core.QubicContracts.GetContractPublicKey(QxContractIndex));
+            var tx = Seed.CreateAndSignTransaction(dest, 0, tick, payload);
+            var result = await Backend.BroadcastTransactionAsync(tx);
+            _actionResult = result.TransactionId;
+            TxTracker.Track(new TrackedTransaction { Hash = result.TransactionId, Source = Seed.Identity?.ToString() ?? "",
+                Destination = dest.ToString(), Amount = 0, TargetTick = tick,
+                InputType = payload.InputType, PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()),
+                Description = $"Change Rights {_actionAssetName}: {_actionShares:N0} shares → contract {_actionContractIdx}" });
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _actionSending = false; }
+    }
 
     private async Task Lookup()
     {

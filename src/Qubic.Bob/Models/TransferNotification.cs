@@ -11,6 +11,9 @@ public sealed class TransferNotification
     [JsonPropertyName("isCatchUp")]
     public bool IsCatchUp { get; set; }
 
+    [JsonPropertyName("catchUpComplete")]
+    public bool CatchUpComplete { get; set; }
+
     [JsonPropertyName("tick")]
     public uint Tick { get; set; }
 

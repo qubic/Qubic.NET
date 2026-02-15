@@ -11,6 +11,9 @@ public sealed class LogNotification
     [JsonPropertyName("isCatchUp")]
     public bool IsCatchUp { get; set; }
 
+    [JsonPropertyName("catchUpComplete")]
+    public bool CatchUpComplete { get; set; }
+
     [JsonPropertyName("ok")]
     public bool Ok { get; set; }
 

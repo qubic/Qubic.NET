@@ -593,8 +593,12 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
             if (data is null) return;
 
-            lastReceivedLogId = data.LogId;
-            lastEpoch = data.Epoch;
+            // Don't update cursor for catchUpComplete signal (it has no real logId/epoch)
+            if (!data.CatchUpComplete)
+            {
+                lastReceivedLogId = data.LogId;
+                lastEpoch = data.Epoch;
+            }
 
             _ = subscription.WriteAsync(data, subscription.CancellationToken);
         });
@@ -648,8 +652,12 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
             if (data is null) return;
 
-            lastReceivedLogId = data.LogId;
-            lastEpoch = data.Epoch;
+            // Don't update cursor for catchUpComplete signal (it has no real logId/epoch)
+            if (!data.CatchUpComplete)
+            {
+                lastReceivedLogId = data.LogId;
+                lastEpoch = data.Epoch;
+            }
 
             _ = subscription.WriteAsync(data, subscription.CancellationToken);
         });

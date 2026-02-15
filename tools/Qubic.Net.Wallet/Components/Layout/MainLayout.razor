@@ -1,39 +1,34 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject QubicBackendService Backend
-@inject QubicSettingsService Settings
 @inject SeedSessionService Seed
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
-@inject IJSRuntime JS
+@inject Qubic.Services.Storage.WalletStorageService WalletStorage
 
 <div class="d-flex flex-column vh-100">
-    <nav class="navbar navbar-dark bg-dark px-3">
-        <div class="d-flex align-items-center">
-            <img src="qubic-logo.svg" height="24" class="me-2" alt="Qubic" />
-            <a class="navbar-brand mb-0 h1" href="/">Qubic.Net Wallet</a>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            <button class="theme-toggle" @onclick="ToggleTheme" title="Toggle dark/light mode">
-                <i class="bi @(_isDark ? "bi-sun" : "bi-moon-stars")"></i>
-            </button>
-            <span class="text-secondary mx-1">|</span>
+    <nav class="qb-navbar">
+        <a class="qb-logo" href="/">
+            <img src="qubic-logo.svg" alt="Qubic" />
+            <span>Wallet</span>
+        </a>
+        <div class="qb-controls">
             @if (Seed.HasSeed)
             {
-                <span class="badge bg-danger">Seed active</span>
-                <span class="badge bg-secondary mono small">@Seed.Identity?.ToString()[..12]...</span>
-                <button class="btn btn-sm btn-outline-light" @onclick="ClearSeed">Clear</button>
+                <span class="badge-qb-gold">Seed active</span>
+                <span class="badge-qb-cyan mono">@Seed.Identity?.ToString()[..12]...</span>
+                <button class="btn btn-sm btn-qb-ghost" @onclick="ClearSeed">Clear</button>
             }
             else
             {
-                <input type="password" class="form-control form-control-sm bg-dark text-light border-secondary"
+                <input type="password" class="form-control form-control-sm"
                        style="width:280px" placeholder="Enter 55-char seed to enable signing..."
                        @bind="_seedInput" @bind:event="oninput" />
-                <button class="btn btn-sm btn-outline-success" @onclick="SetSeed"
+                <button class="btn btn-sm btn-qb-primary" @onclick="SetSeed"
                         disabled="@(_seedInput?.Length != 55)">Unlock</button>
             }
-            <span class="text-secondary mx-1">|</span>
-            <select class="form-select form-select-sm bg-dark text-light border-secondary" style="width:auto"
+            <div class="qb-divider"></div>
+            <select class="form-select form-select-sm" style="width:auto"
                     @bind="Backend.ActiveBackend" @bind:after="OnBackendChanged">
                 <option value="@QueryBackend.Rpc">RPC</option>
                 <option value="@QueryBackend.Bob">Bob</option>
@@ -41,38 +36,38 @@
             </select>
             @if (Backend.ActiveBackend == QueryBackend.DirectNetwork)
             {
-                <input class="form-control form-control-sm bg-dark text-light border-secondary" style="width:130px"
+                <input class="form-control form-control-sm" style="width:130px"
                        placeholder="Host" @bind="Backend.NodeHost" @bind:event="oninput" />
-                <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" style="width:70px"
+                <input type="number" class="form-control form-control-sm" style="width:70px"
                        placeholder="Port" @bind="Backend.NodePort" />
             }
             else
             {
-                <input class="form-control form-control-sm bg-dark text-light border-secondary" style="width:130px"
+                <input class="form-control form-control-sm" style="width:130px"
                        placeholder="Host" @bind="CurrentHost" @bind:event="oninput" />
             }
             @if (TickMonitor.IsConnected)
             {
-                <button class="btn btn-sm btn-outline-danger" @onclick="Disconnect">
+                <button class="btn btn-sm btn-qb-danger" @onclick="Disconnect">
                     <i class="bi bi-power"></i>
                 </button>
-                <span class="badge bg-success mono">E@(TickMonitor.Epoch) | T@(TickMonitor.Tick)</span>
+                <span class="badge-qb-success mono">E@(TickMonitor.Epoch) | T@(TickMonitor.Tick)</span>
             }
             else
             {
-                <button class="btn btn-sm btn-outline-info" @onclick="Reconnect" disabled="@_reconnecting">
+                <button class="btn btn-sm btn-qb-secondary" @onclick="Reconnect" disabled="@_reconnecting">
                     @(_reconnecting ? "..." : "Connect")
                 </button>
                 @if (TickMonitor.Error != null)
                 {
-                    <span class="badge bg-danger" title="@TickMonitor.Error">Offline</span>
+                    <span class="badge-qb-danger" title="@TickMonitor.Error">Offline</span>
                 }
             }
         </div>
     </nav>
     @if (Seed.HasSeed)
     {
-        <div class="seed-warning text-center small py-1">
+        <div class="qb-seed-bar">
             Your seed is held in memory for this session. Clear it when done.
         </div>
     }
@@ -87,7 +82,6 @@
 @code {
     private string? _seedInput;
     private bool _reconnecting;
-    private bool _isDark;
     private bool _disposed;
 
     private string CurrentHost
@@ -99,20 +93,7 @@
     protected override async Task OnInitializedAsync()
     {
         TickMonitor.OnTickChanged += OnTickChanged;
-
-        // Load saved theme
-        var savedTheme = Settings.GetCustom<string>("theme");
-        _isDark = savedTheme == "dark";
-
         await TickMonitor.StartAsync();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && _isDark)
-        {
-            await JS.InvokeVoidAsync("setTheme", "dark");
-        }
     }
 
     private void OnTickChanged()
@@ -128,6 +109,7 @@
             try
             {
                 Seed.SetSeed(_seedInput);
+                WalletStorage.SetSeed(_seedInput, Seed.Identity!.Value.ToString());
                 TxTracker.SetEncryptionKey(_seedInput);
                 _seedInput = null;
             }
@@ -138,6 +120,7 @@
     private void ClearSeed()
     {
         Seed.ClearSeed();
+        WalletStorage.ClearSeed();
         TxTracker.ClearEncryptionKey();
         _seedInput = null;
     }
@@ -161,14 +144,6 @@
     {
         await TickMonitor.StopAsync();
         Backend.ResetClients();
-    }
-
-    private async Task ToggleTheme()
-    {
-        _isDark = !_isDark;
-        var theme = _isDark ? "dark" : "light";
-        Settings.SetCustom("theme", theme);
-        await JS.InvokeVoidAsync("setTheme", theme);
     }
 
     public void Dispose()

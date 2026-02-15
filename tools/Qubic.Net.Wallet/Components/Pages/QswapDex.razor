@@ -11,11 +11,11 @@
 @if (_fees != null)
 {
     <div class="small text-muted mb-2">
-        Fees &mdash; Issuance: <strong>@_fees.Value.issuance.ToString("N0")</strong> |
-        Pool: <strong>@_fees.Value.pool.ToString("N0")</strong> |
-        Transfer: <strong>@_fees.Value.transfer.ToString("N0")</strong> |
-        Swap: <strong>@_fees.Value.swap.ToString("N0")</strong> |
-        Burn: <strong>@_fees.Value.burn.ToString("N0")</strong>
+        Fees &mdash; Issuance: <strong>@_fees.Value.issuance.ToString("N0") QU</strong> |
+        Pool: <strong>@_fees.Value.pool.ToString("N0") QU</strong> |
+        Transfer: <strong>@_fees.Value.transfer.ToString("N0") QU</strong> |
+        Swap: <strong>@_fees.Value.swap.ToString("N0") QU</strong> |
+        Burn: <strong>@_fees.Value.burn.ToString("N0") QU</strong>
     </div>
 }
 
@@ -165,7 +165,7 @@ else
     private bool _sending;
     private string? _result;
     private string? _error;
-    private const int ContractIndex = 3;
+    private const int ContractIndex = 13;
     private (uint issuance, uint pool, uint transfer, uint swap, uint burn)? _fees;
 
     // Issue

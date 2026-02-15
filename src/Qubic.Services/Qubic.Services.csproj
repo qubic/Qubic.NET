@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Qubic.Core\Qubic.Core.csproj" />
     <ProjectReference Include="..\Qubic.Crypto\Qubic.Crypto.csproj" />
     <ProjectReference Include="..\Qubic.Rpc\Qubic.Rpc.csproj" />
