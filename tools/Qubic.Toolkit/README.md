@@ -1,6 +1,8 @@
 # Qubic.Toolkit
 
-Cross-platform desktop application for interacting with the Qubic network. Built with [Photino.Blazor](https://github.com/tryphotino/photino.Blazor) for native window rendering on Windows (WebView2), macOS (WKWebView), and Linux (WebKitGTK).
+A cross-platform desktop application for interacting with the Qubic network. Runs as a native desktop window on Windows, macOS, and Linux — or as a local web app in your browser with `--server` mode.
+
+![toolkit-architecture](https://github.com/user-attachments/assets/87f36279-1693-4388-aa64-c32e5e77a011)
 
 > [!NOTE] 
 > **Beta Software** — This tool is a playground and under active development. Errors may occur. Use it with caution.
