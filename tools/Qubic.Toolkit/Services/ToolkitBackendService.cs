@@ -235,7 +235,13 @@ public class ToolkitBackendService : IDisposable
     {
         if (ActiveBackend != QueryBackend.DirectNetwork)
             throw new InvalidOperationException("Peer list is only available with DirectNetwork backend.");
-        var node = await GetNodeClientAsync();
+
+        // Use a fresh connection: the Qubic node sends ExchangePublicPeers only
+        // once when a new connection is established. On a reused connection that
+        // initial packet was already consumed by an earlier operation, so the node
+        // would never respond to a second ExchangePublicPeers request.
+        using var node = new QubicNodeClient(NodeHost, NodePort);
+        await node.ConnectAsync(ct);
         return await node.GetPeerListAsync(ct);
     }
 

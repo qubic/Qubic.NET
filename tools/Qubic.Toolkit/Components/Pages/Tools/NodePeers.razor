@@ -1,8 +1,9 @@
 @page "/node/peers"
 @inject ToolkitBackendService Backend
+@using Qubic.Network
 
 <h4>Node Peers</h4>
-<p class="text-muted">View connected peer IP addresses. (DirectNetwork only)</p>
+<p class="text-muted">Discover peer IP addresses via ExchangePublicPeers. (DirectNetwork only)</p>
 
 @if (Backend.ActiveBackend != QueryBackend.DirectNetwork)
 {
@@ -12,38 +13,74 @@
 }
 else
 {
-    <div class="mb-3">
-        <button class="btn btn-sm btn-primary" @onclick="FetchPeers" disabled="@_loading">
-            @(_loading ? "Fetching..." : "Fetch Peers")
-        </button>
+    <div class="row g-2 align-items-end mb-3">
+        <div class="col-auto">
+            <label class="form-label mb-0">Depth</label>
+            <select class="form-select form-select-sm" style="width:auto" @bind="_depth" disabled="@_loading">
+                <option value="1">1 — Direct peers only</option>
+                <option value="2">2 — Peers of peers</option>
+                <option value="3">3 — Three levels deep</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-sm btn-primary" @onclick="FetchPeers" disabled="@_loading">
+                @(_loading ? "Discovering..." : "Discover Peers")
+            </button>
+        </div>
     </div>
+
+    @if (_status != null)
+    {
+        <div class="text-muted small mb-2">@_status</div>
+    }
 
     @if (_error != null)
     {
         <div class="alert alert-danger">@_error</div>
     }
 
-    @if (_peers != null)
+    @if (_results != null)
     {
         <div class="card">
-            <div class="card-header">Connected Peers (@_peers.Length)</div>
-            <div class="card-body">
-                @if (_peers.Length == 0)
+            <div class="card-header">
+                Discovered Peers (@_results.Count)
+                @if (_depth > 1)
                 {
-                    <span class="text-muted">No peers returned by node.</span>
+                    <span class="text-muted ms-2">from @_nodesQueried nodes across @_depth levels</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (_results.Count == 0)
+                {
+                    <span class="text-muted">No peers discovered.</span>
                 }
                 else
                 {
                     <table class="table table-sm table-hover mb-0">
                         <thead>
-                            <tr><th>#</th><th>IP Address</th></tr>
+                            <tr>
+                                <th>#</th>
+                                <th>IP Address</th>
+                                @if (_depth > 1)
+                                {
+                                    <th>Discovered At Depth</th>
+                                    <th>Reported By</th>
+                                }
+                            </tr>
                         </thead>
                         <tbody>
-                            @for (int i = 0; i < _peers.Length; i++)
+                            @{ var idx = 0; }
+                            @foreach (var peer in _results.OrderBy(p => p.Depth).ThenBy(p => p.Ip))
                             {
+                                idx++;
                                 <tr>
-                                    <td>@(i + 1)</td>
-                                    <td class="mono">@_peers[i]</td>
+                                    <td>@idx</td>
+                                    <td class="mono">@peer.Ip</td>
+                                    @if (_depth > 1)
+                                    {
+                                        <td>@peer.Depth</td>
+                                        <td class="mono text-muted small">@peer.Source</td>
+                                    }
                                 </tr>
                             }
                         </tbody>
@@ -55,19 +92,69 @@ else
 }
 
 @code {
-    private string[]? _peers;
+    private int _depth = 1;
     private bool _loading;
     private string? _error;
+    private string? _status;
+    private List<PeerEntry>? _results;
+    private int _nodesQueried;
+
+    private record PeerEntry(string Ip, int Depth, string Source);
 
     private async Task FetchPeers()
     {
         _loading = true;
         _error = null;
-        _peers = null;
+        _results = null;
+        _status = null;
+        _nodesQueried = 0;
+        StateHasChanged();
 
         try
         {
-            _peers = await Backend.GetNodePeerListAsync();
+            var allPeers = new Dictionary<string, PeerEntry>();
+            var queried = new HashSet<string>();
+            var queue = new Queue<(string Host, int Depth)>();
+
+            // Seed with the configured node
+            queue.Enqueue((Backend.NodeHost, 0));
+
+            while (queue.Count > 0)
+            {
+                var (host, currentDepth) = queue.Dequeue();
+                if (currentDepth >= _depth) continue;
+                if (!queried.Add(host)) continue;
+
+                _status = $"Querying {host} (depth {currentDepth + 1}/{_depth})...";
+                _nodesQueried = queried.Count;
+                StateHasChanged();
+                await Task.Delay(1); // allow UI to update
+
+                string[] peers;
+                try
+                {
+                    using var node = new QubicNodeClient(host, Backend.NodePort);
+                    await node.ConnectAsync();
+                    peers = await node.GetPeerListAsync();
+                }
+                catch
+                {
+                    continue; // skip unreachable nodes
+                }
+
+                foreach (var ip in peers)
+                {
+                    if (!allPeers.ContainsKey(ip))
+                    {
+                        allPeers[ip] = new PeerEntry(ip, currentDepth + 1, host);
+                        queue.Enqueue((ip, currentDepth + 1));
+                    }
+                }
+            }
+
+            _nodesQueried = queried.Count;
+            _results = allPeers.Values.ToList();
+            _status = null;
         }
         catch (Exception ex)
         {
