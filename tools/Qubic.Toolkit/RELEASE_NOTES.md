@@ -73,24 +73,31 @@ sha256sum Qubic.Net.Toolkit-*.zip
 
 | File | SHA-256 |
 |------|---------|
-| `Qubic.Net.Toolkit-win-x64.zip` | `c0347963bd8019fc7d3ee1a0d2fba5884083045746bfd6621792f1c75a95d23e` |
-| `Qubic.Net.Toolkit-osx-arm64.zip` | `<rebuild required>` |
-| `Qubic.Net.Toolkit-osx-x64.zip` | `fb1ebf52da9153e603a23f517e938e5144003b1316e44885c04ce06a28197f6a` |
-| `Qubic.Net.Toolkit-linux-x64.zip` | `8c4ec2b6e436590ba08067eebddac8343eff1d9606ee357633409976262b3590` |
+| `Qubic.Net.Toolkit-win-x64.zip` | `67aae642ac48aac74d146bfe9cd81fa31175e4d0eff8a568575c654162d641dc` |
+| `Qubic.Net.Toolkit-osx-arm64.zip` | `77c1bb66155948328cf87250bfca0551e7cb673816e8647dbcc98f07e2190953` |
+| `Qubic.Net.Toolkit-osx-x64.zip` | `c064e5a0abbe2c10b58d9b4edd60134264a3f4416e3bcdff6f4b12f910fd41fb` |
+| `Qubic.Net.Toolkit-linux-x64.zip` | `116288ed157821e6ce83b0219dcd2cfcc66b0b2ed270896f42d7c92b6bf31d92` |
 
 ### Running
 
-**Windows:** Extract and run `Qubic.Net.Toolkit.exe`
+Each zip extracts into a `Qubic.Net.Toolkit-{platform}` folder.
 
-**macOS** (requires macOS 12 Monterey or later):
+**Windows:** Extract `Qubic.Net.Toolkit-win-x64.zip`, open the folder, and run `Qubic.Net.Toolkit.exe`
+
+**macOS**:
+
+> [!NOTE]
+> Pre-built macOS binaries only support **server mode** (`--server`). For native desktop window mode, [compile from source](https://github.com/qubic/Qubic.Net/tree/main/tools/Qubic.Toolkit#running-from-source).
 
 Download `osx-arm64` for Apple Silicon (M1/M2/M3/M4) or `osx-x64` for Intel Macs.
 
 ```bash
+unzip Qubic.Net.Toolkit-osx-arm64.zip
+cd Qubic.Net.Toolkit-osx-arm64
 chmod +x Qubic.Net.Toolkit
 codesign --force --deep -s - Qubic.Net.Toolkit
 xattr -d com.apple.quarantine Qubic.Net.Toolkit
-./Qubic.Net.Toolkit
+./Qubic.Net.Toolkit --server
 ```
 
 **Linux:**
@@ -110,6 +117,8 @@ Desktop mode requires **GLIBC 2.38+** and **WebKitGTK** (`libwebkit2gtk-4.1-0`).
 # Install WebKitGTK (Ubuntu/Debian)
 sudo apt install libwebkit2gtk-4.1-0
 
+unzip Qubic.Net.Toolkit-linux-x64.zip
+cd Qubic.Net.Toolkit-linux-x64
 chmod +x Qubic.Net.Toolkit
 ./Qubic.Net.Toolkit
 ```
@@ -118,5 +127,5 @@ If desktop mode is not supported on your system, the app automatically falls bac
 
 **Server mode** (all platforms — opens in browser, no GLIBC 2.38 or WebKitGTK required):
 ```
-Qubic.Net.Toolkit --server
+./Qubic.Net.Toolkit --server
 ```

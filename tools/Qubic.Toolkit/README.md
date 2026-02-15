@@ -48,8 +48,8 @@ sha256sum -c Qubic.Net.Toolkit.sha256
 
 ### Windows
 
-1. Download `Qubic.Net.Toolkit-win-x64.zip`
-2. Extract and run `Qubic.Net.Toolkit.exe`
+1. Download and extract `Qubic.Net.Toolkit-win-x64.zip`
+2. Open the `Qubic.Net.Toolkit-win-x64` folder and run `Qubic.Net.Toolkit.exe`
 
 To run in server mode (opens in browser instead of native window):
 
@@ -61,16 +61,21 @@ Qubic.Net.Toolkit.exe --server
 
 Requires **macOS 12 (Monterey)** or later.
 
+> [!NOTE]
+> Pre-built macOS binaries only support **server mode** (`--server`). Native desktop window mode requires [compiling from source](#running-from-source).
+
 1. Download the zip for your architecture:
    - **Apple Silicon** (M1/M2/M3/M4): `Qubic.Net.Toolkit-osx-arm64.zip`
    - **Intel**: `Qubic.Net.Toolkit-osx-x64.zip`
-2. Extract and run:
+2. Extract and run in server mode:
 
 ```bash
+unzip Qubic.Net.Toolkit-osx-arm64.zip
+cd Qubic.Net.Toolkit-osx-arm64
 chmod +x Qubic.Net.Toolkit
 codesign --force --deep -s - Qubic.Net.Toolkit
 xattr -d com.apple.quarantine Qubic.Net.Toolkit
-./Qubic.Net.Toolkit
+./Qubic.Net.Toolkit --server
 ```
 
 ### Linux
@@ -93,10 +98,11 @@ Install WebKitGTK for desktop mode:
 sudo apt install libwebkit2gtk-4.1-0
 ```
 
-1. Download `Qubic.Net.Toolkit-linux-x64.zip`
-2. Extract and run:
+1. Download and extract `Qubic.Net.Toolkit-linux-x64.zip`
+2. Run:
 
 ```bash
+cd Qubic.Net.Toolkit-linux-x64
 chmod +x Qubic.Net.Toolkit
 ./Qubic.Net.Toolkit
 ```
