@@ -47,6 +47,28 @@
                            value="@Backend.NodePort"
                            @onchange="OnNodePortChanged" />
                 </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Peer Auto-Discover Tick Threshold</label>
+                    <input type="number" class="form-control" min="1" max="100"
+                           value="@Cfg.PeerTickThreshold"
+                           @onchange="e => Cfg.PeerTickThreshold = int.TryParse(e.Value?.ToString(), out var v) ? v : 10" />
+                    <div class="form-text">
+                        When auto-discovering peers (DirectNetwork), switch to a different node if the current
+                        one is behind by more than this many ticks. Default: 10.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Auto-Discover Interval (minutes)</label>
+                    <input type="number" class="form-control" min="0" max="1440"
+                           value="@Cfg.AutoDiscoverIntervalMinutes"
+                           @onchange="e => Cfg.AutoDiscoverIntervalMinutes = int.TryParse(e.Value?.ToString(), out var v) ? v : 0" />
+                    <div class="form-text">
+                        Automatically discover and switch to the most recent peer at this interval.
+                        Set to 0 to disable. Only active when using DirectNetwork backend.
+                    </div>
+                </div>
             </div>
         </div>
 

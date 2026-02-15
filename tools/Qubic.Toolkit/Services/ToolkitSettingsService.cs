@@ -12,6 +12,8 @@ public sealed class ToolkitSettingsService
     private bool _autoResend;
     private int _autoResendMaxRetries = 3;
     private List<string> _favorites = [];
+    private int _peerTickThreshold = 10;
+    private int _autoDiscoverIntervalMinutes;
 
     // Connection settings
     private string _defaultBackend = "Rpc";
@@ -85,6 +87,40 @@ public sealed class ToolkitSettingsService
             _favorites.Add(path);
         SaveToDisk();
         OnChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Maximum tick difference before auto-discover switches to a more recent peer (default 10).
+    /// </summary>
+    public int PeerTickThreshold
+    {
+        get => _peerTickThreshold;
+        set
+        {
+            if (value < 1) value = 1;
+            if (value > 100) value = 100;
+            if (_peerTickThreshold == value) return;
+            _peerTickThreshold = value;
+            SaveToDisk();
+            OnChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Interval in minutes for background auto-discover (0 = disabled).
+    /// </summary>
+    public int AutoDiscoverIntervalMinutes
+    {
+        get => _autoDiscoverIntervalMinutes;
+        set
+        {
+            if (value < 0) value = 0;
+            if (value > 1440) value = 1440;
+            if (_autoDiscoverIntervalMinutes == value) return;
+            _autoDiscoverIntervalMinutes = value;
+            SaveToDisk();
+            OnChanged?.Invoke();
+        }
     }
 
     // ── Connection settings ──
@@ -167,6 +203,8 @@ public sealed class ToolkitSettingsService
                 TickOffset = _tickOffset,
                 AutoResend = _autoResend,
                 AutoResendMaxRetries = _autoResendMaxRetries,
+                PeerTickThreshold = _peerTickThreshold,
+                AutoDiscoverIntervalMinutes = _autoDiscoverIntervalMinutes,
                 Favorites = _favorites,
                 DefaultBackend = _defaultBackend,
                 RpcUrl = _rpcUrl,
@@ -190,6 +228,8 @@ public sealed class ToolkitSettingsService
             _tickOffset = Math.Clamp(data.TickOffset, 1, 100);
             _autoResend = data.AutoResend;
             _autoResendMaxRetries = Math.Clamp(data.AutoResendMaxRetries, 1, 20);
+            _peerTickThreshold = Math.Clamp(data.PeerTickThreshold, 1, 100);
+            _autoDiscoverIntervalMinutes = Math.Clamp(data.AutoDiscoverIntervalMinutes, 0, 1440);
             _favorites = data.Favorites ?? [];
             _defaultBackend = data.DefaultBackend is "Rpc" or "Bob" or "DirectNetwork" ? data.DefaultBackend : "Rpc";
             if (!string.IsNullOrEmpty(data.RpcUrl)) _rpcUrl = data.RpcUrl;
@@ -205,6 +245,8 @@ public sealed class ToolkitSettingsService
         public int TickOffset { get; set; } = 5;
         public bool AutoResend { get; set; }
         public int AutoResendMaxRetries { get; set; } = 3;
+        public int PeerTickThreshold { get; set; } = 10;
+        public int AutoDiscoverIntervalMinutes { get; set; }
         public List<string> Favorites { get; set; } = [];
         public string DefaultBackend { get; set; } = "Rpc";
         public string RpcUrl { get; set; } = "https://rpc.qubic.org";

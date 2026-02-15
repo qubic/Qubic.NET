@@ -165,6 +165,16 @@ a.nav-section-label:hover {
     font-weight: 600;
 }
 
+/* Spinner for auto-discover button */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spin {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
 /* Compact form layout */
 .form-label-sm {
     font-size: 0.8rem;

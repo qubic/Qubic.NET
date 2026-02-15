@@ -51,6 +51,7 @@ class Program
         services.AddSingleton<TickMonitorService>();
         services.AddSingleton<TransactionTrackerService>();
         services.AddSingleton<AssetRegistryService>();
+        services.AddSingleton<PeerAutoDiscoverService>();
     }
 
     static void RunDesktop(string[] args)

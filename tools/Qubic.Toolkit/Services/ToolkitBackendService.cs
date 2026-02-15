@@ -245,6 +245,119 @@ public class ToolkitBackendService : IDisposable
         return await node.GetPeerListAsync(ct);
     }
 
+    /// <summary>
+    /// Result of an auto-discover peer operation.
+    /// </summary>
+    public record PeerDiscoveryResult(
+        bool Switched,
+        string OriginalHost,
+        string? NewHost,
+        uint OriginalTick,
+        uint BestTick,
+        int PeersScanned,
+        int PeersReachable);
+
+    /// <summary>
+    /// Event raised when the node host is changed by auto-discovery.
+    /// </summary>
+    public event Action<PeerDiscoveryResult>? OnPeerDiscovered;
+
+    /// <summary>
+    /// Discovers the most recent peer and switches to it if the current peer is behind.
+    /// </summary>
+    public async Task<PeerDiscoveryResult> AutoDiscoverRecentPeerAsync(int tickThreshold, CancellationToken ct = default)
+    {
+        if (ActiveBackend != QueryBackend.DirectNetwork)
+            throw new InvalidOperationException("Auto-discover is only available with DirectNetwork backend.");
+
+        // Step 1: Get tick from current peer
+        uint currentTick = 0;
+        try
+        {
+            using var currentNode = new QubicNodeClient(NodeHost, NodePort);
+            await currentNode.ConnectAsync(ct);
+            var info = await currentNode.GetCurrentTickInfoAsync(ct);
+            currentTick = info.Tick;
+        }
+        catch { /* current peer unreachable, proceed with discovery */ }
+
+        // Step 2: Discover peers at depth 2 (peers of peers)
+        var allPeers = new HashSet<string>();
+        try
+        {
+            using var peerNode = new QubicNodeClient(NodeHost, NodePort);
+            await peerNode.ConnectAsync(ct);
+            var directPeers = await peerNode.GetPeerListAsync(ct);
+            foreach (var ip in directPeers.Where(ip => ip != "0.0.0.0"))
+                allPeers.Add(ip);
+        }
+        catch
+        {
+            return new PeerDiscoveryResult(false, NodeHost, null, currentTick, currentTick, 0, 0);
+        }
+
+        // Depth 2: get peers from each discovered peer in parallel
+        var depth2Tasks = allPeers.Select(async ip =>
+        {
+            try
+            {
+                using var node = new QubicNodeClient(ip, NodePort);
+                await node.ConnectAsync(ct);
+                return await node.GetPeerListAsync(ct);
+            }
+            catch { return Array.Empty<string>(); }
+        }).ToList();
+
+        var depth2Results = await Task.WhenAll(depth2Tasks);
+        foreach (var peerList in depth2Results)
+            foreach (var ip in peerList.Where(ip => ip != "0.0.0.0"))
+                allPeers.Add(ip);
+
+        // Step 3: Query tick info from all discovered peers in parallel
+        var tasks = allPeers
+            .Select(async ip =>
+            {
+                try
+                {
+                    using var node = new QubicNodeClient(ip, NodePort);
+                    await node.ConnectAsync(ct);
+                    var info = await node.GetCurrentTickInfoAsync(ct);
+                    return (Ip: ip, Tick: info.Tick, Ok: true);
+                }
+                catch
+                {
+                    return (Ip: ip, Tick: (uint)0, Ok: false);
+                }
+            })
+            .ToList();
+
+        var results = await Task.WhenAll(tasks);
+        var reachable = results.Where(r => r.Ok).ToList();
+
+        if (reachable.Count == 0)
+            return new PeerDiscoveryResult(false, NodeHost, null, currentTick, currentTick, results.Length, 0);
+
+        // Step 4: Find the best peer (highest tick)
+        var best = reachable.OrderByDescending(r => r.Tick).First();
+
+        // Step 5: Check if current peer is behind by more than threshold
+        bool shouldSwitch = currentTick == 0 || (best.Tick > currentTick && best.Tick - currentTick > (uint)tickThreshold);
+        var result = new PeerDiscoveryResult(
+            shouldSwitch, NodeHost, shouldSwitch ? best.Ip : null,
+            currentTick, best.Tick, results.Length, reachable.Count);
+
+        if (shouldSwitch)
+        {
+            // Step 6: Switch to the better peer
+            NodeHost = best.Ip;
+            ResetClients();
+            _settings.NodeHost = best.Ip;
+            OnPeerDiscovered?.Invoke(result);
+        }
+
+        return result;
+    }
+
     public async Task<Qubic.Core.Entities.ContractIpo> GetIpoStatusAsync(uint contractIndex, CancellationToken ct = default)
     {
         if (ActiveBackend != QueryBackend.DirectNetwork)

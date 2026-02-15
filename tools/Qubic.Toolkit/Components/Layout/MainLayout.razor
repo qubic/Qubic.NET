@@ -1,9 +1,11 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject ToolkitBackendService Backend
+@inject ToolkitSettingsService Settings
 @inject SeedSessionService Seed
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
+@inject PeerAutoDiscoverService PeerAutoDiscover
 
 <div class="d-flex flex-column vh-100">
     <nav class="navbar navbar-dark bg-dark px-3">
@@ -36,6 +38,17 @@
                        placeholder="Host" @bind="Backend.NodeHost" @bind:event="oninput" />
                 <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" style="width:70px"
                        placeholder="Port" @bind="Backend.NodePort" />
+                <button class="btn btn-sm btn-outline-warning" @onclick="AutoDiscover"
+                        disabled="@_discovering" title="Auto-discover a recent peer">
+                    @if (_discovering)
+                    {
+                        <i class="bi bi-arrow-repeat spin"></i>
+                    }
+                    else
+                    {
+                        <span>&#x26A1;</span>
+                    }
+                </button>
             }
             else
             {
@@ -63,6 +76,13 @@
             }
         </div>
     </nav>
+    @if (_discoveryMessage != null)
+    {
+        <div class="@(_discoveryIsSwitch ? "bg-info" : "bg-success") text-dark text-center small py-1 d-flex justify-content-center align-items-center gap-2">
+            <span>@_discoveryMessage</span>
+            <button class="btn btn-sm btn-close" @onclick="DismissDiscovery"></button>
+        </div>
+    }
     @if (Seed.HasSeed)
     {
         <div class="bg-warning text-dark text-center small py-1">
@@ -80,6 +100,9 @@
 @code {
     private string? _seedInput;
     private bool _reconnecting;
+    private bool _discovering;
+    private string? _discoveryMessage;
+    private bool _discoveryIsSwitch;
 
     private string CurrentUrl
     {
@@ -96,6 +119,8 @@
     protected override async Task OnInitializedAsync()
     {
         TickMonitor.OnTickChanged += OnTickChanged;
+        PeerAutoDiscover.OnDiscoveryCompleted += OnBackgroundDiscovery;
+        PeerAutoDiscover.OnDiscoveryError += OnBackgroundDiscoveryError;
         await TickMonitor.StartAsync();
     }
 
@@ -130,7 +155,9 @@
 
     private async Task OnBackendChanged()
     {
+        _discoveryMessage = null;
         Backend.ResetClients();
+        PeerAutoDiscover.Restart();
         await TickMonitor.StartAsync();
     }
 
@@ -149,9 +176,79 @@
         Backend.ResetClients();
     }
 
+    private async Task AutoDiscover()
+    {
+        _discovering = true;
+        _discoveryMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await Backend.AutoDiscoverRecentPeerAsync(Settings.PeerTickThreshold);
+
+            if (result.Switched)
+            {
+                _discoveryIsSwitch = true;
+                _discoveryMessage = $"Switched from {result.OriginalHost} (tick {result.OriginalTick:N0}) to {result.NewHost} (tick {result.BestTick:N0}) — scanned {result.PeersReachable}/{result.PeersScanned} peers";
+                Backend.ResetClients();
+                await TickMonitor.StartAsync();
+            }
+            else
+            {
+                _discoveryIsSwitch = false;
+                _discoveryMessage = $"Current peer is up to date (tick {result.OriginalTick:N0}, best found: {result.BestTick:N0}) — scanned {result.PeersReachable}/{result.PeersScanned} peers";
+            }
+        }
+        catch (Exception ex)
+        {
+            _discoveryIsSwitch = false;
+            _discoveryMessage = $"Auto-discover failed: {ex.Message}";
+        }
+        finally
+        {
+            _discovering = false;
+        }
+    }
+
+    private void OnBackgroundDiscovery(ToolkitBackendService.PeerDiscoveryResult result)
+    {
+        if (_disposed) return;
+        InvokeAsync(() =>
+        {
+            if (_disposed) return;
+            if (result.Switched)
+            {
+                _discoveryIsSwitch = true;
+                _discoveryMessage = $"[Auto] Switched from {result.OriginalHost} (tick {result.OriginalTick:N0}) to {result.NewHost} (tick {result.BestTick:N0}) — scanned {result.PeersReachable}/{result.PeersScanned} peers";
+            }
+            else
+            {
+                _discoveryIsSwitch = false;
+                _discoveryMessage = $"[Auto] Peer up to date (tick {result.OriginalTick:N0}, best: {result.BestTick:N0}) — {result.PeersReachable}/{result.PeersScanned} peers";
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void OnBackgroundDiscoveryError(string error)
+    {
+        if (_disposed) return;
+        InvokeAsync(() =>
+        {
+            if (_disposed) return;
+            _discoveryIsSwitch = false;
+            _discoveryMessage = $"[Auto] Discovery failed: {error}";
+            StateHasChanged();
+        });
+    }
+
+    private void DismissDiscovery() => _discoveryMessage = null;
+
     public void Dispose()
     {
         _disposed = true;
         TickMonitor.OnTickChanged -= OnTickChanged;
+        PeerAutoDiscover.OnDiscoveryCompleted -= OnBackgroundDiscovery;
+        PeerAutoDiscover.OnDiscoveryError -= OnBackgroundDiscoveryError;
     }
 }
