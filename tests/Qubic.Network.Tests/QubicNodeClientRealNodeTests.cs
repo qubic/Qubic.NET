@@ -30,10 +30,40 @@ public class QubicNodeClientRealNodeTests
 
     private static bool HasNodeConfigured => !string.IsNullOrEmpty(NodeHost);
 
-    private void SkipIfNoNode()
+    // Cache reachability so we don't wait 10s per test when unreachable
+    private static bool? _nodeReachable;
+    private static readonly SemaphoreSlim _reachabilityLock = new(1, 1);
+
+    private async Task SkipIfNoNode()
     {
         Skip.If(!HasNodeConfigured,
             "Skipping real node test: Set QUBIC_NODE_HOST environment variable to run.");
+
+        await _reachabilityLock.WaitAsync();
+        try
+        {
+            if (_nodeReachable is null)
+            {
+                try
+                {
+                    using var probe = new QubicNodeClient(NodeHost!, NodePort, timeoutMs: 5000);
+                    await probe.ConnectAsync();
+                    _ = await probe.GetCurrentTickInfoAsync();
+                    _nodeReachable = true;
+                }
+                catch
+                {
+                    _nodeReachable = false;
+                }
+            }
+        }
+        finally
+        {
+            _reachabilityLock.Release();
+        }
+
+        Skip.If(_nodeReachable == false,
+            $"Skipping: node {NodeHost}:{NodePort} is not reachable.");
     }
 
     #region Connection Tests
@@ -41,7 +71,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task ConnectAsync_ToRealNode_Succeeds()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         using var client = new QubicNodeClient(NodeHost!, NodePort, timeoutMs: 10000);
 
@@ -53,7 +83,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task ConnectAndDisconnect_ToRealNode_WorksCorrectly()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         using var client = new QubicNodeClient(NodeHost!, NodePort);
 
@@ -71,7 +101,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task GetCurrentTickInfoAsync_FromRealNode_ReturnsValidData()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         using var client = new QubicNodeClient(NodeHost!, NodePort);
         await client.ConnectAsync();
@@ -96,7 +126,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task GetCurrentTickInfoAsync_CalledMultipleTimes_TickProgresses()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         using var client = new QubicNodeClient(NodeHost!, NodePort);
         await client.ConnectAsync();
@@ -119,7 +149,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task GetBalanceAsync_ForZeroAddress_ReturnsBalance()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         // The "zero" identity (all A's)
         var identity = QubicIdentity.FromIdentity(
@@ -143,7 +173,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task GetBalanceAsync_ForArbitrator_ReturnsBalance()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         // Arbitrator identity - should have some activity
         var identity = QubicIdentity.FromIdentity(
@@ -162,7 +192,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task GetBalanceAsync_ForCustomIdentity_ReturnsBalance()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         // Check if a custom identity is provided via environment variable
         var customIdentity = Environment.GetEnvironmentVariable("QUBIC_TEST_IDENTITY");
@@ -189,7 +219,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task MultipleOperations_OnSameConnection_AllSucceed()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         var identity = QubicIdentity.FromIdentity(
             "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID");
@@ -220,7 +250,7 @@ public class QubicNodeClientRealNodeTests
     [SkippableFact]
     public async Task RapidRequests_ManyTickInfoRequests_AllSucceed()
     {
-        SkipIfNoNode();
+        await SkipIfNoNode();
 
         using var client = new QubicNodeClient(NodeHost!, NodePort);
         await client.ConnectAsync();

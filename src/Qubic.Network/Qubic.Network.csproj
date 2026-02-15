@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="Qubic.Network.Tests" />
   </ItemGroup>
 
   <ItemGroup>

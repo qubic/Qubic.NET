@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Qubic.Serialization;
@@ -15,8 +16,14 @@ internal sealed class MockQubicServer : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _acceptTask;
     private readonly Dictionary<byte, Func<byte[], byte[]>> _handlers = new();
+    private readonly ConcurrentBag<NetworkStream> _connectedStreams = new();
 
     public int Port { get; }
+
+    /// <summary>
+    /// Number of currently tracked connected streams.
+    /// </summary>
+    public int ConnectedClientCount => _connectedStreams.Count;
 
     public MockQubicServer()
     {
@@ -31,6 +38,22 @@ internal sealed class MockQubicServer : IAsyncDisposable
     public void OnRequest(byte requestType, Func<byte[], byte[]> responseGenerator)
     {
         _handlers[requestType] = responseGenerator;
+    }
+
+    /// <summary>
+    /// Sends a raw packet to all connected clients (unsolicited broadcast).
+    /// </summary>
+    public async Task SendBroadcastAsync(byte[] packet)
+    {
+        foreach (var stream in _connectedStreams)
+        {
+            try
+            {
+                await stream.WriteAsync(packet);
+                await stream.FlushAsync();
+            }
+            catch { /* client may have disconnected */ }
+        }
     }
 
     /// <summary>
@@ -59,9 +82,11 @@ internal sealed class MockQubicServer : IAsyncDisposable
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {
+        NetworkStream? stream = null;
         try
         {
-            await using var stream = client.GetStream();
+            stream = client.GetStream();
+            _connectedStreams.Add(stream);
 
             // Send ExchangePublicPeers immediately on connection (like a real Qubic node)
             var exchangePacket = MockResponseBuilder.CreateExchangePublicPeersPacket();
@@ -105,6 +130,7 @@ internal sealed class MockQubicServer : IAsyncDisposable
         }
         finally
         {
+            stream?.Dispose();
             client.Dispose();
         }
     }
