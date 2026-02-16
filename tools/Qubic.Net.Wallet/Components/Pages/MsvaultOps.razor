@@ -8,18 +8,6 @@
 <h4>MSVault (Multisig)</h4>
 <p class="text-muted">Manage multisig vaults: register, deposit, release, and vote on fee changes.</p>
 
-@if (_fees != null)
-{
-    <div class="small text-muted mb-2">
-        Fees &mdash; Register: <strong>@_fees.Value.register.ToString("N0") QU</strong> |
-        Release: <strong>@_fees.Value.release.ToString("N0") QU</strong> |
-        Reset: <strong>@_fees.Value.reset.ToString("N0") QU</strong> |
-        Holding: <strong>@_fees.Value.holding.ToString("N0") QU</strong> |
-        Deposit: <strong>@_fees.Value.deposit.ToString("N0") QU</strong> |
-        Burn: <strong>@_fees.Value.burn.ToString("N0") QU</strong>
-    </div>
-}
-
 @if (_vaultsLoading)
 {
     <div class="text-muted mb-3"><span class="spinner-border spinner-border-sm me-1"></span> Loading your vaults...</div>
@@ -78,6 +66,7 @@ else
                     <div class="mb-2"><label class="form-label-sm">Registration Fee (QU)</label>
                         <input type="number" class="form-control form-control-sm" min="0" @bind="_regFee" /></div>
                     <button class="btn btn-primary" @onclick="RegisterVault" disabled="@_sending">@(_sending ? "Registering..." : "Register Vault")</button>
+                    @if (_fees != null) { <div class="form-text">Fee: @_fees.Value.register.ToString("N0") QU</div> }
                 </div></div>
                 break;
 
@@ -88,6 +77,7 @@ else
                     <div class="mb-2"><label class="form-label-sm">Amount (QU)</label>
                         <input type="number" class="form-control form-control-sm" min="1" @bind="_depAmount" /></div>
                     <button class="btn btn-primary" @onclick="Deposit" disabled="@_sending">@(_sending ? "Depositing..." : "Deposit")</button>
+                    @if (_fees != null) { <div class="form-text">Fee: @_fees.Value.deposit.ToString("N0") QU</div> }
                 </div></div>
                 break;
 
@@ -118,6 +108,7 @@ else
                     <button class="btn btn-primary" @onclick="ReleaseOrReset" disabled="@_sending">
                         @(_sending ? "Sending..." : (_resetMode ? "Reset Release" : "Release To"))
                     </button>
+                    @if (_fees != null) { <div class="form-text">Fee: @((_resetMode ? _fees.Value.reset : _fees.Value.release).ToString("N0")) QU</div> }
                 </div></div>
                 break;
 
@@ -141,6 +132,7 @@ else
                             <input type="number" class="form-control form-control-sm" min="0" @bind="_vfBurnFee" /></div>
                     </div>
                     <button class="btn btn-primary" @onclick="VoteFeeChange" disabled="@_sending">@(_sending ? "Voting..." : "Vote Fee Change")</button>
+                    <div class="form-text">No fee for voting.</div>
                 </div></div>
                 break;
 

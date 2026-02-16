@@ -10,15 +10,6 @@
 <h4>QX Asset Operations</h4>
 <p class="text-muted">Issue assets, transfer shares, and manage orders on the QX decentralized exchange.</p>
 
-@if (_fees != null)
-{
-    <div class="small text-muted mb-2">
-        Fees &mdash; Issuance: <strong>@_fees.Value.issuance.ToString("N0")</strong> QU |
-        Transfer: <strong>@_fees.Value.transfer.ToString("N0")</strong> QU |
-        Trade: <strong>@FormatTradeFee(_fees.Value.trade)</strong>
-    </div>
-}
-
 @if (_ordersLoading)
 {
     <div class="text-muted mb-3"><span class="spinner-border spinner-border-sm me-1"></span> Loading your open orders...</div>
@@ -123,6 +114,10 @@ else
                             <button class="btn btn-primary" @onclick="IssueAsset" disabled="@_sending">
                                 @(_sending ? "Issuing..." : "Issue Asset")
                             </button>
+                            @if (_fees != null)
+                            {
+                                <div class="small text-muted mt-1">Fee: @_fees.Value.issuance.ToString("N0") QU</div>
+                            }
                         </div>
                     </div>
                     break;
@@ -143,6 +138,10 @@ else
                             <button class="btn btn-primary" @onclick="TransferAsset" disabled="@_sending">
                                 @(_sending ? "Transferring..." : "Transfer")
                             </button>
+                            @if (_fees != null)
+                            {
+                                <div class="small text-muted mt-1">Fee: @_fees.Value.transfer.ToString("N0") QU</div>
+                            }
                         </div>
                     </div>
                     break;
@@ -172,6 +171,10 @@ else
                             <button class="btn btn-primary" @onclick="SubmitOrder" disabled="@_sending">
                                 @(_sending ? "Submitting..." : $"{(_orderAction == "add" ? "Add" : "Remove")} {_activeTab} Order")
                             </button>
+                            @if (_fees != null && _orderAction == "add")
+                            {
+                                <div class="small text-muted mt-1">Trade fee: @FormatTradeFee(_fees.Value.trade)</div>
+                            }
                         </div>
                     </div>
                     break;
@@ -197,6 +200,10 @@ else
                             <button class="btn btn-primary" @onclick="TransferRights" disabled="@_sending">
                                 @(_sending ? "Transferring..." : "Transfer Rights")
                             </button>
+                            @if (_fees != null)
+                            {
+                                <div class="small text-muted mt-1">Fee: @_fees.Value.transfer.ToString("N0") QU</div>
+                            }
                         </div>
                     </div>
                     break;

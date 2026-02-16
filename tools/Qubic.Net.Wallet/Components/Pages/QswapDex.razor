@@ -8,17 +8,6 @@
 <h4>QSwap AMM</h4>
 <p class="text-muted">Issue/transfer assets, create pools, add/remove liquidity, and swap on the QSwap AMM.</p>
 
-@if (_fees != null)
-{
-    <div class="small text-muted mb-2">
-        Fees &mdash; Issuance: <strong>@_fees.Value.issuance.ToString("N0") QU</strong> |
-        Pool: <strong>@_fees.Value.pool.ToString("N0") QU</strong> |
-        Transfer: <strong>@_fees.Value.transfer.ToString("N0") QU</strong> |
-        Swap: <strong>@_fees.Value.swap.ToString("N0") QU</strong> |
-        Burn: <strong>@_fees.Value.burn.ToString("N0") QU</strong>
-    </div>
-}
-
 @if (!Seed.HasSeed)
 {
     <div class="alert alert-warning">Enter your seed in the top bar to enable signing.</div>
@@ -48,6 +37,7 @@ else
                     <div class="mb-2"><label class="form-label-sm">Decimal Places (0-18)</label>
                         <input type="number" class="form-control form-control-sm" min="0" max="18" @bind="_issueDecimals" /></div>
                     <button class="btn btn-primary" @onclick="IssueAsset" disabled="@_sending">@(_sending ? "Issuing..." : "Issue Asset")</button>
+                    @if (_fees != null) { <div class="form-text">Fee: @_fees.Value.issuance.ToString("N0") QU</div> }
                 </div></div>
                 break;
 
@@ -59,6 +49,7 @@ else
                     <div class="mb-2"><label class="form-label-sm">Amount of Shares</label>
                         <input type="number" class="form-control form-control-sm" @bind="_xferAmount" /></div>
                     <button class="btn btn-primary" @onclick="TransferAsset" disabled="@_sending">@(_sending ? "Transferring..." : "Transfer")</button>
+                    @if (_fees != null) { <div class="form-text">Fee: @_fees.Value.transfer.ToString("N0") QU</div> }
                 </div></div>
                 break;
 
@@ -66,6 +57,7 @@ else
                 <div class="card"><div class="card-header">Create Pool</div><div class="card-body">
                     <AssetSelector @bind-IssuerValue="_poolIssuer" @bind-NameValue="_poolName" />
                     <button class="btn btn-primary" @onclick="CreatePool" disabled="@_sending">@(_sending ? "Creating..." : "Create Pool")</button>
+                    @if (_fees != null) { <div class="form-text">Fee: @_fees.Value.pool.ToString("N0") QU</div> }
                 </div></div>
                 break;
 
@@ -141,6 +133,7 @@ else
                             break;
                     }
                     <button class="btn btn-primary" @onclick="ExecuteSwap" disabled="@_sending">@(_sending ? "Swapping..." : "Swap")</button>
+                    @if (_fees != null) { <div class="form-text">Fee: @_fees.Value.swap.ToString("N0") QU</div> }
                 </div></div>
                 break;
         }
