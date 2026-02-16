@@ -113,21 +113,21 @@ var balance = await bob.GetBalanceAsync(identity);
 var transfers = await bob.GetTransfersAsync(identity, startTick: 1000, endTick: 2000);
 ```
 
-## Tools
+## Applications
+
+| App | Repository | Description |
+|-----|------------|-------------|
+| **Qubic.Net Toolkit** | [Qubic.Net.Toolkit](https://github.com/qubic/Qubic.Net.Toolkit) | Cross-platform desktop app for wallet management, transaction building, contract interaction, and network monitoring. |
+| **Qubic.Net Wallet** | [Qubic.Net.Wallet](https://github.com/qubic/Qubic.Net.Wallet) | Cross-platform desktop wallet with dashboard, asset management, staking, DEX trading, and multi-sig vaults. |
+
+## Dev Tools
 
 | Tool | Description |
 |------|-------------|
-| **[Qubic.Toolkit](tools/Qubic.Toolkit/)** | Cross-platform desktop app for wallet management, transaction building, contract interaction, and network monitoring. Also runs as a Blazor Server app with `--server`. |
 | **[Qubic.ContractGen](tools/Qubic.ContractGen/)** | Parses C++ smart contract headers from `qubic-core` and generates C# bindings with correct struct layouts, type mappings, and MSVC `/Zp8` alignment. |
 | **[Qubic.ScTester](tools/Qubic.ScTester/)** | Blazor Server web UI for browsing and testing all generated smart contract functions against live Qubic nodes via RPC, Bob, or direct TCP. |
 
 ```bash
-# Launch the Toolkit desktop app
-dotnet run --project tools/Qubic.Toolkit
-
-# Or run as a Blazor Server app in the browser
-dotnet run --project tools/Qubic.Toolkit -- --server
-
 # Generate C# contract bindings
 dotnet run --project tools/Qubic.ContractGen
 
