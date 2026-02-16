@@ -259,6 +259,11 @@ public class QubicBackendService : IDisposable
         return await Rpc.GetPossessedAssetsAsync(identity, ct);
     }
 
+    public async Task<IReadOnlyList<IssuanceItem>> GetAllIssuancesAsync(CancellationToken ct = default)
+    {
+        return await Rpc.GetAllIssuancesAsync(ct);
+    }
+
     // ── IPO ──
 
     public async Task<IReadOnlyList<IpoInfo>> GetActiveIposAsync(CancellationToken ct = default)

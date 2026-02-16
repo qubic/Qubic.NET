@@ -5,6 +5,7 @@
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
 @inject QubicSettingsService Settings
+@inject AssetRegistryService AssetRegistry
 
 <h4>QX Asset Operations</h4>
 <p class="text-muted">Issue assets, transfer shares, and manage orders on the QX decentralized exchange.</p>
@@ -219,6 +220,71 @@ else
     </div>
 }
 
+<div class="card mb-3 mt-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>QX Market Overview</span>
+        <button class="btn btn-sm btn-outline-primary" @onclick="LoadMarketOverview" disabled="@_marketLoading">
+            @(_marketLoading ? "Loading..." : _marketAssets == null ? "Load" : "Refresh")
+        </button>
+    </div>
+    <div class="card-body">
+        @if (_marketLoading)
+        {
+            <div class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span> Querying order books for @AssetRegistry.GetAll().Count assets...</div>
+        }
+        else if (_marketAssets != null && _marketAssets.Count > 0)
+        {
+            <div class="small text-muted mb-2">@_marketAssets.Count of @AssetRegistry.GetAll().Count assets with active orders</div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Asset</th>
+                            <th>Issuer</th>
+                            <th class="text-end">Best Ask</th>
+                            <th class="text-end">Ask Depth</th>
+                            <th class="text-end">Best Bid</th>
+                            <th class="text-end">Bid Depth</th>
+                            <th class="text-end">Spread</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in _marketAssets)
+                        {
+                            <tr>
+                                <td class="mono fw-bold">@m.Name</td>
+                                <td><AddressDisplay Address="@m.Issuer" TruncateChars="6" ShowCopy="false" /></td>
+                                <td class="mono text-end text-danger">@(m.BestAsk > 0 ? m.BestAsk.ToString("N0") : "—")</td>
+                                <td class="mono text-end small">@(m.AskDepth > 0 ? m.AskDepth.ToString("N0") : "—")</td>
+                                <td class="mono text-end text-success">@(m.BestBid > 0 ? m.BestBid.ToString("N0") : "—")</td>
+                                <td class="mono text-end small">@(m.BidDepth > 0 ? m.BidDepth.ToString("N0") : "—")</td>
+                                <td class="mono text-end">@(m.BestAsk > 0 && m.BestBid > 0 ? $"{((double)(m.BestAsk - m.BestBid) / m.BestBid * 100):F1}%" : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (_marketAssets != null)
+        {
+            <div class="text-muted">No active orders found.</div>
+        }
+        @if (_marketError != null)
+        {
+            <div class="text-danger small mt-1">@_marketError</div>
+        }
+        @if (_marketAssets == null && _marketError == null)
+        {
+            <div class="text-muted small">Click <strong>Load</strong> to discover and query all QX-traded assets.</div>
+        }
+    </div>
+</div>
+
+<div class="small text-muted mt-2">
+    <i class="bi bi-info-circle me-1"></i>
+    To sell or manage your own assets, go to the <a href="/assets">Asset Portfolio</a> page.
+</div>
+
 @code {
     private static readonly string[] _tabs = ["Issue", "Transfer", "Ask", "Bid", "Rights"];
     private string _activeTab = "Issue";
@@ -228,6 +294,12 @@ else
     private (uint issuance, uint transfer, uint trade)? _fees;
 
     private const int ContractIndex = 1; // QX
+
+    // Market overview
+    private bool _marketLoading;
+    private string? _marketError;
+    private List<MarketAsset>? _marketAssets;
+    private record MarketAsset(string Name, string Issuer, long BestAsk, long AskDepth, long BestBid, long BidDepth);
 
     // Open orders
     private bool _ordersLoading;
@@ -544,6 +616,91 @@ else
             PayloadHex = Convert.ToHexString(payload.GetPayloadBytes()),
             Description = description
         });
+    }
+
+    private async Task LoadMarketOverview()
+    {
+        _marketLoading = true;
+        _marketAssets = null;
+        _marketError = null;
+        StateHasChanged();
+        try
+        {
+            // Refresh asset registry from network if stale (auto once/day)
+            await AssetRegistry.RefreshFromNetworkAsync(Backend);
+
+            var assets = AssetRegistry.GetAll();
+            if (assets.Count == 0)
+            {
+                _marketAssets = [];
+                _marketError = "No assets found. Check your RPC connection.";
+                return;
+            }
+
+            // Query order books for all assets in parallel
+            var results = new List<MarketAsset>();
+            var tasks = new List<(string Name, string Issuer, Task<byte[]> AskTask, Task<byte[]> BidTask)>();
+
+            foreach (var asset in assets)
+            {
+                try
+                {
+                    var issuerPk = Qubic.Core.Entities.QubicIdentity.FromIdentity(asset.Issuer).PublicKey;
+                    var assetNameUlong = AssetNameHelper.ToUlong(asset.Name);
+                    var askInput = new Qubic.Core.Contracts.Qx.AssetAskOrdersInput
+                        { Issuer = issuerPk, AssetName = assetNameUlong, Offset = 0 }.ToBytes();
+                    var bidInput = new Qubic.Core.Contracts.Qx.AssetBidOrdersInput
+                        { Issuer = issuerPk, AssetName = assetNameUlong, Offset = 0 }.ToBytes();
+                    tasks.Add((asset.Name, asset.Issuer,
+                        Backend.QuerySmartContractAsync(ContractIndex, 2, askInput),
+                        Backend.QuerySmartContractAsync(ContractIndex, 3, bidInput)));
+                }
+                catch { /* skip assets with invalid identity */ }
+            }
+
+            try { await Task.WhenAll(tasks.SelectMany(t => new Task[] { t.AskTask, t.BidTask })); }
+            catch { /* individual results checked below */ }
+
+            foreach (var (name, issuer, askTask, bidTask) in tasks)
+            {
+                long bestAsk = 0, askDepth = 0, bestBid = 0, bidDepth = 0;
+                try
+                {
+                    if (askTask.IsCompletedSuccessfully && askTask.Result.Length >= Qubic.Core.Contracts.Qx.AssetAskOrdersOrder.Size)
+                    {
+                        var asks = Qubic.Core.Contracts.Qx.AssetAskOrdersOutput.FromBytes(askTask.Result)
+                            .Orders.Where(o => o.NumberOfShares > 0).ToList();
+                        if (asks.Count > 0)
+                        {
+                            bestAsk = asks.Min(o => o.Price);
+                            askDepth = asks.Sum(o => o.NumberOfShares);
+                        }
+                    }
+                }
+                catch { }
+                try
+                {
+                    if (bidTask.IsCompletedSuccessfully && bidTask.Result.Length >= Qubic.Core.Contracts.Qx.AssetBidOrdersOrder.Size)
+                    {
+                        var bids = Qubic.Core.Contracts.Qx.AssetBidOrdersOutput.FromBytes(bidTask.Result)
+                            .Orders.Where(o => o.NumberOfShares > 0).ToList();
+                        if (bids.Count > 0)
+                        {
+                            bestBid = bids.Max(o => o.Price);
+                            bidDepth = bids.Sum(o => o.NumberOfShares);
+                        }
+                    }
+                }
+                catch { }
+
+                if (bestAsk > 0 || bestBid > 0)
+                    results.Add(new MarketAsset(name, issuer, bestAsk, askDepth, bestBid, bidDepth));
+            }
+
+            _marketAssets = results.OrderByDescending(m => m.BidDepth + m.AskDepth).ToList();
+        }
+        catch (Exception ex) { _marketAssets = []; _marketError = ex.Message; }
+        finally { _marketLoading = false; }
     }
 
     public void Dispose()

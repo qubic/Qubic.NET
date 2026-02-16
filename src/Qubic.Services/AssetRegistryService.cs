@@ -6,15 +6,18 @@ public sealed class AssetRegistryService
 {
     private readonly string _storageDir;
     private readonly string _assetsFile;
+    private readonly string _lastRefreshFile;
     private List<AssetEntry> _assets = [];
+
+    /// <summary>The SC token issuer identity (contract index 0 = zero public key).</summary>
+    public const string ScTokenIssuer = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB";
 
     public AssetRegistryService(QubicSettingsService settings)
     {
         _storageDir = settings.StorageDirectory;
         _assetsFile = Path.Combine(_storageDir, "assets.json");
+        _lastRefreshFile = Path.Combine(_storageDir, "assets_refreshed.txt");
         LoadFromDisk();
-        if (_assets.Count == 0)
-            SeedDefaults();
     }
 
     public IReadOnlyList<AssetEntry> GetAll() => _assets.AsReadOnly();
@@ -50,25 +53,53 @@ public sealed class AssetRegistryService
         return removed > 0;
     }
 
-    public event Action? OnChanged;
-
-    private void SeedDefaults()
+    /// <summary>
+    /// Refreshes the asset list from the network if stale (older than 1 day) or if forced.
+    /// Returns the number of assets after refresh, or -1 if refresh was skipped/failed.
+    /// </summary>
+    public async Task<int> RefreshFromNetworkAsync(QubicBackendService backend, bool force = false)
     {
-        // Well-known Qubic assets
-        _assets =
-        [
-            new() { Issuer = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNHB", Name = "QX", Label = "QX Token" },
-            new() { Issuer = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNHB", Name = "RANDOM", Label = "Random Token" },
-            new() { Issuer = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNHB", Name = "QUTIL", Label = "QUtil Token" },
-            new() { Issuer = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNHB", Name = "QTRY", Label = "Quottery Token" },
-            new() { Issuer = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNHB", Name = "MLM", Label = "MLM Token" },
-            new() { Issuer = "CFBMEMZOIDEXQAUXYYSZIURADQLAPWPMNJXQSNVQZAHYVOPYUKKJBJQOFID", Name = "CFB", Label = "CFB" },
-            new() { Issuer = "QABORECBFTFKFGCRUJDSNPTQWBAAOVDMGABDHMFIBOKXLGJXOKCHECRFGJL", Name = "QCAP", Label = "QCAP" },
-            new() { Issuer = "QWALLETSGQVAGBHUCVVXWZLKMOIICE4ROIDNPAQBGMMFQQPPCNDNQHBMDL", Name = "QWALLET", Label = "QWallet" },
-            new() { Issuer = "TFUYVBXYIYBVTEMJHAJGEJOOZHJBQFVQLTBBKMEHPEVIZFXZRPEYFUWGTIWG", Name = "QFT", Label = "QFT" },
-        ];
-        SaveToDisk();
+        if (!force && !IsRefreshNeeded())
+            return -1;
+
+        try
+        {
+            var issuances = await backend.GetAllIssuancesAsync();
+            if (issuances.Count == 0)
+                return -1; // Don't wipe existing data on empty response
+
+            var newAssets = new List<AssetEntry>();
+            foreach (var item in issuances)
+            {
+                if (string.IsNullOrEmpty(item.Data.Name) || string.IsNullOrEmpty(item.Data.IssuerIdentity))
+                    continue;
+                newAssets.Add(new AssetEntry
+                {
+                    Issuer = item.Data.IssuerIdentity,
+                    Name = item.Data.Name,
+                });
+            }
+
+            _assets = newAssets;
+            SaveToDisk();
+            SaveLastRefresh();
+            OnChanged?.Invoke();
+            return _assets.Count;
+        }
+        catch
+        {
+            return -1;
+        }
     }
+
+    /// <summary>Whether a network refresh is needed (no data or older than 1 day).</summary>
+    public bool IsRefreshNeeded()
+    {
+        if (_assets.Count == 0) return true;
+        return GetLastRefresh() is not { } last || (DateTime.UtcNow - last).TotalHours >= 24;
+    }
+
+    public event Action? OnChanged;
 
     private void SaveToDisk()
     {
@@ -89,6 +120,26 @@ public sealed class AssetRegistryService
             _assets = JsonSerializer.Deserialize<List<AssetEntry>>(json) ?? [];
         }
         catch { _assets = []; }
+    }
+
+    private DateTime? GetLastRefresh()
+    {
+        try
+        {
+            if (!File.Exists(_lastRefreshFile)) return null;
+            return DateTime.TryParse(File.ReadAllText(_lastRefreshFile).Trim(), out var dt) ? dt : null;
+        }
+        catch { return null; }
+    }
+
+    private void SaveLastRefresh()
+    {
+        try
+        {
+            Directory.CreateDirectory(_storageDir);
+            File.WriteAllText(_lastRefreshFile, DateTime.UtcNow.ToString("O"));
+        }
+        catch { }
     }
 
     public sealed class AssetEntry

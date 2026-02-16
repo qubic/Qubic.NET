@@ -207,6 +207,18 @@ public sealed class QubicRpcClient : IDisposable
         return response?.PossessedAssets ?? [];
     }
 
+    /// <summary>
+    /// Gets all asset issuances on the network.
+    /// GET /live/v1/assets/issuances
+    /// </summary>
+    public async Task<IReadOnlyList<IssuanceItem>> GetAllIssuancesAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.GetFromJsonAsync<AllIssuancesResponse>(
+            "/live/v1/assets/issuances", _jsonOptions, cancellationToken);
+
+        return response?.Assets ?? [];
+    }
+
     #endregion
 
     #region Live API — IPOs

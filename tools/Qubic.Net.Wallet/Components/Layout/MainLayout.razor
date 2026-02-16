@@ -7,6 +7,7 @@
 @inject Qubic.Services.Storage.WalletStorageService WalletStorage
 @inject QubicSettingsService Settings
 @inject QubicStaticService StaticData
+@inject AssetRegistryService AssetRegistry
 
 <div class="d-flex flex-column vh-100">
     <nav class="qb-navbar">
@@ -99,6 +100,9 @@
 
         if (Settings.RemoteLabelsEnabled)
             _ = StaticData.LoadAsync();
+
+        // Auto-refresh asset registry if stale (once per day)
+        _ = AssetRegistry.RefreshFromNetworkAsync(Backend);
     }
 
     private void OnTickChanged()
