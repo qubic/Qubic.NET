@@ -4,6 +4,7 @@
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
 @inject QubicSettingsService Settings
+@inject IJSRuntime JS
 
 <h4>QEarn Staking</h4>
 <p class="text-muted">Lock QU to earn rewards, unlock, and query staking information.</p>
@@ -25,16 +26,45 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                             <th>Locked Amount</th>
                             <th>Week</th>
                             <th>Remaining</th>
+                            <th>Yield</th>
+                            <th>Est. Full Reward</th>
+                            <th title="Reward if unlocked now based on early unlock schedule">Early Unlock</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var l in _activeLocks)
                         {
+                            var yieldPct = l.Yield > 0 ? (double)l.Yield / 100_000 : 0;
+                            var earlyPct = GetEarlyUnlockRewardPercent(l.Week);
+                            var earlyReward = l.EstReward * (ulong)earlyPct / 100;
+                            var lk = l;
                             <tr>
                                 <td class="mono">@l.Epoch</td>
                                 <td class="mono">@l.Amount.ToString("N0") QU</td>
                                 <td>@l.Week / 52</td>
                                 <td>@l.Remaining week@(l.Remaining != 1 ? "s" : "")</td>
+                                <td class="mono">@(l.Yield > 0 ? $"{yieldPct:F2}%" : "—")</td>
+                                <td class="mono text-success">@(l.EstReward > 0 ? $"+{l.EstReward:N0} QU" : "—")</td>
+                                <td class="mono @(earlyPct < 100 ? "text-warning" : "text-success")" title="@earlyPct% of full reward">
+                                    @if (l.EstReward > 0)
+                                    {
+                                        @($"+{earlyReward:N0} QU ({earlyPct}%)")
+                                    }
+                                    else
+                                    {
+                                        @("—")
+                                    }
+                                </td>
+                                <td>
+                                    @if (Seed.HasSeed)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => UnlockFromSummary(lk)"
+                                                disabled="@(_sending)">
+                                            @(_unlockingEpoch == l.Epoch ? "Unlocking..." : "Unlock")
+                                        </button>
+                                    }
+                                </td>
                             </tr>
                         }
                         @if (_autoEndedStatus != null)
@@ -43,15 +73,15 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                             @if (es.fullyUnlocked > 0)
                             {
                                 <tr class="table-success">
-                                    <td colspan="2" class="mono">Fully Unlocked: @es.fullyUnlocked.ToString("N0") QU</td>
-                                    <td colspan="2" class="mono">Rewarded: @es.fullyRewarded.ToString("N0") QU</td>
+                                    <td colspan="4" class="mono">Fully Unlocked: @es.fullyUnlocked.ToString("N0") QU</td>
+                                    <td colspan="4" class="mono">Rewarded: @es.fullyRewarded.ToString("N0") QU</td>
                                 </tr>
                             }
                             @if (es.earlyUnlocked > 0)
                             {
                                 <tr class="table-warning">
-                                    <td colspan="2" class="mono">Early Unlocked: @es.earlyUnlocked.ToString("N0") QU</td>
-                                    <td colspan="2" class="mono">Rewarded: @es.earlyRewarded.ToString("N0") QU</td>
+                                    <td colspan="4" class="mono">Early Unlocked: @es.earlyUnlocked.ToString("N0") QU</td>
+                                    <td colspan="4" class="mono">Rewarded: @es.earlyRewarded.ToString("N0") QU</td>
                                 </tr>
                             }
                         }
@@ -60,7 +90,13 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
             </div>
             @if (_activeLocks.Count > 0)
             {
-                <div class="small text-muted">Total locked: <strong>@_activeLocks.Sum(l => (long)l.Amount).ToString("N0") QU</strong> across <strong>@_activeLocks.Count</strong> epoch@(_activeLocks.Count != 1 ? "s" : "")</div>
+                <div class="small text-muted">
+                    Total locked: <strong>@_activeLocks.Sum(l => (long)l.Amount).ToString("N0") QU</strong> across <strong>@_activeLocks.Count</strong> epoch@(_activeLocks.Count != 1 ? "s" : "")
+                    @if (_activeLocks.Sum(l => (long)l.EstReward) > 0)
+                    {
+                        <span class="ms-2">| Est. total reward at full unlock: <strong class="text-success">+@_activeLocks.Sum(l => (long)l.EstReward).ToString("N0") QU</strong></span>
+                    }
+                </div>
             }
         </div>
     </div>
@@ -88,24 +124,6 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                 </div>
                 <button class="btn btn-primary" @onclick="Lock" disabled="@(_sending || _lockAmount <= 0)">
                     @(_sending ? "Locking..." : "Lock")
-                </button>
-            </div></div>
-            break;
-
-        case "Unlock":
-            <div class="card"><div class="card-header">Unlock QU</div><div class="card-body">
-                <p class="small text-muted">Unlock previously locked QU. Early unlock may incur penalties.</p>
-                <div class="mb-2">
-                    <label class="form-label-sm">Amount to unlock (QU)</label>
-                    <input type="number" class="form-control form-control-sm" min="1" @bind="_unlockAmount" />
-                </div>
-                <div class="mb-2">
-                    <label class="form-label-sm">Locked Epoch</label>
-                    <input type="number" class="form-control form-control-sm" min="0" @bind="_unlockEpoch" />
-                    <div class="form-text">No fee for unlocking.</div>
-                </div>
-                <button class="btn btn-warning" @onclick="Unlock" disabled="@(_sending || _unlockAmount <= 0)">
-                    @(_sending ? "Unlocking..." : "Unlock")
                 </button>
             </div></div>
             break;
@@ -204,7 +222,7 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
 </div></div>
 
 @code {
-    private static readonly string[] _tabs = ["Lock", "Unlock", "Query"];
+    private static readonly string[] _tabs = ["Lock", "Query"];
     private string _activeTab = "Lock";
     private bool _sending;
     private string? _result;
@@ -216,13 +234,12 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
     private List<ActiveLock> _activeLocks = [];
     private (ulong fullyUnlocked, ulong fullyRewarded, ulong earlyUnlocked, ulong earlyRewarded)? _autoEndedStatus;
 
-    private record ActiveLock(uint Epoch, ulong Amount, int Week, int Remaining);
+    private record ActiveLock(uint Epoch, ulong Amount, int Week, int Remaining, ulong Yield, ulong EstReward);
 
     // Lock
     private long _lockAmount;
-    // Unlock
-    private long _unlockAmount;
-    private uint _unlockEpoch;
+    // Unlock (from summary)
+    private uint? _unlockingEpoch;
 
     // Query
     private int _queryFunc = 1;
@@ -234,6 +251,10 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
 
     protected override async Task OnInitializedAsync()
     {
+        // Default query epoch to current epoch
+        if (TickMonitor.IsConnected && TickMonitor.Epoch > 0)
+            _qEpoch = (uint)TickMonitor.Epoch;
+
         if (Seed.HasSeed)
         {
             _autoLoading = true;
@@ -245,6 +266,8 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                 {
                     try { currentEpoch = (await Backend.GetTickInfoAsync()).Epoch; } catch { }
                 }
+                if (_qEpoch == 0 && currentEpoch > 0)
+                    _qEpoch = currentEpoch;
 
                 // Query lock status bitmask (function 4)
                 var lockInput = new Qubic.Core.Contracts.Qearn.GetUserLockStatusInput { User = pk }.ToBytes();
@@ -273,7 +296,19 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
 
                     if (tasks.Count > 0)
                     {
-                        await Task.WhenAll(tasks.Select(t => t.QueryTask));
+                        // Also query lock info per epoch (function 1) for yield data
+                        var yieldTasks = new Dictionary<uint, Task<byte[]>>();
+                        foreach (var (_, lockEpoch, _) in tasks)
+                        {
+                            if (!yieldTasks.ContainsKey(lockEpoch))
+                            {
+                                var yieldInput = new Qubic.Core.Contracts.Qearn.GetLockInfoPerEpochInput { Epoch = lockEpoch }.ToBytes();
+                                yieldTasks[lockEpoch] = Backend.QuerySmartContractAsync(ContractIndex, 1, yieldInput);
+                            }
+                        }
+
+                        await Task.WhenAll(tasks.Select(t => t.QueryTask).Concat(yieldTasks.Values));
+
                         foreach (var (weeksLocked, lockEpoch, queryTask) in tasks)
                         {
                             ulong amount = 0;
@@ -285,8 +320,17 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
                             }
                             catch { }
 
+                            ulong yield = 0;
+                            try
+                            {
+                                if (yieldTasks.TryGetValue(lockEpoch, out var yt) && yt.Result.Length >= 40)
+                                    yield = Qubic.Core.Contracts.Qearn.GetLockInfoPerEpochOutput.FromBytes(yt.Result).Yield;
+                            }
+                            catch { }
+
+                            var estReward = yield > 0 ? amount * yield / 10_000_000 : 0;
                             var remaining = 52 - weeksLocked;
-                            _activeLocks.Add(new ActiveLock(lockEpoch, amount, weeksLocked, remaining));
+                            _activeLocks.Add(new ActiveLock(lockEpoch, amount, weeksLocked, remaining, yield, estReward));
                         }
                         _activeLocks = _activeLocks.OrderBy(l => l.Epoch).ToList();
                     }
@@ -335,21 +379,27 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
         finally { _sending = false; }
     }
 
-    private async Task Unlock()
+    private async Task UnlockFromSummary(ActiveLock lk)
     {
-        _sending = true; _error = null; _result = null;
+        var earlyPct = GetEarlyUnlockRewardPercent(lk.Week);
+        var msg = earlyPct >= 100
+            ? $"Unlock {lk.Amount:N0} QU from epoch {lk.Epoch}?\n\nThis lock has reached full maturity — you will receive 100% of the reward."
+            : $"Unlock {lk.Amount:N0} QU from epoch {lk.Epoch}?\n\nThis is an early unlock (week {lk.Week}/52). You will only receive {earlyPct}% of the full reward.";
+        if (!await JS.InvokeAsync<bool>("confirm", msg))
+            return;
+
+        _sending = true; _error = null; _result = null; _unlockingEpoch = lk.Epoch;
         try
         {
-            if (_unlockAmount <= 0) { _error = "Amount must be positive."; return; }
             var tick = await GetTick();
             var payload = new Qubic.Core.Contracts.Qearn.UnlockPayload
             {
-                Amount = (ulong)_unlockAmount, LockedEpoch = _unlockEpoch
+                Amount = lk.Amount, LockedEpoch = lk.Epoch
             };
-            await Broadcast(0, tick, payload, $"QEarn Unlock {_unlockAmount:N0} QU from epoch {_unlockEpoch}");
+            await Broadcast(0, tick, payload, $"QEarn Unlock {lk.Amount:N0} QU from epoch {lk.Epoch}");
         }
         catch (Exception ex) { _error = ex.Message; }
-        finally { _sending = false; }
+        finally { _sending = false; _unlockingEpoch = null; }
     }
 
     private byte[] GetUserPk()
@@ -399,6 +449,26 @@ else if (_activeLocks.Count > 0 || _autoEndedStatus != null)
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _querying = false; }
+    }
+
+    /// Returns the percentage of full reward received if unlocking early at the given week.
+    /// Based on the QEarn contract's early unlock schedule.
+    private static int GetEarlyUnlockRewardPercent(int w)
+    {
+        if (w >= 52) return 100;
+        if (w >= 48) return 55;
+        if (w >= 44) return 50;
+        if (w >= 40) return 45;
+        if (w >= 36) return 40;
+        if (w >= 32) return 35;
+        if (w >= 28) return 30;
+        if (w >= 24) return 25;
+        if (w >= 20) return 20;
+        if (w >= 16) return 15;
+        if (w >= 12) return 10;
+        if (w >= 8) return 5;
+        if (w >= 4) return 5;
+        return 0;
     }
 
     private List<KeyValuePair<string, string>> ParseQueryResult(int func, byte[] data)
