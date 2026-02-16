@@ -1,4 +1,4 @@
-# Qubic.Net
+# Qubic.NET
 
 A modular .NET 8.0 library for interacting with the [Qubic](https://qubic.org) network. Provides direct TCP node communication, HTTP RPC, and QubicBob JSON-RPC clients, along with core domain models, binary serialization, and pure C# cryptographic primitives.
 
