@@ -330,6 +330,12 @@ public sealed class WalletDatabase : IDisposable
         return ReadTransactions(sb.ToString(), parms.ToArray());
     }
 
+    public StoredTransaction? GetTransactionByHash(string hash)
+    {
+        var results = ReadTransactions("SELECT * FROM transactions WHERE hash=@h LIMIT 1", ("@h", hash));
+        return results.Count > 0 ? results[0] : null;
+    }
+
     public int GetTransactionCount()
     {
         using var cmd = CreateCommand("SELECT COUNT(*) FROM transactions");

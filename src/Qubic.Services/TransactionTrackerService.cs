@@ -278,10 +278,39 @@ public sealed class TransactionTrackerService : IDisposable
             if (tx.TargetTick > currentTick) continue; // Not yet reached
 
             // Tick has passed, check status
+            bool confirmed = false;
+
+            // Check local wallet DB first (covers all sync sources: RPC, Bob, DirectNetwork)
+            if (UseDb)
+            {
+                try
+                {
+                    var stored = _storage.Database.GetTransactionByHash(tx.Hash);
+                    if (stored != null && (stored.MoneyFlew.HasValue || stored.Success.HasValue))
+                    {
+                        var moneyFlew = stored.MoneyFlew ?? stored.Success;
+                        tx.MoneyFlew = moneyFlew;
+                        var isZeroAmountContractCall = tx.Amount == 0 && tx.InputType > 0;
+                        if (moneyFlew == true)
+                        {
+                            tx.Status = TrackedTxStatus.Confirmed;
+                            confirmed = true;
+                        }
+                        else
+                        {
+                            tx.Status = isZeroAmountContractCall ? TrackedTxStatus.Confirmed : TrackedTxStatus.Failed;
+                            confirmed = isZeroAmountContractCall;
+                        }
+                        tx.ResolvedUtc = DateTime.UtcNow;
+                        changed = true;
+                        if (confirmed) continue;
+                    }
+                }
+                catch { /* DB read failed, fall through to backend checks */ }
+            }
+
             try
             {
-                bool confirmed = false;
-
                 // Try RPC first (has MoneyFlew)
                 if (_backend.ActiveBackend == QueryBackend.Rpc)
                 {
@@ -348,28 +377,33 @@ public sealed class TransactionTrackerService : IDisposable
                     tx.ResolvedUtc = DateTime.UtcNow;
                     changed = true;
                 }
+            }
+            catch { /* will retry next cycle */ }
 
-                if (confirmed) continue;
+            if (confirmed) continue;
 
-                // If tick passed significantly and still no info, mark unknown
-                if (currentTick > tx.TargetTick + 20)
-                {
-                    tx.Status = TrackedTxStatus.Unknown;
-                    tx.ResolvedUtc = DateTime.UtcNow;
-                    changed = true;
-                }
+            // If tick passed significantly and still no info, mark unknown.
+            // This runs even if the receipt/lookup above threw an exception.
+            if (tx.Status == TrackedTxStatus.Pending && currentTick > tx.TargetTick + 20)
+            {
+                tx.Status = TrackedTxStatus.Unknown;
+                tx.ResolvedUtc = DateTime.UtcNow;
+                changed = true;
+            }
 
-                // Auto-resend: if tx failed/unknown and resend is enabled
-                if (tx.Status is TrackedTxStatus.Failed or TrackedTxStatus.Unknown
-                    && _settings.AutoResend
-                    && _seed.HasSeed
-                    && tx.ResendCount < _settings.AutoResendMaxRetries)
+            // Auto-resend: if tx failed/unknown and resend is enabled
+            if (tx.Status is TrackedTxStatus.Failed or TrackedTxStatus.Unknown
+                && _settings.AutoResend
+                && _seed.HasSeed
+                && tx.ResendCount < _settings.AutoResendMaxRetries)
+            {
+                try
                 {
                     var resent = await TryResend(tx, ct);
                     if (resent) changed = true;
                 }
+                catch { /* will retry next cycle */ }
             }
-            catch { /* will retry next cycle */ }
         }
 
         if (changed)

@@ -76,7 +76,7 @@ else
                     {
                         var info = ParseLogInfo(log);
                         <tr>
-                            <td class="small text-nowrap">@(log.Timestamp ?? "—")</td>
+                            <td class="small text-nowrap">@FormatTimestamp(log.Timestamp)</td>
                             <td class="mono">@log.Tick.ToString("N0")</td>
                             <td><span class="badge bg-secondary">@(log.LogTypeName ?? $"#{log.LogType}")</span></td>
                             <td>
@@ -140,7 +140,7 @@ else
                                             <tr><td class="text-muted">Body Size</td><td>@log.BodySize bytes</td></tr>
                                             @if (!string.IsNullOrEmpty(log.Timestamp))
                                             {
-                                                <tr><td class="text-muted">Timestamp</td><td>@log.Timestamp</td></tr>
+                                                <tr><td class="text-muted">Timestamp</td><td>@FormatTimestamp(log.Timestamp)</td></tr>
                                             }
                                             <tr><td class="text-muted">Synced From</td><td>@log.SyncedFrom</td></tr>
                                             <tr><td class="text-muted">Synced At</td><td>@log.SyncedAtUtc</td></tr>
@@ -291,6 +291,22 @@ else
             if (root.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.String)
                 return prop.GetString();
         return null;
+    }
+
+    private static string FormatTimestamp(string? timestamp)
+    {
+        if (string.IsNullOrEmpty(timestamp)) return "—";
+        if (long.TryParse(timestamp, out var epoch))
+        {
+            // Try as seconds first (typical Unix epoch), fall back to milliseconds
+            var dto = epoch > 1_000_000_000_000
+                ? DateTimeOffset.FromUnixTimeMilliseconds(epoch)
+                : DateTimeOffset.FromUnixTimeSeconds(epoch);
+            return dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+        }
+        if (DateTimeOffset.TryParse(timestamp, out var parsed))
+            return parsed.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+        return timestamp;
     }
 
     private static long GetLong(JsonElement root, params string[] names)

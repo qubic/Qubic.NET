@@ -5,6 +5,8 @@
 @inject TickMonitorService TickMonitor
 @inject TransactionTrackerService TxTracker
 @inject Qubic.Services.Storage.WalletStorageService WalletStorage
+@inject QubicSettingsService Settings
+@inject QubicStaticService StaticData
 
 <div class="d-flex flex-column vh-100">
     <nav class="qb-navbar">
@@ -94,6 +96,9 @@
     {
         TickMonitor.OnTickChanged += OnTickChanged;
         await TickMonitor.StartAsync();
+
+        if (Settings.RemoteLabelsEnabled)
+            _ = StaticData.LoadAsync();
     }
 
     private void OnTickChanged()
