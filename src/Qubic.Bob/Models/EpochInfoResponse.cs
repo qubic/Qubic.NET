@@ -26,6 +26,12 @@ public sealed class EpochInfoResponse
     [JsonPropertyName("endTickEndLogId")]
     public JsonElement EndTickEndLogId { get; set; }
 
+    [JsonPropertyName("lastLogId")]
+    public JsonElement LastLogId { get; set; }
+
+    [JsonPropertyName("currentTick")]
+    public JsonElement CurrentTick { get; set; }
+
     [JsonPropertyName("numberOfTransactions")]
     public JsonElement NumberOfTransactions { get; set; }
 
@@ -61,6 +67,17 @@ public sealed class EpochInfoResponse
 
     /// <summary>Gets EndTickEndLogId as ulong.</summary>
     public ulong GetEndTickEndLogId() => ParseJsonElement(EndTickEndLogId);
+
+    /// <summary>Gets LastLogId as long (the most recent log ID in the current epoch).</summary>
+    public long GetLastLogId()
+    {
+        if (LastLogId.ValueKind == JsonValueKind.Number && LastLogId.TryGetInt64(out var v)) return v;
+        if (LastLogId.ValueKind == JsonValueKind.String && long.TryParse(LastLogId.GetString(), out var s)) return s;
+        return 0;
+    }
+
+    /// <summary>Gets CurrentTick as ulong.</summary>
+    public ulong GetCurrentTick() => ParseJsonElement(CurrentTick);
 
     /// <summary>Gets NumberOfTransactions as ulong.</summary>
     public ulong GetNumberOfTransactions() => ParseJsonElement(NumberOfTransactions);

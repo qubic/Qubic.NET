@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Qubic.Bob; // BobClient for fetching current logId
 
 namespace Qubic.Services.Storage;
 
@@ -13,6 +14,7 @@ public sealed class WalletStorageService : IDisposable
     private readonly WalletDatabase _db;
     private readonly WalletSyncService _sync;
     private readonly QubicSettingsService _settings;
+    private readonly QubicBackendService _backend;
     private string? _identity;
 
     public bool IsOpen => _db.IsOpen;
@@ -22,30 +24,62 @@ public sealed class WalletStorageService : IDisposable
 
     public event Action? OnStateChanged;
 
-    public WalletStorageService(WalletDatabase db, WalletSyncService sync, QubicSettingsService settings)
+    public WalletStorageService(WalletDatabase db, WalletSyncService sync, QubicSettingsService settings, QubicBackendService backend)
     {
         _db = db;
         _sync = sync;
         _settings = settings;
+        _backend = backend;
     }
 
     /// <summary>
     /// Opens the encrypted database for this seed and starts background sync.
+    /// Sync is skipped for brand-new databases (e.g. freshly generated seeds with no history).
+    /// When <paramref name="currentEpoch"/> is provided and the DB is new, watermarks are
+    /// initialized so that future sync starts from the current epoch instead of from the beginning.
     /// </summary>
-    public void SetSeed(string seed, string identity)
+    public void SetSeed(string seed, string identity, uint currentEpoch = 0)
     {
         Close();
 
         _identity = identity;
 
         var dbPath = GetDbPath(seed);
+        var isNew = !File.Exists(dbPath);
         var passphrase = GetPassphrase(seed);
         _db.Open(dbPath, passphrase);
 
         MigrateLegacyTxdb(seed);
 
-        _sync.Start(identity);
+        if (isNew && currentEpoch > 0)
+        {
+            // Seed watermarks so future sync starts from current epoch, not from the beginning
+            _db.SetWatermark("bob_log_last_epoch", currentEpoch.ToString());
+            _db.SetWatermark("bob_log_last_logid", "0");
+            // Fetch the current logId from Bob in the background to refine the watermark
+            _ = FetchAndSetCurrentLogIdAsync();
+        }
+
+        if (!isNew)
+            _sync.Start(identity);
         OnStateChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Fetches the current epoch info from Bob and updates the logId watermark.
+    /// Best-effort — failures are silently ignored since we already have epoch as fallback.
+    /// </summary>
+    private async Task FetchAndSetCurrentLogIdAsync()
+    {
+        try
+        {
+            using var bob = new BobClient(_backend.BobUrl);
+            var epochInfo = await bob.GetCurrentEpochAsync();
+            var logId = epochInfo.GetLastLogId();
+            if (logId > 0 && _db.IsOpen)
+                _db.SetWatermark("bob_log_last_logid", logId.ToString());
+        }
+        catch { /* best effort — epoch watermark is already set as fallback */ }
     }
 
     /// <summary>

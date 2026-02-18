@@ -9,20 +9,23 @@ public class SeedSessionService
 {
     private string? _seed;
     private QubicIdentity? _identity;
+    private string? _activeLabel;
     private readonly TransactionBuilder _txBuilder = new();
     private readonly QubicCrypt _crypt = new();
 
     public bool HasSeed => _seed != null;
     public QubicIdentity? Identity => _identity;
+    public string? ActiveLabel => _activeLabel;
     public event Action? OnSeedChanged;
 
-    public void SetSeed(string seed)
+    public void SetSeed(string seed, string? label = null)
     {
         if (seed.Length != 55)
             throw new ArgumentException("Seed must be 55 characters.");
 
         _seed = seed;
         _identity = QubicIdentity.FromSeed(seed);
+        _activeLabel = label;
         OnSeedChanged?.Invoke();
     }
 
@@ -30,7 +33,15 @@ public class SeedSessionService
     {
         _seed = null;
         _identity = null;
+        _activeLabel = null;
         OnSeedChanged?.Invoke();
+    }
+
+    /// <summary>Returns the current seed for vault storage.</summary>
+    public string GetSeedForVault()
+    {
+        EnsureSeed();
+        return _seed!;
     }
 
     public byte[] GetPublicKey()
