@@ -21,6 +21,7 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
     private readonly List<BobNodeState> _nodes;
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonElement?>> _pendingRequests = new();
     private readonly ConcurrentDictionary<string, SubscriptionEntry> _activeSubscriptions = new();
+    private readonly ConcurrentDictionary<int, SubscriptionEntry> _pendingSubscriptionEntries = new();
     private readonly SemaphoreSlim _connectLock = new(1, 1);
 
     private ClientWebSocket? _webSocket;
@@ -156,8 +157,21 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
                         bestNode.BaseUrl);
                 }
 
-                // Resubscribe all active subscriptions
-                await ResubscribeAllAsync(cancellationToken);
+                // Start a temporary receive pump so SendRequestCoreAsync can get responses
+                // during resubscription (the main receive loop is blocked waiting for us to return).
+                using var resubCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var tempReceiveTask = Task.Run(() => TempReceivePumpAsync(resubCts.Token), resubCts.Token);
+
+                try
+                {
+                    await ResubscribeAllAsync(cancellationToken);
+                }
+                finally
+                {
+                    resubCts.Cancel();
+                    try { await tempReceiveTask; } catch (OperationCanceledException) { }
+                }
+
                 return;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -182,6 +196,7 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
                 var subscriptionId = await SendSubscribeAsync(
                     entry.Subscription.SubscriptionType,
                     resubParams,
+                    entry,
                     cancellationToken);
 
                 // Update the subscription's server ID and re-register in the lookup
@@ -336,6 +351,40 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
     #region WebSocket Receive Loop
 
+    /// <summary>
+    /// Temporary receive pump used during resubscription after reconnect.
+    /// The main receive loop is blocked inside ReconnectAsync, so we need this
+    /// to read responses from the new WebSocket while SendRequestCoreAsync awaits.
+    /// </summary>
+    private async Task TempReceivePumpAsync(CancellationToken cancellationToken)
+    {
+        var buffer = new byte[8192];
+        var messageBuilder = new StringBuilder();
+
+        try
+        {
+            while (_webSocket?.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            {
+                var result = await _webSocket.ReceiveAsync(
+                    new ArraySegment<byte>(buffer), cancellationToken);
+
+                if (result.MessageType == WebSocketMessageType.Close)
+                    break;
+
+                messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+
+                if (result.EndOfMessage)
+                {
+                    var message = messageBuilder.ToString();
+                    messageBuilder.Clear();
+                    ProcessMessage(message);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (WebSocketException) { }
+    }
+
     private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
     {
         var buffer = new byte[1024 * 1024]; // 1MB buffer
@@ -415,9 +464,24 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
             if (_pendingRequests.TryRemove(msg.Id!.Value, out var tcs))
             {
                 if (msg.Error is not null)
+                {
+                    _pendingSubscriptionEntries.TryRemove(msg.Id.Value, out _);
                     tcs.TrySetException(new BobRpcException(msg.Error.Code, msg.Error.Message));
+                }
                 else
+                {
+                    // If this is a subscribe response, register the entry BEFORE resolving the TCS
+                    // so notifications arriving immediately after are dispatched correctly.
+                    if (_pendingSubscriptionEntries.TryRemove(msg.Id.Value, out var entry) &&
+                        msg.Result.HasValue && msg.Result.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var subId = msg.Result.Value.GetString();
+                        if (subId is not null)
+                            _activeSubscriptions[subId] = entry;
+                    }
+
                     tcs.TrySetResult(msg.Result);
+                }
             }
         }
         else if (msg.IsNotification)
@@ -454,9 +518,10 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
     private async Task<string?> SendSubscribeAsync(
         string subscriptionType,
         object[] subscribeParams,
+        SubscriptionEntry entry,
         CancellationToken cancellationToken)
     {
-        var result = await SendRequestAsync("qubic_subscribe", subscribeParams, cancellationToken);
+        var result = await SendRequestWithEntryAsync("qubic_subscribe", subscribeParams, entry, cancellationToken);
 
         // The result should be the subscription ID string
         if (result.HasValue && result.Value.ValueKind == JsonValueKind.String)
@@ -473,9 +538,23 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
         return result.HasValue && result.Value.ValueKind == JsonValueKind.True;
     }
 
-    private async Task<JsonElement?> SendRequestAsync(
+    private Task<JsonElement?> SendRequestAsync(
         string method,
         object? parameters,
+        CancellationToken cancellationToken)
+        => SendRequestCoreAsync(method, parameters, null, cancellationToken);
+
+    private Task<JsonElement?> SendRequestWithEntryAsync(
+        string method,
+        object? parameters,
+        SubscriptionEntry entry,
+        CancellationToken cancellationToken)
+        => SendRequestCoreAsync(method, parameters, entry, cancellationToken);
+
+    private async Task<JsonElement?> SendRequestCoreAsync(
+        string method,
+        object? parameters,
+        SubscriptionEntry? subscriptionEntry,
         CancellationToken cancellationToken)
     {
         if (_webSocket?.State != WebSocketState.Open)
@@ -491,6 +570,12 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
         var tcs = new TaskCompletionSource<JsonElement?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingRequests[requestId] = tcs;
+
+        // Pre-register the subscription entry so the response handler can add it
+        // to _activeSubscriptions BEFORE resolving the TCS, preventing the race
+        // where notifications arrive before the subscription is tracked.
+        if (subscriptionEntry is not null)
+            _pendingSubscriptionEntries[requestId] = subscriptionEntry;
 
         try
         {
@@ -512,6 +597,7 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
         catch
         {
             _pendingRequests.TryRemove(requestId, out _);
+            _pendingSubscriptionEntries.TryRemove(requestId, out _);
             throw;
         }
     }
@@ -744,12 +830,15 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
         var subscriptionId = await SendSubscribeAsync(
             subscription.SubscriptionType,
             subscription.OriginalParams,
+            entry,
             cancellationToken);
 
         subscription.ServerSubscriptionId = subscriptionId;
 
+        // Entry is already registered by the response handler, but ensure it's there
+        // in case the response wasn't a string (fallback path).
         if (subscriptionId is not null)
-            _activeSubscriptions[subscriptionId] = entry;
+            _activeSubscriptions.TryAdd(subscriptionId, entry);
     }
 
     #endregion

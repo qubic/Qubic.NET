@@ -20,6 +20,15 @@ public sealed class VaultEntry
 }
 
 /// <summary>
+/// An address book entry in the vault (label + 60-char identity, no seed).
+/// </summary>
+public sealed class ContactEntry
+{
+    public string Label { get; set; } = "";
+    public string Address { get; set; } = "";
+}
+
+/// <summary>
 /// Manages an encrypted vault file containing multiple seed entries.
 /// Uses PBKDF2 (600k iterations, SHA-256) for key derivation and AES-256-GCM for authenticated encryption.
 /// </summary>
@@ -34,6 +43,7 @@ public sealed class VaultService
 
     private readonly QubicSettingsService _settings;
     private List<VaultEntry>? _entries;
+    private List<ContactEntry>? _contacts;
     private string? _password;
 
     public VaultService(QubicSettingsService settings)
@@ -56,9 +66,13 @@ public sealed class VaultService
     /// <summary>True if the vault is loaded and decrypted in memory.</summary>
     public bool IsUnlocked => _entries != null;
 
-    /// <summary>Decrypted entries. Empty if locked.</summary>
+    /// <summary>Decrypted seed entries. Empty if locked.</summary>
     public IReadOnlyList<VaultEntry> Entries =>
         _entries?.AsReadOnly() ?? (IReadOnlyList<VaultEntry>)Array.Empty<VaultEntry>();
+
+    /// <summary>Address book contacts. Empty if locked.</summary>
+    public IReadOnlyList<ContactEntry> Contacts =>
+        _contacts?.AsReadOnly() ?? (IReadOnlyList<ContactEntry>)Array.Empty<ContactEntry>();
 
     // ── Password validation ──
 
@@ -107,6 +121,7 @@ public sealed class VaultService
         }
 
         _entries = entries;
+        _contacts = [];
         _password = password;
         _settings.SetCustom(VaultPathKey, filePath);
         SaveToDisk();
@@ -148,13 +163,33 @@ public sealed class VaultService
             if (envelope == null) return "Invalid vault file format.";
 
             var decryptedJson = Decrypt(envelope, password);
-            var entries = JsonSerializer.Deserialize<List<VaultEntry>>(decryptedJson);
+
+            // V2 format: { "Seeds": [...], "Contacts": [...] }
+            // V1 format: [{ "Label": "...", "Seed": "..." }, ...]
+            List<VaultEntry>? entries;
+            List<ContactEntry>? contacts;
+
+            if (decryptedJson.TrimStart().StartsWith('['))
+            {
+                // V1: flat array of seeds
+                entries = JsonSerializer.Deserialize<List<VaultEntry>>(decryptedJson);
+                contacts = [];
+            }
+            else
+            {
+                // V2: object with Seeds + Contacts
+                var payload = JsonSerializer.Deserialize<VaultPayload>(decryptedJson);
+                entries = payload?.Seeds;
+                contacts = payload?.Contacts ?? [];
+            }
+
             if (entries == null) return "Decrypted data is invalid.";
 
             foreach (var entry in entries)
                 entry.Identity = QubicIdentity.FromSeed(entry.Seed).ToString();
 
             _entries = entries;
+            _contacts = contacts;
             _password = password;
             OnVaultChanged?.Invoke();
             return null;
@@ -168,6 +203,7 @@ public sealed class VaultService
     public void LockVault()
     {
         _entries = null;
+        _contacts = null;
         _password = null;
         OnVaultChanged?.Invoke();
     }
@@ -177,6 +213,7 @@ public sealed class VaultService
     {
         var path = VaultPath;
         _entries = null;
+        _contacts = null;
         _password = null;
         _settings.RemoveCustom(VaultPathKey);
         try { if (path != null && File.Exists(path)) File.Delete(path); } catch { }
@@ -231,6 +268,57 @@ public sealed class VaultService
     /// <summary>Gets an entry by identity, or null.</summary>
     public VaultEntry? GetEntry(string identity) =>
         _entries?.FirstOrDefault(e => e.Identity == identity);
+
+    // ── Contact (address book) management ──
+
+    /// <summary>Adds a contact to the address book.</summary>
+    public void AddContact(string label, string address)
+    {
+        EnsureUnlocked();
+        if (string.IsNullOrWhiteSpace(label))
+            throw new ArgumentException("Label is required.", nameof(label));
+        if (string.IsNullOrEmpty(address) || address.Length != 60)
+            throw new ArgumentException("Address must be 60 characters.", nameof(address));
+        if (_contacts!.Any(c => c.Address.Equals(address, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("This address is already in the address book.");
+
+        _contacts!.Add(new ContactEntry { Label = label, Address = address.ToUpperInvariant() });
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Removes a contact by address.</summary>
+    public void RemoveContact(string address)
+    {
+        EnsureUnlocked();
+        var removed = _contacts!.RemoveAll(c => c.Address.Equals(address, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0) return;
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Renames a contact's label.</summary>
+    public void RenameContact(string address, string newLabel)
+    {
+        EnsureUnlocked();
+        var contact = _contacts!.FirstOrDefault(c => c.Address.Equals(address, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Contact not found.");
+        contact.Label = newLabel;
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Gets a contact by address, or null.</summary>
+    public ContactEntry? GetContact(string address) =>
+        _contacts?.FirstOrDefault(c => c.Address.Equals(address, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Returns true if the address is already in the address book or matches a vault identity.</summary>
+    public bool IsKnownAddress(string? address)
+    {
+        if (string.IsNullOrEmpty(address) || !IsUnlocked) return false;
+        return _contacts!.Any(c => c.Address.Equals(address, StringComparison.OrdinalIgnoreCase))
+            || _entries!.Any(e => e.Identity.Equals(address, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>Changes the vault password. Re-encrypts all entries with the new password.</summary>
     public void ChangePassword(string currentPassword, string newPassword)
@@ -311,7 +399,8 @@ public sealed class VaultService
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        var json = JsonSerializer.Serialize(_entries);
+        var payload = new VaultPayload { Seeds = _entries, Contacts = _contacts ?? [] };
+        var json = JsonSerializer.Serialize(payload);
         var envelope = Encrypt(json, _password);
         var fileJson = JsonSerializer.Serialize(envelope, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(path, fileJson);
@@ -330,12 +419,12 @@ public sealed class VaultService
 
         // This will throw CryptographicException if the round-trip fails
         var decryptedJson = Decrypt(envelope, password);
-        var entries = JsonSerializer.Deserialize<List<VaultEntry>>(decryptedJson)
+        var payload = JsonSerializer.Deserialize<VaultPayload>(decryptedJson)
             ?? throw new InvalidOperationException("Decrypted vault data is invalid.");
 
-        if (entries.Count != _entries!.Count)
+        if (payload.Seeds.Count != _entries!.Count)
             throw new InvalidOperationException(
-                $"Round-trip mismatch: wrote {_entries.Count} entries, read back {entries.Count}.");
+                $"Round-trip mismatch: wrote {_entries.Count} entries, read back {payload.Seeds.Count}.");
     }
 
     private sealed class VaultFileEnvelope
@@ -344,5 +433,12 @@ public sealed class VaultService
         public string Nonce { get; set; } = "";
         public string Tag { get; set; } = "";
         public string Data { get; set; } = "";
+    }
+
+    /// <summary>V2 vault payload: seeds + address book contacts.</summary>
+    private sealed class VaultPayload
+    {
+        public List<VaultEntry> Seeds { get; set; } = [];
+        public List<ContactEntry> Contacts { get; set; } = [];
     }
 }
