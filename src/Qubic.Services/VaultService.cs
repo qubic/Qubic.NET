@@ -28,6 +28,20 @@ public sealed class ContactEntry
     public string Address { get; set; } = "";
 }
 
+/// <summary>A saved SendToMany template (name + list of recipients).</summary>
+public sealed class SendManyTemplate
+{
+    public string Name { get; set; } = "";
+    public List<SendManyRecipient> Recipients { get; set; } = [];
+}
+
+/// <summary>A single recipient in a SendToMany template.</summary>
+public sealed class SendManyRecipient
+{
+    public string Address { get; set; } = "";
+    public long Amount { get; set; }
+}
+
 /// <summary>
 /// Manages an encrypted vault file containing multiple seed entries.
 /// Uses PBKDF2 (600k iterations, SHA-256) for key derivation and AES-256-GCM for authenticated encryption.
@@ -44,6 +58,7 @@ public sealed class VaultService
     private readonly QubicSettingsService _settings;
     private List<VaultEntry>? _entries;
     private List<ContactEntry>? _contacts;
+    private List<SendManyTemplate>? _templates;
     private string? _password;
 
     public VaultService(QubicSettingsService settings)
@@ -73,6 +88,10 @@ public sealed class VaultService
     /// <summary>Address book contacts. Empty if locked.</summary>
     public IReadOnlyList<ContactEntry> Contacts =>
         _contacts?.AsReadOnly() ?? (IReadOnlyList<ContactEntry>)Array.Empty<ContactEntry>();
+
+    /// <summary>SendToMany templates. Empty if locked.</summary>
+    public IReadOnlyList<SendManyTemplate> Templates =>
+        _templates?.AsReadOnly() ?? (IReadOnlyList<SendManyTemplate>)Array.Empty<SendManyTemplate>();
 
     // ── Password validation ──
 
@@ -122,6 +141,7 @@ public sealed class VaultService
 
         _entries = entries;
         _contacts = [];
+        _templates = [];
         _password = password;
         _settings.SetCustom(VaultPathKey, filePath);
         SaveToDisk();
@@ -168,19 +188,22 @@ public sealed class VaultService
             // V1 format: [{ "Label": "...", "Seed": "..." }, ...]
             List<VaultEntry>? entries;
             List<ContactEntry>? contacts;
+            List<SendManyTemplate>? templates;
 
             if (decryptedJson.TrimStart().StartsWith('['))
             {
                 // V1: flat array of seeds
                 entries = JsonSerializer.Deserialize<List<VaultEntry>>(decryptedJson);
                 contacts = [];
+                templates = [];
             }
             else
             {
-                // V2: object with Seeds + Contacts
+                // V2+: object with Seeds + Contacts + Templates
                 var payload = JsonSerializer.Deserialize<VaultPayload>(decryptedJson);
                 entries = payload?.Seeds;
                 contacts = payload?.Contacts ?? [];
+                templates = payload?.Templates ?? [];
             }
 
             if (entries == null) return "Decrypted data is invalid.";
@@ -190,6 +213,7 @@ public sealed class VaultService
 
             _entries = entries;
             _contacts = contacts;
+            _templates = templates;
             _password = password;
             OnVaultChanged?.Invoke();
             return null;
@@ -204,6 +228,7 @@ public sealed class VaultService
     {
         _entries = null;
         _contacts = null;
+        _templates = null;
         _password = null;
         OnVaultChanged?.Invoke();
     }
@@ -214,6 +239,7 @@ public sealed class VaultService
         var path = VaultPath;
         _entries = null;
         _contacts = null;
+        _templates = null;
         _password = null;
         _settings.RemoveCustom(VaultPathKey);
         try { if (path != null && File.Exists(path)) File.Delete(path); } catch { }
@@ -320,6 +346,62 @@ public sealed class VaultService
             || _entries!.Any(e => e.Identity.Equals(address, StringComparison.OrdinalIgnoreCase));
     }
 
+    // ── Template management ──
+
+    /// <summary>Adds a new SendToMany template.</summary>
+    public void AddTemplate(string name, List<SendManyRecipient> recipients)
+    {
+        EnsureUnlocked();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Template name is required.", nameof(name));
+        if (recipients.Count == 0 || recipients.All(r => string.IsNullOrWhiteSpace(r.Address)))
+            throw new ArgumentException("At least one recipient with an address is required.", nameof(recipients));
+        if (_templates!.Any(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("A template with this name already exists.");
+
+        _templates!.Add(new SendManyTemplate { Name = name.Trim(), Recipients = recipients });
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Updates an existing template's recipients.</summary>
+    public void UpdateTemplate(string name, List<SendManyRecipient> recipients)
+    {
+        EnsureUnlocked();
+        var template = _templates!.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Template not found.");
+        if (recipients.Count == 0 || recipients.All(r => string.IsNullOrWhiteSpace(r.Address)))
+            throw new ArgumentException("At least one recipient with an address is required.", nameof(recipients));
+        template.Recipients = recipients;
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Removes a template by name.</summary>
+    public void RemoveTemplate(string name)
+    {
+        EnsureUnlocked();
+        var removed = _templates!.RemoveAll(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0) return;
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Renames a template.</summary>
+    public void RenameTemplate(string name, string newName)
+    {
+        EnsureUnlocked();
+        if (string.IsNullOrWhiteSpace(newName))
+            throw new ArgumentException("New name is required.", nameof(newName));
+        var template = _templates!.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Template not found.");
+        if (_templates!.Any(t => t.Name.Equals(newName, StringComparison.OrdinalIgnoreCase) && t != template))
+            throw new InvalidOperationException("A template with this name already exists.");
+        template.Name = newName.Trim();
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
     /// <summary>Changes the vault password. Re-encrypts all entries with the new password.</summary>
     public void ChangePassword(string currentPassword, string newPassword)
     {
@@ -399,7 +481,7 @@ public sealed class VaultService
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        var payload = new VaultPayload { Seeds = _entries, Contacts = _contacts ?? [] };
+        var payload = new VaultPayload { Seeds = _entries, Contacts = _contacts ?? [], Templates = _templates ?? [] };
         var json = JsonSerializer.Serialize(payload);
         var envelope = Encrypt(json, _password);
         var fileJson = JsonSerializer.Serialize(envelope, new JsonSerializerOptions { WriteIndented = true });
@@ -435,10 +517,11 @@ public sealed class VaultService
         public string Data { get; set; } = "";
     }
 
-    /// <summary>V2 vault payload: seeds + address book contacts.</summary>
+    /// <summary>Vault payload: seeds + address book contacts + SendToMany templates.</summary>
     private sealed class VaultPayload
     {
         public List<VaultEntry> Seeds { get; set; } = [];
         public List<ContactEntry> Contacts { get; set; } = [];
+        public List<SendManyTemplate> Templates { get; set; } = [];
     }
 }
