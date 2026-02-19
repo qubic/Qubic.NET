@@ -167,6 +167,31 @@ public sealed class VaultService
     }
 
     /// <summary>
+    /// Moves (or copies) the vault file to a new location and updates the stored path.
+    /// </summary>
+    public void MoveVault(string newPath)
+    {
+        var currentPath = VaultPath;
+        if (string.IsNullOrWhiteSpace(currentPath) || !File.Exists(currentPath))
+            throw new InvalidOperationException("No vault file to move.");
+        if (string.IsNullOrWhiteSpace(newPath))
+            throw new ArgumentException("New file path is required.", nameof(newPath));
+
+        var fullNew = Path.GetFullPath(newPath);
+        var fullCurrent = Path.GetFullPath(currentPath);
+        if (string.Equals(fullNew, fullCurrent, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        File.Copy(currentPath, newPath, overwrite: true);
+        _settings.SetCustom(VaultPathKey, newPath);
+
+        // Delete the old file only after the path is updated
+        try { File.Delete(currentPath); } catch { }
+
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>
     /// Unlocks the vault with the given password.
     /// Returns null on success, or an error message on failure.
     /// </summary>

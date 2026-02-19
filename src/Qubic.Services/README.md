@@ -15,6 +15,7 @@ High-level services for building Qubic applications in .NET.
 | `TransactionTrackerService` | Transaction lifecycle tracking with encrypted persistence |
 | `AssetRegistryService` | Asset ownership querying |
 | `PeerAutoDiscoverService` | Automatic peer discovery and failover |
+| `VaultService` | Encrypted vault for seeds, contacts, and send-many templates (AES-256-GCM + Argon2id) |
 | `WalletStorageService` | SQLite-based wallet data storage |
 
 ## Dependencies
