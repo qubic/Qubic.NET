@@ -278,33 +278,35 @@ public sealed class WalletSyncService : IDisposable
                     await wsClient.ConnectAsync(ct);
                     Log("Bob Logs: Connected");
 
-                    // ── Phase 1: Previous epoch indexed fetch ──
+                    // ── Phase 1: Previous epochs indexed fetch (up to epoch-2) ──
                     var currentEpochInfo = await wsClient.GetCurrentEpochAsync(ct);
                     var currentEpoch = currentEpochInfo.Epoch;
-                    var prevEpoch = currentEpoch - 1;
                     Log($"Bob Logs: Current epoch = {currentEpoch}");
 
                     var prevEpochDoneStr = _db.GetWatermark(prevEpochDoneKey);
                     var prevEpochDone = uint.TryParse(prevEpochDoneStr, out var ped) ? ped : 0u;
 
-                    if (prevEpoch > 0 && prevEpochDone < prevEpoch)
+                    var oldestEpoch = currentEpoch >= 2 ? currentEpoch - 2 : 1u;
+                    for (var catchUpEpoch = oldestEpoch; catchUpEpoch < currentEpoch; catchUpEpoch++)
                     {
+                        if (prevEpochDone >= catchUpEpoch)
+                        {
+                            Log($"Bob Logs: Phase 1 — epoch {catchUpEpoch} already caught up, skipping");
+                            continue;
+                        }
+
                         BobLogStatus = StreamStatus.CatchingUp;
-                        BobLogCatchUpEpoch = prevEpoch;
-                        Log($"Bob Logs: Phase 1 — fetching epoch {prevEpoch} logs via indexed lookup");
+                        BobLogCatchUpEpoch = catchUpEpoch;
+                        Log($"Bob Logs: Phase 1 — fetching epoch {catchUpEpoch} logs via indexed lookup");
                         RaiseChanged();
 
-                        var prevEpochInfo = await wsClient.GetEpochInfoAsync((int)prevEpoch, ct);
-                        var count = await FetchEpochLogsIndexed(wsClient, prevEpoch, prevEpochInfo, identity, ct);
+                        var epochInfo = await wsClient.GetEpochInfoAsync((int)catchUpEpoch, ct);
+                        var count = await FetchEpochLogsIndexed(wsClient, catchUpEpoch, epochInfo, identity, ct);
 
-                        Log($"Bob Logs: Phase 1 complete — {count} matching logs from epoch {prevEpoch}");
-                        _db.SetWatermark(prevEpochDoneKey, prevEpoch.ToString());
+                        Log($"Bob Logs: Phase 1 — epoch {catchUpEpoch} done, {count} matching logs");
+                        _db.SetWatermark(prevEpochDoneKey, catchUpEpoch.ToString());
                         BobLogCatchUpPercent = null;
                         BobLogCatchUpEpoch = null;
-                    }
-                    else
-                    {
-                        Log($"Bob Logs: Phase 1 — epoch {prevEpoch} already caught up, skipping");
                     }
 
                     // ── Phase 2: Current epoch indexed fetch ──
