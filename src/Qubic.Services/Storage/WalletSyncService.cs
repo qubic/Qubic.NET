@@ -43,6 +43,8 @@ public sealed class WalletSyncService : IDisposable
     public string? RpcStatusMessage { get; private set; }
     public StreamStatus BobLogStatus { get; private set; } = StreamStatus.Idle;
     public string? BobLogStatusMessage { get; private set; }
+    public double? BobLogCatchUpPercent { get; private set; }
+    public uint? BobLogCatchUpEpoch { get; private set; }
 
     // Sync log for diagnostics
     private readonly List<string> _syncLog = new();
@@ -96,6 +98,8 @@ public sealed class WalletSyncService : IDisposable
         RpcStatusMessage = null;
         BobLogStatus = StreamStatus.Idle;
         BobLogStatusMessage = null;
+        BobLogCatchUpPercent = null;
+        BobLogCatchUpEpoch = null;
 
         var ct = _cts.Token;
         _rpcTask = Task.Run(() => RpcSyncLoop(identity, ct), ct);
@@ -125,6 +129,8 @@ public sealed class WalletSyncService : IDisposable
         State = SyncState.Idle;
         RpcStatus = StreamStatus.Idle;
         BobLogStatus = StreamStatus.Idle;
+        BobLogCatchUpPercent = null;
+        BobLogCatchUpEpoch = null;
         RaiseChanged();
     }
 
@@ -249,6 +255,7 @@ public sealed class WalletSyncService : IDisposable
     {
         const string watermarkKey = "bob_log_last_logid";
         const string epochWatermarkKey = "bob_log_last_epoch";
+        const string prevEpochDoneKey = "bob_log_prev_epoch_done";
 
         try
         {
@@ -271,94 +278,116 @@ public sealed class WalletSyncService : IDisposable
                     await wsClient.ConnectAsync(ct);
                     Log("Bob Logs: Connected");
 
+                    // ── Phase 1: Previous epoch indexed fetch ──
+                    var currentEpochInfo = await wsClient.GetCurrentEpochAsync(ct);
+                    var currentEpoch = currentEpochInfo.Epoch;
+                    var prevEpoch = currentEpoch - 1;
+                    Log($"Bob Logs: Current epoch = {currentEpoch}");
+
+                    var prevEpochDoneStr = _db.GetWatermark(prevEpochDoneKey);
+                    var prevEpochDone = uint.TryParse(prevEpochDoneStr, out var ped) ? ped : 0u;
+
+                    if (prevEpoch > 0 && prevEpochDone < prevEpoch)
+                    {
+                        BobLogStatus = StreamStatus.CatchingUp;
+                        BobLogCatchUpEpoch = prevEpoch;
+                        Log($"Bob Logs: Phase 1 — fetching epoch {prevEpoch} logs via indexed lookup");
+                        RaiseChanged();
+
+                        var prevEpochInfo = await wsClient.GetEpochInfoAsync((int)prevEpoch, ct);
+                        var count = await FetchEpochLogsIndexed(wsClient, prevEpoch, prevEpochInfo, identity, ct);
+
+                        Log($"Bob Logs: Phase 1 complete — {count} matching logs from epoch {prevEpoch}");
+                        _db.SetWatermark(prevEpochDoneKey, prevEpoch.ToString());
+                        BobLogCatchUpPercent = null;
+                        BobLogCatchUpEpoch = null;
+                    }
+                    else
+                    {
+                        Log($"Bob Logs: Phase 1 — epoch {prevEpoch} already caught up, skipping");
+                    }
+
+                    // ── Phase 2: Current epoch indexed fetch ──
+                    BobLogStatus = StreamStatus.CatchingUp;
+                    BobLogCatchUpEpoch = currentEpoch;
+                    Log($"Bob Logs: Phase 2 — fetching current epoch {currentEpoch} logs via indexed lookup");
+                    RaiseChanged();
+
+                    // Re-fetch current epoch info to get latest indexed tick
+                    currentEpochInfo = await wsClient.GetCurrentEpochAsync(ct);
+                    var phase2Count = await FetchEpochLogsIndexed(wsClient, currentEpoch, currentEpochInfo, identity, ct);
+
+                    // Record watermark: use the lastIndexedTick so subscription can resume from there
+                    var lastIndexedTick = (uint)currentEpochInfo.GetLastIndexedTick();
+                    Log($"Bob Logs: Phase 2 complete — {phase2Count} matching logs from epoch {currentEpoch} (lastIndexedTick={lastIndexedTick})");
+
+                    BobLogCatchUpPercent = null;
+                    BobLogCatchUpEpoch = null;
+
+                    // ── Phase 3: Subscribe for live logs ──
+                    // Subscribe from the last indexed position so the subscription
+                    // covers any gap between indexed data and real-time.
                     var wmStr = _db.GetWatermark(watermarkKey);
-                    long? startLogId = long.TryParse(wmStr, out var lid) ? lid : 0L;
+                    long? startLogId = long.TryParse(wmStr, out var lid) ? lid : null;
                     var epochStr = _db.GetWatermark(epochWatermarkKey);
                     var startEpoch = uint.TryParse(epochStr, out var ep) ? ep : (uint?)null;
+
+                    // If stored epoch is older than current, reset
+                    if (startEpoch.HasValue && startEpoch.Value < currentEpoch)
+                    {
+                        startEpoch = currentEpoch;
+                        startLogId = null;
+                    }
 
                     var options = new LogSubscriptionOptions
                     {
                         Identities = [identity],
                         StartLogId = startLogId,
-                        StartEpoch = startEpoch
+                        StartEpoch = startEpoch ?? currentEpoch
                     };
 
                     BobLogStatus = StreamStatus.CatchingUp;
-                    BobLogStatusMessage = $"Catching up from logId {startLogId} epoch {startEpoch?.ToString() ?? "?"}...";
-                    Log($"Bob Logs: Subscribing (startLogId={startLogId}, startEpoch={startEpoch?.ToString() ?? "none"})");
+                    BobLogStatusMessage = $"Subscribing for live logs...";
+                    Log($"Bob Logs: Phase 3 — subscribing (startLogId={startLogId?.ToString() ?? "null"}, startEpoch={options.StartEpoch})");
                     RaiseChanged();
 
                     var sub = await wsClient.SubscribeLogsAsync(options, ct);
                     Log($"Bob Logs: Subscribed (subId={sub.ServerSubscriptionId ?? "null"}), awaiting data...");
                     var catchUpCount = 0;
-                    var lastDataUtc = DateTime.UtcNow;
-
-                    // Periodic heartbeat: if no data for 60s during catch-up, log a warning
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            while (!ct.IsCancellationRequested)
-                            {
-                                await Task.Delay(TimeSpan.FromSeconds(60), ct);
-                                var gap = DateTime.UtcNow - lastDataUtc;
-                                if (gap.TotalSeconds > 60)
-                                    Log($"Bob Logs: No data received for {gap.TotalSeconds:F0}s (WS state={wsClient.State}, subId={sub.ServerSubscriptionId ?? "null"})");
-                            }
-                        }
-                        catch (OperationCanceledException) { }
-                    }, ct);
 
                     await foreach (var notification in sub.WithCancellation(ct))
                     {
-                        lastDataUtc = DateTime.UtcNow;
+                        // catchUpProgress: update progress bar, continue
+                        if (notification.CatchUpProgress)
+                        {
+                            BobLogCatchUpPercent = notification.Percent;
+                            BobLogCatchUpEpoch = notification.Epoch > 0 ? notification.Epoch : currentEpoch;
+                            BobLogStatusMessage = $"Catching up: {notification.Percent:F0}%";
+                            RaiseChanged();
+                            continue;
+                        }
 
-                        // catchUpComplete is the definitive signal that catch-up is done
+                        // catchUpComplete: transition to live
                         if (notification.CatchUpComplete)
                         {
-                            if (!_bobLogInitialDone)
+                            if (notification.LastPosition.HasValue)
                             {
-                                _bobLogInitialDone = true;
-                                BobLogStatus = StreamStatus.Live;
-                                BobLogStatusMessage = $"Live — {catchUpCount} logs caught up";
-                                Log($"Bob Logs: Catch-up complete — {catchUpCount} logs caught up");
-                                CheckInitialSyncComplete();
-                                RaiseChanged();
+                                _db.SetWatermark(watermarkKey, notification.LastPosition.Value.ToString());
+                                _db.SetWatermark(epochWatermarkKey,
+                                    (notification.Epoch > 0 ? notification.Epoch : currentEpoch).ToString());
                             }
-                            continue; // Not a real data notification
+                            _bobLogInitialDone = true;
+                            BobLogStatus = StreamStatus.Live;
+                            BobLogCatchUpPercent = null;
+                            BobLogCatchUpEpoch = null;
+                            BobLogStatusMessage = $"Live — {catchUpCount} logs caught up";
+                            Log($"Bob Logs: Catch-up complete — {catchUpCount} logs caught up, now live");
+                            CheckInitialSyncComplete();
+                            RaiseChanged();
+                            continue;
                         }
 
-                        var now = DateTime.UtcNow.ToString("O");
-
-                        string? bodyJson = null;
-                        string? bodyRaw = null;
-                        if (notification.Body.HasValue)
-                        {
-                            bodyJson = notification.Body.Value.ToString();
-                            // Store the raw JSON as hex for body_raw
-                            var rawBytes = System.Text.Encoding.UTF8.GetBytes(bodyJson);
-                            bodyRaw = Convert.ToHexString(rawBytes);
-                        }
-
-                        var logEvent = new StoredLogEvent
-                        {
-                            LogId = notification.LogId,
-                            Tick = notification.Tick,
-                            Epoch = notification.Epoch,
-                            LogType = notification.LogType,
-                            LogTypeName = string.IsNullOrEmpty(notification.LogTypeName) ? null : notification.LogTypeName,
-                            TxHash = notification.TxHash,
-                            Body = bodyJson,
-                            BodyRaw = bodyRaw,
-                            LogDigest = notification.LogDigest,
-                            BodySize = notification.BodySize,
-                            Timestamp = notification.GetTimestamp(),
-                            SyncedFrom = "bob_ws",
-                            SyncedAtUtc = now
-                        };
-
-                        _db.InsertLogEvent(logEvent);
-                        LogEventsSynced++;
+                        StoreLogNotification(notification);
                         _db.SetWatermark(watermarkKey, notification.LogId.ToString());
                         _db.SetWatermark(epochWatermarkKey, notification.Epoch.ToString());
 
@@ -366,8 +395,7 @@ public sealed class WalletSyncService : IDisposable
                         {
                             catchUpCount++;
                             if (catchUpCount % 100 == 0)
-                                Log($"Bob Logs: Caught up {catchUpCount} logs (logId {notification.LogId}, epoch {notification.Epoch})");
-                            BobLogStatusMessage = $"Catching up... {catchUpCount} logs (logId {notification.LogId})";
+                                Log($"Bob Logs: Subscription catch-up: {catchUpCount} logs (logId {notification.LogId})");
                         }
                         else
                         {
@@ -382,6 +410,8 @@ public sealed class WalletSyncService : IDisposable
                     LastError = $"Bob log sync: {ex.Message}";
                     BobLogStatus = StreamStatus.Error;
                     BobLogStatusMessage = $"Error: {ex.Message}";
+                    BobLogCatchUpPercent = null;
+                    BobLogCatchUpEpoch = null;
                     Log($"Bob Logs: Error — {ex.Message}");
                     if (!_bobLogInitialDone)
                     {
@@ -402,6 +432,176 @@ public sealed class WalletSyncService : IDisposable
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    /// <summary>
+    /// 3-step indexed log fetch: findLogIds → getTickLogRanges → getLogsByIdRange.
+    /// Returns the number of matching logs stored.
+    /// </summary>
+    private async Task<int> FetchEpochLogsIndexed(
+        BobWebSocketClient wsClient, uint epoch, EpochInfoResponse epochInfo,
+        string identity, CancellationToken ct)
+    {
+        var initialTick = (uint)epochInfo.GetInitialTick();
+        var endTick = (uint)epochInfo.GetEndTick();
+        if (endTick == 0) endTick = (uint)epochInfo.GetFinalTick();
+        if (endTick == 0) endTick = (uint)epochInfo.GetCurrentTick();
+        if (endTick == 0) endTick = (uint)epochInfo.GetLastIndexedTick();
+        Log($"Bob Logs: Epoch {epoch} ticks {initialTick}–{endTick}");
+
+        if (initialTick == 0 || endTick == 0 || endTick < initialTick)
+        {
+            Log($"Bob Logs: Epoch {epoch} — invalid tick range, skipping");
+            return 0;
+        }
+
+        // Step 1: Find ticks with matching logs
+        BobLogStatusMessage = $"Epoch {epoch}: finding matching ticks...";
+        RaiseChanged();
+
+        var filter = new FindLogIdsFilter
+        {
+            ScIndex = 0,
+            LogType = 0,
+            Topic1 = identity,
+            FromTick = initialTick,
+            ToTick = endTick
+        };
+        var matchingTicks = await wsClient.FindLogIdsAsync(filter, ct);
+        Log($"Bob Logs: Epoch {epoch} — findLogIds returned {matchingTicks.Count} ticks");
+
+        if (matchingTicks.Count == 0)
+            return 0;
+
+        // Step 2: Get logId ranges (batch by 1000)
+        BobLogStatusMessage = $"Epoch {epoch}: getting log ranges for {matchingTicks.Count} ticks...";
+        RaiseChanged();
+
+        var allRanges = new List<TickLogRange>();
+        for (int i = 0; i < matchingTicks.Count; i += 1000)
+        {
+            var tickBatch = matchingTicks.Skip(i).Take(1000).ToArray();
+            var ranges = await wsClient.GetTickLogRangesAsync(tickBatch, ct);
+            allRanges.AddRange(ranges);
+        }
+
+        // Merge adjacent/overlapping ranges
+        var merged = MergeLogRanges(allRanges);
+        var totalLogIds = merged.Sum(r => r.ToId - r.FromId + 1);
+        Log($"Bob Logs: Epoch {epoch} — {allRanges.Count} tick ranges → {merged.Count} merged ranges ({totalLogIds} logIds)");
+
+        // Step 3: Fetch logs by merged ranges
+        long processedLogIds = 0;
+        int matchCount = 0;
+
+        foreach (var range in merged)
+        {
+            for (long fromId = range.FromId; fromId <= range.ToId; fromId += 100_000)
+            {
+                ct.ThrowIfCancellationRequested();
+                var toId = Math.Min(fromId + 99_999, range.ToId);
+                var logs = await wsClient.GetLogsByIdRangeAsync(epoch, fromId, toId, ct);
+
+                foreach (var entry in logs)
+                {
+                    if (!entry.Ok) continue;
+
+                    // Client-side identity filter
+                    if (entry.Body.HasValue)
+                    {
+                        var bodyStr = entry.Body.Value.ToString();
+                        if (!bodyStr.Contains(identity, StringComparison.Ordinal))
+                            continue;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    StoreLogNotification(entry);
+                    matchCount++;
+                }
+
+                processedLogIds += toId - fromId + 1;
+                BobLogCatchUpPercent = totalLogIds > 0
+                    ? Math.Min(100.0, processedLogIds * 100.0 / totalLogIds)
+                    : 100.0;
+                BobLogStatusMessage = $"Epoch {epoch}: fetching logs — {BobLogCatchUpPercent:F0}%";
+                RaiseChanged();
+            }
+        }
+
+        // Store the last logId we fetched as watermark for subscription resume
+        if (merged.Count > 0)
+        {
+            var lastLogId = merged[^1].ToId;
+            _db.SetWatermark("bob_log_last_logid", lastLogId.ToString());
+            _db.SetWatermark("bob_log_last_epoch", epoch.ToString());
+        }
+
+        return matchCount;
+    }
+
+    /// <summary>Merges adjacent/overlapping tick log ranges into minimal fetch ranges.</summary>
+    private static List<(long FromId, long ToId)> MergeLogRanges(List<TickLogRange> ranges)
+    {
+        var valid = ranges
+            .Where(r => r.FromLogId.HasValue && r.Length.HasValue && r.Length.Value > 0)
+            .OrderBy(r => r.FromLogId!.Value)
+            .ToList();
+
+        var merged = new List<(long FromId, long ToId)>();
+        foreach (var r in valid)
+        {
+            long fromId = r.FromLogId!.Value;
+            long toId = fromId + r.Length!.Value - 1;
+
+            if (merged.Count > 0 && fromId <= merged[^1].ToId + 1)
+            {
+                var last = merged[^1];
+                merged[^1] = (last.FromId, Math.Max(last.ToId, toId));
+            }
+            else
+            {
+                merged.Add((fromId, toId));
+            }
+        }
+        return merged;
+    }
+
+    /// <summary>Converts a LogNotification to a StoredLogEvent and inserts it into the database.</summary>
+    private void StoreLogNotification(LogNotification notification)
+    {
+        var now = DateTime.UtcNow.ToString("O");
+
+        string? bodyJson = null;
+        string? bodyRaw = null;
+        if (notification.Body.HasValue)
+        {
+            bodyJson = notification.Body.Value.ToString();
+            var rawBytes = System.Text.Encoding.UTF8.GetBytes(bodyJson);
+            bodyRaw = Convert.ToHexString(rawBytes);
+        }
+
+        var logEvent = new StoredLogEvent
+        {
+            LogId = notification.LogId,
+            Tick = notification.Tick,
+            Epoch = notification.Epoch,
+            LogType = notification.LogType,
+            LogTypeName = string.IsNullOrEmpty(notification.LogTypeName) ? null : notification.LogTypeName,
+            TxHash = notification.TxHash,
+            Body = bodyJson,
+            BodyRaw = bodyRaw,
+            LogDigest = notification.LogDigest,
+            BodySize = notification.BodySize,
+            Timestamp = notification.GetTimestamp(),
+            SyncedFrom = "bob_ws",
+            SyncedAtUtc = now
+        };
+
+        _db.InsertLogEvent(logEvent);
+        LogEventsSynced++;
     }
 
     // ── Stream 3: Fetch Missing Transactions Referenced by Logs ──

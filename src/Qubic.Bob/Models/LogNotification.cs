@@ -14,8 +14,38 @@ public sealed class LogNotification
     [JsonPropertyName("catchUpComplete")]
     public bool CatchUpComplete { get; set; }
 
+    [JsonPropertyName("catchUpProgress")]
+    public bool CatchUpProgress { get; set; }
+
+    [JsonPropertyName("percent")]
+    public double? Percent { get; set; }
+
+    [JsonPropertyName("current")]
+    public long? Current { get; set; }
+
+    [JsonPropertyName("total")]
+    public long? Total { get; set; }
+
+    [JsonPropertyName("position")]
+    public long? Position { get; set; }
+
+    [JsonPropertyName("matched")]
+    public long? Matched { get; set; }
+
+    [JsonPropertyName("lastPosition")]
+    public long? LastPosition { get; set; }
+
+    [JsonPropertyName("totalMatched")]
+    public long? TotalMatched { get; set; }
+
+    [JsonPropertyName("totalProcessed")]
+    public long? TotalProcessed { get; set; }
+
     [JsonPropertyName("ok")]
     public bool Ok { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
 
     [JsonPropertyName("tick")]
     public uint Tick { get; set; }

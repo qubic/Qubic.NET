@@ -29,6 +29,12 @@ public sealed class EpochInfoResponse
     [JsonPropertyName("lastLogId")]
     public JsonElement LastLogId { get; set; }
 
+    [JsonPropertyName("latestLogId")]
+    public JsonElement LatestLogId { get; set; }
+
+    [JsonPropertyName("lastIndexedTick")]
+    public JsonElement LastIndexedTick { get; set; }
+
     [JsonPropertyName("currentTick")]
     public JsonElement CurrentTick { get; set; }
 
@@ -68,13 +74,21 @@ public sealed class EpochInfoResponse
     /// <summary>Gets EndTickEndLogId as ulong.</summary>
     public ulong GetEndTickEndLogId() => ParseJsonElement(EndTickEndLogId);
 
-    /// <summary>Gets LastLogId as long (the most recent log ID in the current epoch).</summary>
+    /// <summary>Gets the latest log ID (tries latestLogId first, then lastLogId, then endTickEndLogId).</summary>
     public long GetLastLogId()
     {
+        // Try latestLogId (used in actual Bob responses)
+        if (LatestLogId.ValueKind == JsonValueKind.Number && LatestLogId.TryGetInt64(out var lv)) return lv;
+        if (LatestLogId.ValueKind == JsonValueKind.String && long.TryParse(LatestLogId.GetString(), out var ls)) return ls;
+        // Fall back to lastLogId
         if (LastLogId.ValueKind == JsonValueKind.Number && LastLogId.TryGetInt64(out var v)) return v;
         if (LastLogId.ValueKind == JsonValueKind.String && long.TryParse(LastLogId.GetString(), out var s)) return s;
-        return 0;
+        // Fall back to endTickEndLogId for completed epochs
+        return (long)GetEndTickEndLogId();
     }
+
+    /// <summary>Gets LastIndexedTick as ulong.</summary>
+    public ulong GetLastIndexedTick() => ParseJsonElement(LastIndexedTick);
 
     /// <summary>Gets CurrentTick as ulong.</summary>
     public ulong GetCurrentTick() => ParseJsonElement(CurrentTick);

@@ -759,8 +759,8 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
             if (data is null) return;
 
-            // Don't update cursor for catchUpComplete signal (it has no real logId/epoch)
-            if (!data.CatchUpComplete)
+            // Don't update cursor for catchUpComplete/catchUpProgress signals (no real logId/epoch)
+            if (!data.CatchUpComplete && !data.CatchUpProgress)
             {
                 lastReceivedLogId = data.LogId;
                 lastEpoch = data.Epoch;
@@ -951,6 +951,114 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
         => CallAsync<ComputorsResponse>("qubic_getComputors", new object[] { epoch }, cancellationToken);
 
     // --- Logs & Smart Contracts ---
+
+    /// <summary>
+    /// Searches the log index and returns tick numbers containing matching events.
+    /// </summary>
+    public async Task<List<uint>> FindLogIdsAsync(
+        FindLogIdsFilter filter,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var result = await SendRequestAsync("qubic_findLogIds",
+            new object[] { filter }, cancellationToken);
+
+        if (result is null)
+            return new List<uint>();
+
+        var element = result.Value;
+
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.Deserialize<List<uint>>(_jsonOptions) ?? new();
+
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty("error", out var errorProp))
+        {
+            EmitEvent(BobConnectionEventType.Error,
+                $"FindLogIds: server error: {errorProp}");
+        }
+
+        return new List<uint>();
+    }
+
+    /// <summary>
+    /// Gets log ID ranges for the given tick numbers (max 1000 per call).
+    /// </summary>
+    public async Task<List<TickLogRange>> GetTickLogRangesAsync(
+        uint[] ticks,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var result = await SendRequestAsync("qubic_getTickLogRanges",
+            new object[] { ticks }, cancellationToken);
+
+        if (result is null)
+            return new List<TickLogRange>();
+
+        var element = result.Value;
+
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.Deserialize<List<TickLogRange>>(_jsonOptions) ?? new();
+
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty("error", out var errorProp))
+        {
+            EmitEvent(BobConnectionEventType.Error,
+                $"GetTickLogRanges: server error: {errorProp}");
+        }
+
+        return new List<TickLogRange>();
+    }
+
+    /// <summary>Gets log entries by ID range for a specific epoch.</summary>
+    /// <param name="epoch">The epoch to fetch logs from.</param>
+    /// <param name="startLogId">Starting log ID (inclusive).</param>
+    /// <param name="endLogId">Ending log ID (inclusive).</param>
+    public async Task<List<LogNotification>> GetLogsByIdRangeAsync(
+        uint epoch, long startLogId, long endLogId,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var parameters = new object[] { (int)epoch, (int)startLogId, (int)endLogId };
+
+        var result = await SendRequestAsync("qubic_getLogsByIdRange",
+            parameters, cancellationToken);
+
+        if (result is null)
+            return new List<LogNotification>();
+
+        var element = result.Value;
+
+        // Result may be a direct array or an object wrapping one
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.Deserialize<List<LogNotification>>(_jsonOptions) ?? new();
+
+        // Error object like {"error":"Wrong range"} — log and return empty
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("error", out var errorProp))
+            {
+                EmitEvent(BobConnectionEventType.Error,
+                    $"GetLogsByIdRange: server error: {errorProp}");
+                return new List<LogNotification>();
+            }
+
+            // Object wrapper — look for an array property inside
+            foreach (var prop in element.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.Array)
+                    return prop.Value.Deserialize<List<LogNotification>>(_jsonOptions) ?? new();
+            }
+        }
+
+        // Unexpected shape — log and return empty
+        EmitEvent(BobConnectionEventType.Error,
+            $"GetLogsByIdRange: unexpected result kind={element.ValueKind}, raw={element.GetRawText()[..Math.Min(200, element.GetRawText().Length)]}");
+        return new List<LogNotification>();
+    }
 
     /// <summary>Gets log entries for a smart contract.</summary>
     public Task<List<BobLogEntry>> GetLogsAsync(

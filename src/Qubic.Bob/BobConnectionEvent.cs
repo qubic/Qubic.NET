@@ -25,5 +25,6 @@ public enum BobConnectionEventType
     NodeMarkedUnavailable,
     NodeRecovered,
     SubscriptionRestored,
-    Error
+    Error,
+    Info
 }
