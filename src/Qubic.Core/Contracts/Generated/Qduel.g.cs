@@ -29,6 +29,8 @@ public static class QduelContract
         public const uint GetTTLHours = 3;
         /// <summary>GetUserProfile (inputType=4).</summary>
         public const uint GetUserProfile = 4;
+        /// <summary>CalculateRevenue (inputType=5).</summary>
+        public const uint CalculateRevenue = 5;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -46,6 +48,8 @@ public static class QduelContract
         public const uint Deposit = 5;
         /// <summary>Withdraw (inputType=6).</summary>
         public const uint Withdraw = 6;
+        /// <summary>CloseRoom (inputType=7).</summary>
+        public const uint CloseRoom = 7;
     }
 }
 
@@ -132,11 +136,21 @@ public readonly struct GetTTLHoursOutput : ISmartContractOutput<GetTTLHoursOutpu
 
 // ═══ Function: GetUserProfile (inputType=4) ═══
 
-/// <summary>Input for query (empty).</summary>
+/// <summary>Input for query.</summary>
 public readonly struct GetUserProfileInput : ISmartContractInput
 {
-    public int SerializedSize => 0;
-    public byte[] ToBytes() => [];
+    public const int Size = 32;
+
+    public int SerializedSize => Size;
+
+    public required byte[] UserId { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        UserId.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        return bytes;
+    }
 }
 
 /// <summary>Output.</summary>
@@ -234,13 +248,15 @@ public sealed class ConnectToRoomPayload : ITransactionPayload, ISmartContractIn
 /// <summary>Output.</summary>
 public readonly struct ConnectToRoomOutput : ISmartContractOutput<ConnectToRoomOutput>
 {
+    public byte[] Winner { get; init; }
     public byte ReturnCode { get; init; }
 
     public static ConnectToRoomOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new ConnectToRoomOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            Winner = data[0..].Slice(0, 32).ToArray(),
+            ReturnCode = data.Slice(32, 1)[0]
         };
     }
 }
@@ -250,7 +266,7 @@ public readonly struct ConnectToRoomOutput : ISmartContractOutput<ConnectToRoomO
 /// <summary>Input payload for procedure.</summary>
 public sealed class SetPercentFeesPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 3;
+    public const int Size = 6;
 
     public ushort InputType => 3;
     public ushort InputSize => Size;
@@ -259,6 +275,7 @@ public sealed class SetPercentFeesPayload : ITransactionPayload, ISmartContractI
     public byte DevFeePercentBps { get; init; }
     public byte BurnFeePercentBps { get; init; }
     public byte ShareholdersFeePercentBps { get; init; }
+    public ushort PercentScale { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
@@ -268,6 +285,7 @@ public sealed class SetPercentFeesPayload : ITransactionPayload, ISmartContractI
         bytes.AsSpan(0, 1)[0] = DevFeePercentBps;
         bytes.AsSpan(1, 1)[0] = BurnFeePercentBps;
         bytes.AsSpan(2, 1)[0] = ShareholdersFeePercentBps;
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(4), PercentScale);
         return bytes;
     }
 }
@@ -382,6 +400,71 @@ public readonly struct WithdrawOutput : ISmartContractOutput<WithdrawOutput>
         return new WithdrawOutput
         {
             ReturnCode = data.Slice(0, 1)[0]
+        };
+    }
+}
+
+// ═══ Procedure: CloseRoom (inputType=7) ═══
+
+/// <summary>Input for procedure (empty payload).</summary>
+public sealed class CloseRoomPayload : ITransactionPayload, ISmartContractInput
+{
+    public ushort InputType => 7;
+    public ushort InputSize => 0;
+    public int SerializedSize => 0;
+    public byte[] GetPayloadBytes() => [];
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct CloseRoomOutput : ISmartContractOutput<CloseRoomOutput>
+{
+    public byte ReturnCode { get; init; }
+
+    public static CloseRoomOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new CloseRoomOutput
+        {
+            ReturnCode = data.Slice(0, 1)[0]
+        };
+    }
+}
+
+// ═══ Function: CalculateRevenue (inputType=5) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct CalculateRevenueInput : ISmartContractInput
+{
+    public const int Size = 8;
+
+    public int SerializedSize => Size;
+
+    public ulong Amount { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Amount);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct CalculateRevenueOutput : ISmartContractOutput<CalculateRevenueOutput>
+{
+    public ulong DevFee { get; init; }
+    public ulong BurnFee { get; init; }
+    public ulong ShareholdersFee { get; init; }
+    public ulong Winner { get; init; }
+
+    public static CalculateRevenueOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new CalculateRevenueOutput
+        {
+            DevFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            BurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            ShareholdersFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            Winner = BinaryPrimitives.ReadUInt64LittleEndian(data[24..])
         };
     }
 }

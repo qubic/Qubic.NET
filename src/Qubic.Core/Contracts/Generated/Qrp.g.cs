@@ -36,6 +36,8 @@ public static class QrpContract
         public const uint AddAllowedSC = 2;
         /// <summary>RemoveAllowedSC (inputType=3).</summary>
         public const uint RemoveAllowedSC = 3;
+        /// <summary>SendReserve (inputType=4).</summary>
+        public const uint SendReserve = 4;
     }
 }
 
@@ -197,6 +199,45 @@ public readonly struct RemoveAllowedSCOutput : ISmartContractOutput<RemoveAllowe
     public static RemoveAllowedSCOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new RemoveAllowedSCOutput
+        {
+            ReturnCode = data.Slice(0, 1)[0]
+        };
+    }
+}
+
+// ═══ Procedure: SendReserve (inputType=4) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class SendReservePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 16;
+
+    public ushort InputType => 4;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong ScIndex { get; init; }
+    public ulong Amount { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), ScIndex);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Amount);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct SendReserveOutput : ISmartContractOutput<SendReserveOutput>
+{
+    public byte ReturnCode { get; init; }
+
+    public static SendReserveOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new SendReserveOutput
         {
             ReturnCode = data.Slice(0, 1)[0]
         };

@@ -7,7 +7,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.Crypto</PackageId>
-    <Version>1.3.1</Version>
+    <Version>1.3.3</Version>
     <Authors>j0et0m</Authors>
     <Company>Qubic</Company>
     <Description>Pure C#/.NET implementation of Qubic cryptographic primitives: K12 (KangarooTwelve) hashing, FourQ elliptic curve, SchnorrQ signatures, and ECDH key exchange. Zero external dependencies.</Description>
