@@ -15,12 +15,23 @@ public class CppHeaderParser
     public ContractDefinition Parse(string headerPath, int contractIndex, string csharpName, string cppStructName)
     {
         var lines = File.ReadAllLines(headerPath);
+        return ParseLines(lines, contractIndex, csharpName, cppStructName, Path.GetFileName(headerPath));
+    }
+
+    public ContractDefinition ParseText(string sourceText, int contractIndex, string csharpName, string cppStructName)
+    {
+        var lines = sourceText.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        return ParseLines(lines, contractIndex, csharpName, cppStructName, "(pasted)");
+    }
+
+    private ContractDefinition ParseLines(string[] lines, int contractIndex, string csharpName, string cppStructName, string headerFile)
+    {
         var contract = new ContractDefinition
         {
             CppStructName = cppStructName,
             CSharpName = csharpName,
             ContractIndex = contractIndex,
-            HeaderFile = Path.GetFileName(headerPath)
+            HeaderFile = headerFile
         };
 
         // Phase 1: Collect constexpr constants from the entire file
@@ -81,13 +92,26 @@ public class CppHeaderParser
     private void CollectConstants(string[] lines)
     {
         var constexprRe = new Regex(@"constexpr\s+\w+\s+(\w+)\s*=\s*(.+?)\s*;");
-        foreach (var line in lines)
+        var defineRe = new Regex(@"^\s*#define\s+(\w+)\s+(.+)$");
+        foreach (var rawLine in lines)
         {
+            var line = StripComment(rawLine);
+
             var m = constexprRe.Match(line);
             if (m.Success)
             {
                 var name = m.Groups[1].Value;
                 var expr = m.Groups[2].Value;
+                if (TryEvaluateExpr(expr, out var val))
+                    _constants[name] = val;
+                continue;
+            }
+
+            var dm = defineRe.Match(line);
+            if (dm.Success)
+            {
+                var name = dm.Groups[1].Value;
+                var expr = dm.Groups[2].Value.Trim();
                 if (TryEvaluateExpr(expr, out var val))
                     _constants[name] = val;
             }
@@ -97,12 +121,8 @@ public class CppHeaderParser
     private bool TryEvaluateExpr(string expr, out long value)
     {
         value = 0;
-        // Remove type suffixes
-        expr = expr.Trim()
-            .Replace("ULL", "")
-            .Replace("UL", "")
-            .Replace("LL", "")
-            .Replace("U", "");
+        // Remove type suffixes (only at end of token, not mid-word)
+        expr = Regex.Replace(expr.Trim(), @"(ULL|UL|LL|U)\b", "");
 
         // Try direct number
         if (TryParseNumber(expr, out value))
@@ -142,7 +162,7 @@ public class CppHeaderParser
 
     private bool ResolveValue(string token, out long value)
     {
-        token = token.Trim().Replace("ULL", "").Replace("UL", "").Replace("LL", "").Replace("U", "");
+        token = Regex.Replace(token.Trim(), @"(ULL|UL|LL|U)\b", "");
         if (TryParseNumber(token, out value))
             return true;
         return _constants.TryGetValue(token, out value);
@@ -206,6 +226,14 @@ public class CppHeaderParser
                 // Skip if it's a 2-struct (e.g., QX2, QEARN2) or the contract struct
                 if (structName.EndsWith("2") || structName == contractStructName)
                 {
+                    i++;
+                    continue;
+                }
+
+                // Handle single-line empty struct: struct Name {};
+                if (line.Contains('{') && line.Contains('}'))
+                {
+                    _fileStructs[structName] = new StructDef { CppName = structName };
                     i++;
                     continue;
                 }
@@ -402,7 +430,14 @@ public class CppHeaderParser
             var sm = structRe.Match(line);
             if (sm.Success && (inPublic || depth == 1) && !line.Contains("_locals"))
             {
-                currentStructName = $"{sm.Groups[1].Value}_{sm.Groups[2].Value}";
+                var sName = $"{sm.Groups[1].Value}_{sm.Groups[2].Value}";
+                // Handle single-line empty structs: struct name_input {};
+                if (braceOpen > 0 && braceClose > 0 && braceOpen == braceClose)
+                {
+                    result[sName] = new StructDef { CppName = sName };
+                    continue;
+                }
+                currentStructName = sName;
                 currentFields = [];
                 currentNested = [];
                 structDepth = depth;
@@ -417,6 +452,12 @@ public class CppHeaderParser
                 && !line.Contains("_locals") && !line.Contains("_input") && !line.Contains("_output"))
             {
                 var structName = gsm.Groups[1].Value;
+                // Handle single-line empty structs: struct Name {};
+                if (braceOpen > 0 && braceClose > 0 && braceOpen == braceClose)
+                {
+                    _contractInternalStructs[structName] = new StructDef { CppName = structName };
+                    continue;
+                }
                 // Parse this struct and store it as a contract-internal struct
                 currentStructName = $"__internal__{structName}";
                 currentFields = [];

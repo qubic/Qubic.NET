@@ -602,7 +602,7 @@ public class CSharpEmitter
     /// Each field is aligned to its natural alignment, and the struct size
     /// is padded to a multiple of the struct's max member alignment.
     /// </summary>
-    private List<int> ComputeFieldOffsets(StructDef def, out int totalSize, out int structAlignment)
+    public List<int> ComputeFieldOffsets(StructDef def, out int totalSize, out int structAlignment)
     {
         var offsets = new List<int>();
         int offset = 0;
