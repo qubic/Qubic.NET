@@ -8,7 +8,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.Core</PackageId>
-    <Version>1.279.0</Version>
+    <Version>1.279.0.1</Version>
     <Authors>Qubic.NET Contributors</Authors>
     <Description>Core domain models and abstractions for the Qubic network</Description>
     <PackageTags>qubic;blockchain;cryptocurrency</PackageTags>
