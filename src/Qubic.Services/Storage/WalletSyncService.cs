@@ -315,42 +315,34 @@ public sealed class WalletSyncService : IDisposable
                     Log($"Bob Logs: Phase 2 — fetching current epoch {currentEpoch} logs via indexed lookup");
                     RaiseChanged();
 
-                    // Re-fetch current epoch info to get latest indexed tick
+                    // Snapshot the current latestLogId BEFORE the indexed fetch.
+                    // After the fetch, we know there are no matching logs between
+                    // the last match and this point, so the subscription can start here.
                     currentEpochInfo = await wsClient.GetCurrentEpochAsync(ct);
-                    var phase2Count = await FetchEpochLogsIndexed(wsClient, currentEpoch, currentEpochInfo, identity, ct);
+                    var snapshotLogId = currentEpochInfo.GetLastLogId();
+                    Log($"Bob Logs: Phase 2 — snapshotLogId={snapshotLogId}");
 
-                    // Record watermark: use the lastIndexedTick so subscription can resume from there
-                    var lastIndexedTick = (uint)currentEpochInfo.GetLastIndexedTick();
-                    Log($"Bob Logs: Phase 2 complete — {phase2Count} matching logs from epoch {currentEpoch} (lastIndexedTick={lastIndexedTick})");
+                    var phase2Count = await FetchEpochLogsIndexed(wsClient, currentEpoch, currentEpochInfo, identity, ct);
+                    Log($"Bob Logs: Phase 2 complete — {phase2Count} matching logs from epoch {currentEpoch}");
+
+                    // Set watermark to the snapshot so subscription skips the gap
+                    _db.SetWatermark(watermarkKey, snapshotLogId.ToString());
+                    _db.SetWatermark(epochWatermarkKey, currentEpoch.ToString());
 
                     BobLogCatchUpPercent = null;
                     BobLogCatchUpEpoch = null;
 
                     // ── Phase 3: Subscribe for live logs ──
-                    // Subscribe from the last indexed position so the subscription
-                    // covers any gap between indexed data and real-time.
-                    var wmStr = _db.GetWatermark(watermarkKey);
-                    long? startLogId = long.TryParse(wmStr, out var lid) ? lid : null;
-                    var epochStr = _db.GetWatermark(epochWatermarkKey);
-                    var startEpoch = uint.TryParse(epochStr, out var ep) ? ep : (uint?)null;
-
-                    // If stored epoch is older than current, reset
-                    if (startEpoch.HasValue && startEpoch.Value < currentEpoch)
-                    {
-                        startEpoch = currentEpoch;
-                        startLogId = null;
-                    }
-
                     var options = new LogSubscriptionOptions
                     {
                         Identities = [identity],
-                        StartLogId = startLogId,
-                        StartEpoch = startEpoch ?? currentEpoch
+                        StartLogId = snapshotLogId,
+                        StartEpoch = currentEpoch
                     };
 
                     BobLogStatus = StreamStatus.CatchingUp;
                     BobLogStatusMessage = $"Subscribing for live logs...";
-                    Log($"Bob Logs: Phase 3 — subscribing (startLogId={startLogId?.ToString() ?? "null"}, startEpoch={options.StartEpoch})");
+                    Log($"Bob Logs: Phase 3 — subscribing from logId {snapshotLogId} epoch {currentEpoch}");
                     RaiseChanged();
 
                     var sub = await wsClient.SubscribeLogsAsync(options, ct);
@@ -531,14 +523,6 @@ public sealed class WalletSyncService : IDisposable
                 BobLogStatusMessage = $"Epoch {epoch}: fetching logs — {BobLogCatchUpPercent:F0}%";
                 RaiseChanged();
             }
-        }
-
-        // Store the last logId we fetched as watermark for subscription resume
-        if (merged.Count > 0)
-        {
-            var lastLogId = merged[^1].ToId;
-            _db.SetWatermark("bob_log_last_logid", lastLogId.ToString());
-            _db.SetWatermark("bob_log_last_epoch", epoch.ToString());
         }
 
         return matchCount;

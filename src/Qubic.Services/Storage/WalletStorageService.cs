@@ -34,11 +34,10 @@ public sealed class WalletStorageService : IDisposable
 
     /// <summary>
     /// Opens the encrypted database for this seed and starts background sync.
-    /// Sync is skipped for brand-new databases (e.g. freshly generated seeds with no history).
-    /// When <paramref name="currentEpoch"/> is provided and the DB is new, watermarks are
-    /// initialized so that future sync starts from the current epoch instead of from the beginning.
+    /// When <paramref name="skipInitialSync"/> is true (e.g. freshly generated seeds with no history),
+    /// sync is skipped and watermarks are initialized so that future sync starts from the current epoch.
     /// </summary>
-    public void SetSeed(string seed, string identity, uint currentEpoch = 0)
+    public void SetSeed(string seed, string identity, uint currentEpoch = 0, bool skipInitialSync = false)
     {
         Close();
 
@@ -51,7 +50,7 @@ public sealed class WalletStorageService : IDisposable
 
         MigrateLegacyTxdb(seed);
 
-        if (isNew && currentEpoch > 0)
+        if (skipInitialSync && isNew && currentEpoch > 0)
         {
             // Seed watermarks so future sync starts from current epoch, not from the beginning
             _db.SetWatermark("bob_log_last_epoch", currentEpoch.ToString());
@@ -60,7 +59,7 @@ public sealed class WalletStorageService : IDisposable
             _ = FetchAndSetCurrentLogIdAsync();
         }
 
-        if (!isNew)
+        if (!skipInitialSync || !isNew)
             _sync.Start(identity);
         OnStateChanged?.Invoke();
     }
