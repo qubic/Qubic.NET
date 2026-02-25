@@ -331,6 +331,7 @@ public sealed class WalletDatabase : IDisposable
 
     public List<StoredTransaction> GetTransactions(TransactionQuery query, string identity)
     {
+        if (!IsOpen) return [];
         var sb = new StringBuilder("SELECT * FROM transactions WHERE 1=1");
         var parms = new List<(string, object)>();
 
@@ -371,12 +372,14 @@ public sealed class WalletDatabase : IDisposable
 
     public StoredTransaction? GetTransactionByHash(string hash)
     {
+        if (!IsOpen) return null;
         var results = ReadTransactions("SELECT * FROM transactions WHERE hash=@h LIMIT 1", ("@h", hash));
         return results.Count > 0 ? results[0] : null;
     }
 
     public int GetTransactionCount()
     {
+        if (!IsOpen) return 0;
         using var cmd = CreateCommand("SELECT COUNT(*) FROM transactions");
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
@@ -416,6 +419,7 @@ public sealed class WalletDatabase : IDisposable
 
     public List<TrackedTransaction> GetTrackedTransactions()
     {
+        if (!IsOpen) return [];
         var results = new List<TrackedTransaction>();
         using var cmd = CreateCommand("SELECT * FROM tracked_transactions ORDER BY created_utc DESC");
         using var reader = cmd.ExecuteReader();
@@ -530,6 +534,7 @@ public sealed class WalletDatabase : IDisposable
 
     public List<StoredLogEvent> GetLogEvents(LogEventQuery query)
     {
+        if (!IsOpen) return [];
         var sb = new StringBuilder("SELECT * FROM log_events WHERE 1=1");
         var parms = new List<(string, object)>();
 
@@ -549,6 +554,7 @@ public sealed class WalletDatabase : IDisposable
 
     public int GetLogEventCount()
     {
+        if (!IsOpen) return 0;
         using var cmd = CreateCommand("SELECT COUNT(*) FROM log_events");
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
@@ -558,6 +564,7 @@ public sealed class WalletDatabase : IDisposable
     /// </summary>
     public List<string> GetMissingLogTransactionHashes()
     {
+        if (!IsOpen) return [];
         var results = new List<string>();
         using var cmd = CreateCommand("""
             SELECT DISTINCT le.tx_hash FROM log_events le
@@ -574,6 +581,7 @@ public sealed class WalletDatabase : IDisposable
 
     public string? GetWatermark(string key)
     {
+        if (!IsOpen) return null;
         using var cmd = CreateCommand("SELECT value FROM sync_watermarks WHERE key=@k", ("@k", key));
         var result = cmd.ExecuteScalar();
         return result as string;
@@ -592,6 +600,7 @@ public sealed class WalletDatabase : IDisposable
 
     public Dictionary<string, string> GetAllWatermarks()
     {
+        if (!IsOpen) return new();
         var result = new Dictionary<string, string>();
         using var cmd = CreateCommand("SELECT key, value FROM sync_watermarks");
         using var reader = cmd.ExecuteReader();
@@ -709,7 +718,9 @@ public sealed class WalletDatabase : IDisposable
 
     private SqliteCommand CreateCommand(string sql, params (string name, object value)[] parms)
     {
-        var cmd = _connection!.CreateCommand();
+        if (_connection == null)
+            throw new InvalidOperationException("Database is not open.");
+        var cmd = _connection.CreateCommand();
         cmd.CommandText = sql;
         foreach (var (name, value) in parms)
             cmd.Parameters.AddWithValue(name, value);
