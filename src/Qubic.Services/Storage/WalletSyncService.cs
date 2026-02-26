@@ -449,20 +449,26 @@ public sealed class WalletSyncService : IDisposable
             return 0;
         }
 
-        // Step 1: Find ticks with matching logs
+        // Step 1: Find ticks with matching logs (as source via topic1 + as dest via topic2)
         BobLogStatusMessage = $"Epoch {epoch}: finding matching ticks...";
         RaiseChanged();
 
-        var filter = new FindLogIdsFilter
+        var filterTopic1 = new FindLogIdsFilter
         {
-            ScIndex = 0,
-            LogType = 0,
-            Topic1 = identity,
-            FromTick = initialTick,
-            ToTick = endTick
+            ScIndex = 0, LogType = 0, Topic1 = identity,
+            FromTick = initialTick, ToTick = endTick
         };
-        var matchingTicks = await wsClient.FindLogIdsAsync(filter, ct);
-        Log($"Bob Logs: Epoch {epoch} — findLogIds returned {matchingTicks.Count} ticks");
+        var filterTopic2 = new FindLogIdsFilter
+        {
+            ScIndex = 0, LogType = 0, Topic2 = identity,
+            FromTick = initialTick, ToTick = endTick
+        };
+        var task1 = wsClient.FindLogIdsAsync(filterTopic1, ct);
+        var task2 = wsClient.FindLogIdsAsync(filterTopic2, ct);
+        await Task.WhenAll(task1, task2);
+
+        var matchingTicks = task1.Result.Union(task2.Result).OrderBy(t => t).ToList();
+        Log($"Bob Logs: Epoch {epoch} — findLogIds returned {task1.Result.Count} (topic1) + {task2.Result.Count} (topic2) → {matchingTicks.Count} unique ticks");
 
         if (matchingTicks.Count == 0)
             return 0;

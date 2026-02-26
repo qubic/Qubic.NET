@@ -23,6 +23,9 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
     private readonly ConcurrentDictionary<string, SubscriptionEntry> _activeSubscriptions = new();
     private readonly ConcurrentDictionary<int, SubscriptionEntry> _pendingSubscriptionEntries = new();
     private readonly SemaphoreSlim _connectLock = new(1, 1);
+    private readonly SemaphoreSlim _rateLock = new(1, 1);
+    private readonly Queue<long> _requestTimestamps = new();
+    private const int MaxRequestsPerSecond = 14; // stay under Bob's 15 req/s limit
 
     private ClientWebSocket? _webSocket;
     private BobNodeState? _activeNode;
@@ -579,6 +582,9 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
         try
         {
+            // Rate limiting: wait if we've hit the per-second cap
+            await ThrottleAsync(cancellationToken);
+
             var json = JsonSerializer.Serialize(request, _jsonOptions);
             var bytes = Encoding.UTF8.GetBytes(json);
 
@@ -599,6 +605,48 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
             _pendingRequests.TryRemove(requestId, out _);
             _pendingSubscriptionEntries.TryRemove(requestId, out _);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Sliding-window rate limiter: ensures no more than <see cref="MaxRequestsPerSecond"/>
+    /// requests are sent within any 1-second window.
+    /// </summary>
+    private async Task ThrottleAsync(CancellationToken ct)
+    {
+        await _rateLock.WaitAsync(ct);
+        try
+        {
+            var now = Stopwatch.GetTimestamp();
+            var oneSecondAgo = now - Stopwatch.Frequency;
+
+            // Discard timestamps older than 1 second
+            while (_requestTimestamps.Count > 0 && _requestTimestamps.Peek() <= oneSecondAgo)
+                _requestTimestamps.Dequeue();
+
+            // If at the limit, wait until the oldest request expires
+            if (_requestTimestamps.Count >= MaxRequestsPerSecond)
+            {
+                var oldest = _requestTimestamps.Peek();
+                var waitTicks = oldest + Stopwatch.Frequency - now;
+                if (waitTicks > 0)
+                {
+                    var waitMs = (int)(waitTicks * 1000 / Stopwatch.Frequency) + 1;
+                    await Task.Delay(waitMs, ct);
+                }
+
+                // Re-drain after waiting
+                now = Stopwatch.GetTimestamp();
+                oneSecondAgo = now - Stopwatch.Frequency;
+                while (_requestTimestamps.Count > 0 && _requestTimestamps.Peek() <= oneSecondAgo)
+                    _requestTimestamps.Dequeue();
+            }
+
+            _requestTimestamps.Enqueue(Stopwatch.GetTimestamp());
+        }
+        finally
+        {
+            _rateLock.Release();
         }
     }
 

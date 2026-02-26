@@ -28,6 +28,15 @@ public sealed class ContactEntry
     public string Address { get; set; } = "";
 }
 
+/// <summary>
+/// A watchlist entry: an address to monitor balance for (no seed, no sending).
+/// </summary>
+public sealed class WatchlistEntry
+{
+    public string Label { get; set; } = "";
+    public string Address { get; set; } = "";
+}
+
 /// <summary>A saved SendToMany template (name + list of recipients).</summary>
 public sealed class SendManyTemplate
 {
@@ -58,6 +67,7 @@ public sealed class VaultService
     private readonly QubicSettingsService _settings;
     private List<VaultEntry>? _entries;
     private List<ContactEntry>? _contacts;
+    private List<WatchlistEntry>? _watchlist;
     private List<SendManyTemplate>? _templates;
     private string? _password;
 
@@ -88,6 +98,10 @@ public sealed class VaultService
     /// <summary>Address book contacts. Empty if locked.</summary>
     public IReadOnlyList<ContactEntry> Contacts =>
         _contacts?.AsReadOnly() ?? (IReadOnlyList<ContactEntry>)Array.Empty<ContactEntry>();
+
+    /// <summary>Watchlist addresses for balance monitoring. Empty if locked.</summary>
+    public IReadOnlyList<WatchlistEntry> Watchlist =>
+        _watchlist?.AsReadOnly() ?? (IReadOnlyList<WatchlistEntry>)Array.Empty<WatchlistEntry>();
 
     /// <summary>SendToMany templates. Empty if locked.</summary>
     public IReadOnlyList<SendManyTemplate> Templates =>
@@ -141,6 +155,7 @@ public sealed class VaultService
 
         _entries = entries;
         _contacts = [];
+        _watchlist = [];
         _templates = [];
         _password = password;
         _settings.SetCustom(VaultPathKey, filePath);
@@ -213,6 +228,7 @@ public sealed class VaultService
             // V1 format: [{ "Label": "...", "Seed": "..." }, ...]
             List<VaultEntry>? entries;
             List<ContactEntry>? contacts;
+            List<WatchlistEntry>? watchlist;
             List<SendManyTemplate>? templates;
 
             if (decryptedJson.TrimStart().StartsWith('['))
@@ -220,14 +236,16 @@ public sealed class VaultService
                 // V1: flat array of seeds
                 entries = JsonSerializer.Deserialize<List<VaultEntry>>(decryptedJson);
                 contacts = [];
+                watchlist = [];
                 templates = [];
             }
             else
             {
-                // V2+: object with Seeds + Contacts + Templates
+                // V2+: object with Seeds + Contacts + Watchlist + Templates
                 var payload = JsonSerializer.Deserialize<VaultPayload>(decryptedJson);
                 entries = payload?.Seeds;
                 contacts = payload?.Contacts ?? [];
+                watchlist = payload?.Watchlist ?? [];
                 templates = payload?.Templates ?? [];
             }
 
@@ -238,6 +256,7 @@ public sealed class VaultService
 
             _entries = entries;
             _contacts = contacts;
+            _watchlist = watchlist;
             _templates = templates;
             _password = password;
             OnVaultChanged?.Invoke();
@@ -253,6 +272,7 @@ public sealed class VaultService
     {
         _entries = null;
         _contacts = null;
+        _watchlist = null;
         _templates = null;
         _password = null;
         OnVaultChanged?.Invoke();
@@ -264,6 +284,7 @@ public sealed class VaultService
         var path = VaultPath;
         _entries = null;
         _contacts = null;
+        _watchlist = null;
         _templates = null;
         _password = null;
         _settings.RemoveCustom(VaultPathKey);
@@ -363,11 +384,55 @@ public sealed class VaultService
     public ContactEntry? GetContact(string address) =>
         _contacts?.FirstOrDefault(c => c.Address.Equals(address, StringComparison.OrdinalIgnoreCase));
 
+    // ── Watchlist management ──
+
+    /// <summary>Adds an address to the watchlist.</summary>
+    public void AddWatchlistEntry(string label, string address)
+    {
+        EnsureUnlocked();
+        if (string.IsNullOrWhiteSpace(label))
+            throw new ArgumentException("Label is required.", nameof(label));
+        if (string.IsNullOrEmpty(address) || address.Length != 60)
+            throw new ArgumentException("Address must be 60 characters.", nameof(address));
+        if (_watchlist!.Any(w => w.Address.Equals(address, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("This address is already in the watchlist.");
+
+        _watchlist!.Add(new WatchlistEntry { Label = label, Address = address.ToUpperInvariant() });
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Removes a watchlist entry by address.</summary>
+    public void RemoveWatchlistEntry(string address)
+    {
+        EnsureUnlocked();
+        var removed = _watchlist!.RemoveAll(w => w.Address.Equals(address, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0) return;
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Renames a watchlist entry's label.</summary>
+    public void RenameWatchlistEntry(string address, string newLabel)
+    {
+        EnsureUnlocked();
+        var entry = _watchlist!.FirstOrDefault(w => w.Address.Equals(address, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Watchlist entry not found.");
+        entry.Label = newLabel;
+        SaveToDisk();
+        OnVaultChanged?.Invoke();
+    }
+
+    /// <summary>Gets a watchlist entry by address, or null.</summary>
+    public WatchlistEntry? GetWatchlistEntry(string address) =>
+        _watchlist?.FirstOrDefault(w => w.Address.Equals(address, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Returns true if the address is already in the address book or matches a vault identity.</summary>
     public bool IsKnownAddress(string? address)
     {
         if (string.IsNullOrEmpty(address) || !IsUnlocked) return false;
         return _contacts!.Any(c => c.Address.Equals(address, StringComparison.OrdinalIgnoreCase))
+            || _watchlist!.Any(w => w.Address.Equals(address, StringComparison.OrdinalIgnoreCase))
             || _entries!.Any(e => e.Identity.Equals(address, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -506,7 +571,7 @@ public sealed class VaultService
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        var payload = new VaultPayload { Seeds = _entries, Contacts = _contacts ?? [], Templates = _templates ?? [] };
+        var payload = new VaultPayload { Seeds = _entries, Contacts = _contacts ?? [], Watchlist = _watchlist ?? [], Templates = _templates ?? [] };
         var json = JsonSerializer.Serialize(payload);
         var envelope = Encrypt(json, _password);
         var fileJson = JsonSerializer.Serialize(envelope, new JsonSerializerOptions { WriteIndented = true });
@@ -542,11 +607,12 @@ public sealed class VaultService
         public string Data { get; set; } = "";
     }
 
-    /// <summary>Vault payload: seeds + address book contacts + SendToMany templates.</summary>
+    /// <summary>Vault payload: seeds + contacts + watchlist + SendToMany templates.</summary>
     private sealed class VaultPayload
     {
         public List<VaultEntry> Seeds { get; set; } = [];
         public List<ContactEntry> Contacts { get; set; } = [];
+        public List<WatchlistEntry> Watchlist { get; set; } = [];
         public List<SendManyTemplate> Templates { get; set; } = [];
     }
 }
