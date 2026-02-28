@@ -21,10 +21,10 @@ public class NotificationModelTests
             "tick": 22500000,
             "isCatchUp": true,
             "timestamp": "1700000000000",
-            "txCountFiltered": 5,
-            "txCountTotal": 12,
-            "logCountFiltered": 3,
-            "logCountTotal": 8,
+            "filteredTxs": 5,
+            "totalTxs": 12,
+            "filteredLogs": 3,
+            "totalLogs": 8,
             "transactions": [
                 {
                     "hash": "txhash1",

@@ -33,7 +33,7 @@ public static class K12
             throw new ArgumentOutOfRangeException(nameof(outputLength));
 
         var output = new byte[outputLength];
-        Hash(input, output);
+        Hash(input, output.AsSpan());
         return output;
     }
 
@@ -51,7 +51,7 @@ public static class K12
     public static byte[] Hash(ReadOnlySpan<byte> input, ReadOnlySpan<byte> customization, int outputLength = 32)
     {
         var output = new byte[outputLength];
-        Hash(input, customization, output);
+        Hash(input, customization, output.AsSpan());
         return output;
     }
 

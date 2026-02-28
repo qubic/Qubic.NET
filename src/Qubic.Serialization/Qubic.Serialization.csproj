@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -9,7 +9,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.Serialization</PackageId>
-    <Version>1.3.3</Version>
+    <Version>1.3.4</Version>
     <Authors>Qubic.NET Contributors</Authors>
     <Description>Binary serialization for the Qubic network protocol</Description>
     <PackageTags>qubic;blockchain;serialization</PackageTags>

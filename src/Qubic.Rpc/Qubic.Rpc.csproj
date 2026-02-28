@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.Rpc</PackageId>
-    <Version>1.3.3</Version>
+    <Version>1.3.4</Version>
     <Authors>Qubic.NET Contributors</Authors>
     <Description>HTTP client for the official Qubic RPC API</Description>
     <PackageTags>qubic;blockchain;rpc;http</PackageTags>
@@ -22,10 +22,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Qubic.Core\Qubic.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.Net.Http.Json" Version="8.*" />
   </ItemGroup>
 
 </Project>
