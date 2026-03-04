@@ -101,14 +101,15 @@ public sealed class QubicPacketReader
     /// </summary>
     public ContractIpo ReadContractIpoResponse(ReadOnlySpan<byte> payload)
     {
-        // Payload: 676 * 32 pubkeys + 676 * 8 prices = 27,040 bytes
+        // Payload: contractIndex (4) + tick (4) + 676 * 32 pubkeys + 676 * 8 prices = 27,048 bytes
         const int numSlots = 676;
-        var expectedSize = numSlots * 32 + numSlots * 8;
+        const int headerSize = 8; // contractIndex (4) + tick (4)
+        var expectedSize = headerSize + numSlots * 32 + numSlots * 8;
         if (payload.Length < expectedSize)
             throw new ArgumentException($"Payload too short for ContractIPO. Expected {expectedSize}, got {payload.Length}.");
 
         var publicKeys = new byte[numSlots][];
-        var offset = 0;
+        var offset = headerSize; // skip contractIndex + tick
         for (int i = 0; i < numSlots; i++)
         {
             publicKeys[i] = payload.Slice(offset, 32).ToArray();

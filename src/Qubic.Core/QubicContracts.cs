@@ -159,12 +159,14 @@ public static class QubicContracts
 
     /// <summary>
     /// Gets the contract public key for a given contract index.
-    /// Contract addresses are encoded as: contractIndex in first byte, rest zeros.
+    /// Contract addresses are little-endian encoded: contractIndex occupies bytes 0-1, rest zeros.
+    /// Supports indices 0–1023 (MAX_NUMBER_OF_CONTRACTS = 1024 in core).
     /// </summary>
     public static byte[] GetContractPublicKey(int contractIndex)
     {
         var pubKey = new byte[32];
-        pubKey[0] = (byte)contractIndex;
+        pubKey[0] = (byte)(contractIndex & 0xFF);
+        pubKey[1] = (byte)(contractIndex >> 8);
         return pubKey;
     }
 
