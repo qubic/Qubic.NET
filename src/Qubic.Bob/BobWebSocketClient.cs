@@ -188,7 +188,13 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
     private async Task ResubscribeAllAsync(CancellationToken cancellationToken)
     {
-        foreach (var entry in _activeSubscriptions.Values)
+        // Snapshot and deduplicate: OnDisconnected nulls ServerSubscriptionId but
+        // doesn't remove the old dict key, so the same entry can appear under
+        // multiple keys. Clear the dict and rebuild from unique entries.
+        var entries = _activeSubscriptions.Values.Distinct().ToList();
+        _activeSubscriptions.Clear();
+
+        foreach (var entry in entries)
         {
             if (entry.Subscription.CancellationToken.IsCancellationRequested)
                 continue;
@@ -202,12 +208,7 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
                     entry,
                     cancellationToken);
 
-                // Update the subscription's server ID and re-register in the lookup
-                var oldId = entry.Subscription.ServerSubscriptionId;
                 entry.Subscription.ServerSubscriptionId = subscriptionId;
-
-                if (oldId is not null)
-                    _activeSubscriptions.TryRemove(oldId, out _);
 
                 if (subscriptionId is not null)
                     _activeSubscriptions[subscriptionId] = entry;
