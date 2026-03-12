@@ -47,6 +47,35 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
     /// </summary>
     public string? ActiveNodeUrl => _activeNode?.BaseUrl;
 
+    /// <summary>
+    /// Waits until the connection state becomes <see cref="BobConnectionState.Connected"/>.
+    /// Useful after a disconnect when the client is reconnecting internally.
+    /// </summary>
+    /// <param name="timeout">Maximum time to wait. Defaults to 60 seconds.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if connected within the timeout, false otherwise.</returns>
+    public async Task<bool> WaitForConnectionAsync(
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        timeout ??= TimeSpan.FromSeconds(60);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout.Value);
+
+        try
+        {
+            while (State != BobConnectionState.Connected && !timeoutCts.Token.IsCancellationRequested)
+            {
+                await Task.Delay(250, timeoutCts.Token);
+            }
+            return State == BobConnectionState.Connected;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false; // Timed out
+        }
+    }
+
     public BobWebSocketClient(BobWebSocketOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -160,20 +189,22 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
                         bestNode.BaseUrl);
                 }
 
-                // Start a temporary receive pump so SendRequestCoreAsync can get responses
-                // during resubscription (the main receive loop is blocked waiting for us to return).
-                using var resubCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                var tempReceiveTask = Task.Run(() => TempReceivePumpAsync(resubCts.Token), resubCts.Token);
-
-                try
+                // Fire-and-forget resubscription — the receive loop will resume
+                // immediately after ReconnectAsync returns, so it can process
+                // the subscribe responses that ResubscribeAllAsync awaits.
+                _ = Task.Run(async () =>
                 {
-                    await ResubscribeAllAsync(cancellationToken);
-                }
-                finally
-                {
-                    resubCts.Cancel();
-                    try { await tempReceiveTask; } catch (OperationCanceledException) { }
-                }
+                    try
+                    {
+                        await ResubscribeAllAsync(cancellationToken);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        EmitEvent(BobConnectionEventType.Error,
+                            $"Resubscription failed: {ex.Message}",
+                            _activeNode?.BaseUrl, ex);
+                    }
+                }, cancellationToken);
 
                 return;
             }
@@ -354,40 +385,6 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
     #endregion
 
     #region WebSocket Receive Loop
-
-    /// <summary>
-    /// Temporary receive pump used during resubscription after reconnect.
-    /// The main receive loop is blocked inside ReconnectAsync, so we need this
-    /// to read responses from the new WebSocket while SendRequestCoreAsync awaits.
-    /// </summary>
-    private async Task TempReceivePumpAsync(CancellationToken cancellationToken)
-    {
-        var buffer = new byte[8192];
-        var messageBuilder = new StringBuilder();
-
-        try
-        {
-            while (_webSocket?.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
-            {
-                var result = await _webSocket.ReceiveAsync(
-                    new ArraySegment<byte>(buffer), cancellationToken);
-
-                if (result.MessageType == WebSocketMessageType.Close)
-                    break;
-
-                messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
-
-                if (result.EndOfMessage)
-                {
-                    var message = messageBuilder.ToString();
-                    messageBuilder.Clear();
-                    ProcessMessage(message);
-                }
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (WebSocketException) { }
-    }
 
     private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
     {
