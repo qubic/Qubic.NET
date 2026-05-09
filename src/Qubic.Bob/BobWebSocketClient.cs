@@ -350,7 +350,35 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
 
     private async Task ProbeAllNodesAsync(CancellationToken cancellationToken)
     {
-        var tasks = _nodes.Select(node => ProbeNodeAsync(node, cancellationToken));
+        // Wrap each probe so per-node failures don't abort the whole pass.
+        // ProbeNodeAsync already records availability/failure on the node itself;
+        // we just need to prevent OperationCanceledException (HttpClient 10s timeout
+        // on a slow node) from propagating through Task.WhenAll.
+        var tasks = _nodes.Select(async node =>
+        {
+            try
+            {
+                await ProbeNodeAsync(node, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw; // outer cancel — do propagate
+            }
+            catch (OperationCanceledException)
+            {
+                // Probe-internal timeout (HttpClient.Timeout). Mark node unavailable.
+                node.IsAvailable = false;
+                node.ConsecutiveFailures++;
+                node.LastHealthCheckUtc = DateTime.UtcNow;
+            }
+            catch
+            {
+                // Already handled inside ProbeNodeAsync, but be defensive.
+                node.IsAvailable = false;
+                node.ConsecutiveFailures++;
+                node.LastHealthCheckUtc = DateTime.UtcNow;
+            }
+        });
         await Task.WhenAll(tasks);
     }
 
