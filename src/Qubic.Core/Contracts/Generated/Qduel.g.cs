@@ -31,6 +31,8 @@ public static class QduelContract
         public const uint GetUserProfile = 4;
         /// <summary>CalculateRevenue (inputType=5).</summary>
         public const uint CalculateRevenue = 5;
+        /// <summary>GetLastWinners (inputType=6).</summary>
+        public const uint GetLastWinners = 6;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -175,6 +177,70 @@ public readonly struct GetUserProfileOutput : ISmartContractOutput<GetUserProfil
             RaiseStep = BinaryPrimitives.ReadUInt64LittleEndian(data[56..]),
             MaxStake = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
             ReturnCode = data.Slice(72, 1)[0]
+        };
+    }
+}
+
+// ═══ Function: CalculateRevenue (inputType=5) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct CalculateRevenueInput : ISmartContractInput
+{
+    public const int Size = 8;
+
+    public int SerializedSize => Size;
+
+    public ulong Amount { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Amount);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct CalculateRevenueOutput : ISmartContractOutput<CalculateRevenueOutput>
+{
+    public ulong DevFee { get; init; }
+    public ulong BurnFee { get; init; }
+    public ulong ShareholdersFee { get; init; }
+    public ulong Winner { get; init; }
+
+    public static CalculateRevenueOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new CalculateRevenueOutput
+        {
+            DevFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            BurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            ShareholdersFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            Winner = BinaryPrimitives.ReadUInt64LittleEndian(data[24..])
+        };
+    }
+}
+
+// ═══ Function: GetLastWinners (inputType=6) ═══
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetLastWinnersInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetLastWinnersOutput : ISmartContractOutput<GetLastWinnersOutput>
+{
+    public byte[] Winners { get; init; }
+    public byte ReturnCode { get; init; }
+
+    public static GetLastWinnersOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetLastWinnersOutput
+        {
+            Winners = [] /* unknown struct array WinnerData */,
+            ReturnCode = data.Slice(0, 1)[0]
         };
     }
 }
@@ -426,45 +492,6 @@ public readonly struct CloseRoomOutput : ISmartContractOutput<CloseRoomOutput>
         return new CloseRoomOutput
         {
             ReturnCode = data.Slice(0, 1)[0]
-        };
-    }
-}
-
-// ═══ Function: CalculateRevenue (inputType=5) ═══
-
-/// <summary>Input for query.</summary>
-public readonly struct CalculateRevenueInput : ISmartContractInput
-{
-    public const int Size = 8;
-
-    public int SerializedSize => Size;
-
-    public ulong Amount { get; init; }
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Amount);
-        return bytes;
-    }
-}
-
-/// <summary>Output.</summary>
-public readonly struct CalculateRevenueOutput : ISmartContractOutput<CalculateRevenueOutput>
-{
-    public ulong DevFee { get; init; }
-    public ulong BurnFee { get; init; }
-    public ulong ShareholdersFee { get; init; }
-    public ulong Winner { get; init; }
-
-    public static CalculateRevenueOutput FromBytes(ReadOnlySpan<byte> data)
-    {
-        return new CalculateRevenueOutput
-        {
-            DevFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
-            BurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
-            ShareholdersFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
-            Winner = BinaryPrimitives.ReadUInt64LittleEndian(data[24..])
         };
     }
 }

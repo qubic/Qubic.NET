@@ -104,16 +104,16 @@ public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
 
     public static GetPlayersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var players = new byte[0][];
-        for (int i = 0; i < 0; i++)
+        var players = new byte[1024][];
+        for (int i = 0; i < 1024; i++)
         {
             players[i] = data[(0 + i * 32)..].Slice(0, 32).ToArray();
         }
         return new GetPlayersOutput
         {
             Players = players,
-            PlayerCounter = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
-            ReturnCode = data.Slice(8, 1)[0]
+            PlayerCounter = BinaryPrimitives.ReadUInt64LittleEndian(data[32768..]),
+            ReturnCode = data.Slice(32776, 1)[0]
         };
     }
 }

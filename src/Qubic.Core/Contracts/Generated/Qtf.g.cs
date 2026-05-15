@@ -39,6 +39,10 @@ public static class QtfContract
         public const uint GetFees = 8;
         /// <summary>EstimatePrizePayouts (inputType=9).</summary>
         public const uint EstimatePrizePayouts = 9;
+        /// <summary>GetPlayers (inputType=10).</summary>
+        public const uint GetPlayers = 10;
+        /// <summary>GetWinningCombinationsHistory (inputType=11).</summary>
+        public const uint GetWinningCombinationsHistory = 11;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -54,6 +58,12 @@ public static class QtfContract
         public const uint SetTargetJackpot = 4;
         /// <summary>SetDrawHour (inputType=5).</summary>
         public const uint SetDrawHour = 5;
+        /// <summary>SyncJackpot (inputType=6).</summary>
+        public const uint SyncJackpot = 6;
+        /// <summary>BuyTicketsBatch (inputType=7).</summary>
+        public const uint BuyTicketsBatch = 7;
+        /// <summary>BuyTicketsBySelection (inputType=8).</summary>
+        public const uint BuyTicketsBySelection = 8;
     }
 }
 
@@ -298,12 +308,88 @@ public readonly struct EstimatePrizePayoutsOutput : ISmartContractOutput<Estimat
     }
 }
 
+// ═══ Function: GetPlayers (inputType=10) ═══
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetPlayersInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
+{
+    public byte[] Players { get; init; }
+    public byte ReturnCode { get; init; }
+
+    public static GetPlayersOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetPlayersOutput
+        {
+            Players = [] /* unknown struct array PlayerData */,
+            ReturnCode = data.Slice(0, 1)[0]
+        };
+    }
+}
+
+// ═══ Function: GetWinningCombinationsHistory (inputType=11) ═══
+
+/// <summary>Nested type from GetWinningCombinationsHistory.</summary>
+public readonly struct GetWinningCombinationsHistoryWinningCombination
+{
+    public const int Size = 4;
+
+    public byte[] Values { get; init; }
+
+    public static GetWinningCombinationsHistoryWinningCombination ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var values = new byte[4];
+        for (int i = 0; i < 4; i++)
+        {
+            values[i] = data.Slice(0 + i * 1, 1)[0];
+        }
+        return new GetWinningCombinationsHistoryWinningCombination
+        {
+            Values = values
+        };
+    }
+}
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetWinningCombinationsHistoryInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetWinningCombinationsHistoryOutput : ISmartContractOutput<GetWinningCombinationsHistoryOutput>
+{
+    public GetWinningCombinationsHistoryWinningCombination[] History { get; init; }
+    public byte ReturnCode { get; init; }
+
+    public static GetWinningCombinationsHistoryOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var history = new GetWinningCombinationsHistoryWinningCombination[128];
+        for (int i = 0; i < 128; i++)
+        {
+            history[i] = GetWinningCombinationsHistoryWinningCombination.ReadFrom(data.Slice(0 + i * GetWinningCombinationsHistoryWinningCombination.Size, GetWinningCombinationsHistoryWinningCombination.Size));
+        }
+        return new GetWinningCombinationsHistoryOutput
+        {
+            History = history,
+            ReturnCode = data.Slice(512, 1)[0]
+        };
+    }
+}
+
 // ═══ Procedure: BuyTicket (inputType=1) ═══
 
 /// <summary>Input payload for procedure.</summary>
 public sealed class BuyTicketPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 0;
+    public const int Size = 4;
 
     public ushort InputType => 1;
     public ushort InputSize => Size;
@@ -316,7 +402,7 @@ public sealed class BuyTicketPayload : ITransactionPayload, ISmartContractInput
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        for (int i = 0; i < 0 && RandomValues != null && i < RandomValues.Length; i++)
+        for (int i = 0; i < 4 && RandomValues != null && i < RandomValues.Length; i++)
         {
             bytes.AsSpan(0 + i * 1)[0] = RandomValues[i];
         }
@@ -482,6 +568,118 @@ public readonly struct SetDrawHourOutput : ISmartContractOutput<SetDrawHourOutpu
         return new SetDrawHourOutput
         {
             ReturnCode = data.Slice(0, 1)[0]
+        };
+    }
+}
+
+// ═══ Procedure: SyncJackpot (inputType=6) ═══
+
+/// <summary>Input for procedure (empty payload).</summary>
+public sealed class SyncJackpotPayload : ITransactionPayload, ISmartContractInput
+{
+    public ushort InputType => 6;
+    public ushort InputSize => 0;
+    public int SerializedSize => 0;
+    public byte[] GetPayloadBytes() => [];
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct SyncJackpotOutput : ISmartContractOutput<SyncJackpotOutput>
+{
+    public byte ReturnCode { get; init; }
+
+    public static SyncJackpotOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new SyncJackpotOutput
+        {
+            ReturnCode = data.Slice(0, 1)[0]
+        };
+    }
+}
+
+// ═══ Procedure: BuyTicketsBatch (inputType=7) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class BuyTicketsBatchPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 0;
+
+    public ushort InputType => 7;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public byte[] Tickets { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        for (int i = 0; i < 0 && Tickets != null && i < Tickets.Length; i++)
+        {
+            bytes.AsSpan(0 + i * 1)[0] = Tickets[i];
+        }
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct BuyTicketsBatchOutput : ISmartContractOutput<BuyTicketsBatchOutput>
+{
+    public ushort BoughtTicketCount { get; init; }
+    public byte ReturnCode { get; init; }
+
+    public static BuyTicketsBatchOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new BuyTicketsBatchOutput
+        {
+            BoughtTicketCount = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
+            ReturnCode = data.Slice(2, 1)[0]
+        };
+    }
+}
+
+// ═══ Procedure: BuyTicketsBySelection (inputType=8) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class BuyTicketsBySelectionPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 32;
+
+    public ushort InputType => 8;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public byte[] Numbers { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        for (int i = 0; i < 32 && Numbers != null && i < Numbers.Length; i++)
+        {
+            bytes.AsSpan(0 + i * 1)[0] = Numbers[i];
+        }
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct BuyTicketsBySelectionOutput : ISmartContractOutput<BuyTicketsBySelectionOutput>
+{
+    public ushort RequestedTicketCount { get; init; }
+    public ushort BoughtTicketCount { get; init; }
+    public byte ReturnCode { get; init; }
+
+    public static BuyTicketsBySelectionOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new BuyTicketsBySelectionOutput
+        {
+            RequestedTicketCount = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
+            BoughtTicketCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
+            ReturnCode = data.Slice(4, 1)[0]
         };
     }
 }

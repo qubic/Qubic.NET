@@ -29,6 +29,10 @@ var contracts = new (int Index, string CSharpName, string CppStruct, string? Hea
     (21, "Qrp",      "QRP",       "QReservePool.h"),
     (22, "Qtf",      "QTF",       "QThirtyFour.h"),
     (23, "Qduel",    "QDUEL",     "QDuel.h"),
+    (24, "Pulse",    "PULSE",     "Pulse.h"),
+    (25, "Vottun",   "VOTTUNBRIDGE", "VottunBridge.h"),
+    (26, "Qusino",   "QUSINO",    "Qusino.h"),
+    (27, "Escrow",   "ESCROW",    "Escrow.h"),
 };
 
 // Resolve paths

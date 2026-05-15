@@ -158,8 +158,8 @@ public readonly struct GetUserVoteStatusOutput : ISmartContractOutput<GetUserVot
 
     public static GetUserVoteStatusOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var projectIndexList = new uint[0];
-        for (int i = 0; i < 0; i++)
+        var projectIndexList = new uint[128];
+        for (int i = 0; i < 128; i++)
         {
             projectIndexList[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(4 + i * 4)..]);
         }
@@ -329,8 +329,8 @@ public readonly struct GetProjectIndexListByCreatorOutput : ISmartContractOutput
 
     public static GetProjectIndexListByCreatorOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var indexListForProjects = new uint[0];
-        for (int i = 0; i < 0; i++)
+        var indexListForProjects = new uint[128];
+        for (int i = 0; i < 128; i++)
         {
             indexListForProjects[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(0 + i * 4)..]);
         }

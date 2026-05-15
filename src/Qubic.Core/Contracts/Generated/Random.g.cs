@@ -37,19 +37,19 @@ public sealed class RevealAndCommitPayload : ITransactionPayload, ISmartContract
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public bool[] RevealedBits { get; init; }
-    public required byte[] CommittedDigest { get; init; }
+    public bool[] Reveal { get; init; }
+    public required byte[] Commit { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        for (int i = 0; i < 4096 && RevealedBits != null && i < RevealedBits.Length; i++)
+        for (int i = 0; i < 4096 && Reveal != null && i < Reveal.Length; i++)
         {
-            bytes.AsSpan(0 + i * 1)[0] = (byte)(RevealedBits[i] ? 1 : 0);
+            bytes.AsSpan(0 + i * 1)[0] = (byte)(Reveal[i] ? 1 : 0);
         }
-        CommittedDigest.AsSpan(0, 32).CopyTo(bytes.AsSpan(4096));
+        Commit.AsSpan(0, 32).CopyTo(bytes.AsSpan(4096));
         return bytes;
     }
 }

@@ -446,12 +446,13 @@ public readonly struct TransferShareOwnershipAndPossessionOutput : ISmartContrac
 /// <summary>Input payload for procedure.</summary>
 public sealed class CreatePoolPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 8;
+    public const int Size = 40;
 
     public ushort InputType => 3;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
+    public required byte[] AssetIssuer { get; init; }
     public ulong AssetName { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
@@ -459,7 +460,8 @@ public sealed class CreatePoolPayload : ITransactionPayload, ISmartContractInput
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), AssetName);
+        AssetIssuer.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(32), AssetName);
         return bytes;
     }
 }

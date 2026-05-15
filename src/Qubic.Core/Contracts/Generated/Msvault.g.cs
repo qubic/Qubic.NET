@@ -107,7 +107,6 @@ public readonly struct GetVaultsOutput : ISmartContractOutput<GetVaultsOutput>
 
     public static GetVaultsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        // Layout: uint64 numberOfVaults(8) + Array<uint64,8> vaultIds(64) + Array<id,8> vaultNames(256) = 328 bytes
         var vaultIds = new ulong[8];
         for (int i = 0; i < 8; i++)
         {
@@ -155,7 +154,6 @@ public readonly struct GetReleaseStatusOutput : ISmartContractOutput<GetReleaseS
 
     public static GetReleaseStatusOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        // Layout: uint64 status(8) + Array<uint64,16> amounts(128) + Array<id,16> destinations(512) = 648 bytes
         var amounts = new ulong[16];
         for (int i = 0; i < 16; i++)
         {
@@ -336,7 +334,6 @@ public readonly struct GetVaultOwnersOutput : ISmartContractOutput<GetVaultOwner
 
     public static GetVaultOwnersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        // Layout: uint64 status(8) + uint64 numOwners(8) + Array<id,16> owners(512) + uint64 reqApprovals(8) = 536 bytes
         var owners = new byte[16][];
         for (int i = 0; i < 16; i++)
         {
@@ -554,43 +551,20 @@ public readonly struct GetVaultAssetBalancesInput : ISmartContractInput
     }
 }
 
-/// <summary>An asset balance entry: Asset(40 bytes) + uint64 balance(8 bytes) = 48 bytes.</summary>
-public readonly struct AssetBalanceEntry
-{
-    public QubicAsset Asset { get; init; }
-    public ulong Balance { get; init; }
-
-    public static AssetBalanceEntry ReadFrom(ReadOnlySpan<byte> data)
-    {
-        return new AssetBalanceEntry
-        {
-            Asset = QubicAsset.ReadFrom(data),
-            Balance = BinaryPrimitives.ReadUInt64LittleEndian(data[40..])
-        };
-    }
-}
-
 /// <summary>Output.</summary>
 public readonly struct GetVaultAssetBalancesOutput : ISmartContractOutput<GetVaultAssetBalancesOutput>
 {
     public ulong Status { get; init; }
     public ulong NumberOfAssetTypes { get; init; }
-    /// <summary>Fixed array of 8 asset balance entries (MSVAULT_MAX_ASSET_TYPES).</summary>
-    public AssetBalanceEntry[] AssetBalances { get; init; }
+    public byte[] AssetBalances { get; init; }
 
     public static GetVaultAssetBalancesOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        // Layout: uint64 status(8) + uint64 numTypes(8) + Array<AssetBalance,8>(384) = 400 bytes
-        var assetBalances = new AssetBalanceEntry[8];
-        for (int i = 0; i < 8; i++)
-        {
-            assetBalances[i] = AssetBalanceEntry.ReadFrom(data[(16 + i * 48)..]);
-        }
         return new GetVaultAssetBalancesOutput
         {
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             NumberOfAssetTypes = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
-            AssetBalances = assetBalances
+            AssetBalances = [] /* unknown struct array AssetBalance */
         };
     }
 }
@@ -624,7 +598,6 @@ public readonly struct GetAssetReleaseStatusOutput : ISmartContractOutput<GetAss
 
     public static GetAssetReleaseStatusOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        // Layout: uint64 status(8) + Array<Asset,16>(640) + Array<uint64,16>(128) + Array<id,16>(512) = 1288 bytes
         var assets = new QubicAsset[16];
         for (int i = 0; i < 16; i++)
         {
@@ -690,7 +663,6 @@ public readonly struct GetManagedAssetBalanceOutput : ISmartContractOutput<GetMa
 /// <summary>Input payload for procedure.</summary>
 public sealed class RegisterVaultPayload : ITransactionPayload, ISmartContractInput
 {
-    /// <summary>32 (vaultName) + 16*32 (owners) + 8 (requiredApprovals) = 552 bytes.</summary>
     public const int Size = 552;
 
     public ushort InputType => 1;
@@ -698,7 +670,6 @@ public sealed class RegisterVaultPayload : ITransactionPayload, ISmartContractIn
     public int SerializedSize => Size;
 
     public required byte[] VaultName { get; init; }
-    /// <summary>Up to 16 owner public keys (32 bytes each). Minimum 2 unique owners required.</summary>
     public required byte[][] Owners { get; init; }
     public ulong RequiredApprovals { get; init; }
 

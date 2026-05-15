@@ -25,22 +25,30 @@ public static class QrwaContract
         public const uint GetGovParams = 1;
         /// <summary>GetGovPoll (inputType=2).</summary>
         public const uint GetGovPoll = 2;
-        /// <summary>GetAssetReleasePoll (inputType=3).</summary>
-        public const uint GetAssetReleasePoll = 3;
         /// <summary>GetTreasuryBalance (inputType=4).</summary>
         public const uint GetTreasuryBalance = 4;
         /// <summary>GetDividendBalances (inputType=5).</summary>
         public const uint GetDividendBalances = 5;
         /// <summary>GetTotalDistributed (inputType=6).</summary>
         public const uint GetTotalDistributed = 6;
-        /// <summary>GetActiveAssetReleasePollIds (inputType=7).</summary>
-        public const uint GetActiveAssetReleasePollIds = 7;
         /// <summary>GetActiveGovPollIds (inputType=8).</summary>
         public const uint GetActiveGovPollIds = 8;
         /// <summary>GetGeneralAssetBalance (inputType=9).</summary>
         public const uint GetGeneralAssetBalance = 9;
         /// <summary>GetGeneralAssets (inputType=10).</summary>
         public const uint GetGeneralAssets = 10;
+        /// <summary>GetPayoutsQmine (inputType=11).</summary>
+        public const uint GetPayoutsQmine = 11;
+        /// <summary>GetContractAddresses (inputType=12).</summary>
+        public const uint GetContractAddresses = 12;
+        /// <summary>GetPayoutsQrwa (inputType=13).</summary>
+        public const uint GetPayoutsQrwa = 13;
+        /// <summary>GetPayoutsDedicated (inputType=14).</summary>
+        public const uint GetPayoutsDedicated = 14;
+        /// <summary>GetScDividendTracking (inputType=15).</summary>
+        public const uint GetScDividendTracking = 15;
+        /// <summary>GetPayoutsPoolD (inputType=16).</summary>
+        public const uint GetPayoutsPoolD = 16;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -50,40 +58,38 @@ public static class QrwaContract
         public const uint DonateToTreasury = 3;
         /// <summary>VoteGovParams (inputType=4).</summary>
         public const uint VoteGovParams = 4;
-        /// <summary>CreateAssetReleasePoll (inputType=5).</summary>
-        public const uint CreateAssetReleasePoll = 5;
-        /// <summary>VoteAssetRelease (inputType=6).</summary>
-        public const uint VoteAssetRelease = 6;
         /// <summary>DepositGeneralAsset (inputType=7).</summary>
         public const uint DepositGeneralAsset = 7;
         /// <summary>RevokeAssetManagementRights (inputType=8).</summary>
         public const uint RevokeAssetManagementRights = 8;
+        /// <summary>SetPoolARevenueAddress (inputType=9).</summary>
+        public const uint SetPoolARevenueAddress = 9;
+        /// <summary>SetPoolDRevenueAddress (inputType=10).</summary>
+        public const uint SetPoolDRevenueAddress = 10;
     }
 }
 
 // ═══ Function: GetGovParams (inputType=1) ═══
 
-/// <summary>Input for query.</summary>
+/// <summary>Input for query (empty).</summary>
 public readonly struct GetGovParamsInput : ISmartContractInput
 {
-    public const int Size = 0;
-
-    public int SerializedSize => Size;
-
-    public byte[] Params { get; init; }
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        // TODO: serialize unknown type QRWAGovParams for Params
-        return bytes;
-    }
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
 }
 
-/// <summary>Output (empty).</summary>
+/// <summary>Output.</summary>
 public readonly struct GetGovParamsOutput : ISmartContractOutput<GetGovParamsOutput>
 {
-    public static GetGovParamsOutput FromBytes(ReadOnlySpan<byte> data) => new();
+    public byte[] Params { get; init; }
+
+    public static GetGovParamsOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetGovParamsOutput
+        {
+            Params = [] /* unknown type QRWAGovParams */
+        };
+    }
 }
 
 // ═══ Function: GetGovPoll (inputType=2) ═══
@@ -121,182 +127,133 @@ public readonly struct GetGovPollOutput : ISmartContractOutput<GetGovPollOutput>
     }
 }
 
-// ═══ Function: GetAssetReleasePoll (inputType=3) ═══
+// ═══ Function: GetTreasuryBalance (inputType=4) ═══
 
-/// <summary>Input for query.</summary>
-public readonly struct GetAssetReleasePollInput : ISmartContractInput
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetTreasuryBalanceInput : ISmartContractInput
 {
-    public const int Size = 8;
-
-    public int SerializedSize => Size;
-
-    public ulong ProposalId { get; init; }
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), ProposalId);
-        return bytes;
-    }
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
 }
 
 /// <summary>Output.</summary>
-public readonly struct GetAssetReleasePollOutput : ISmartContractOutput<GetAssetReleasePollOutput>
+public readonly struct GetTreasuryBalanceOutput : ISmartContractOutput<GetTreasuryBalanceOutput>
 {
-    public byte[] Proposal { get; init; }
-    public ulong Status { get; init; }
+    public ulong Balance { get; init; }
 
-    public static GetAssetReleasePollOutput FromBytes(ReadOnlySpan<byte> data)
+    public static GetTreasuryBalanceOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        return new GetAssetReleasePollOutput
+        return new GetTreasuryBalanceOutput
         {
-            Proposal = [] /* unknown type AssetReleaseProposal */,
-            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
+            Balance = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
         };
     }
 }
 
-// ═══ Function: GetTreasuryBalance (inputType=4) ═══
-
-/// <summary>Input for query.</summary>
-public readonly struct GetTreasuryBalanceInput : ISmartContractInput
-{
-    public const int Size = 8;
-
-    public int SerializedSize => Size;
-
-    public ulong Balance { get; init; }
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Balance);
-        return bytes;
-    }
-}
-
-/// <summary>Output (empty).</summary>
-public readonly struct GetTreasuryBalanceOutput : ISmartContractOutput<GetTreasuryBalanceOutput>
-{
-    public static GetTreasuryBalanceOutput FromBytes(ReadOnlySpan<byte> data) => new();
-}
-
 // ═══ Function: GetDividendBalances (inputType=5) ═══
 
-/// <summary>Input for query.</summary>
+/// <summary>Input for query (empty).</summary>
 public readonly struct GetDividendBalancesInput : ISmartContractInput
 {
-    public const int Size = 32;
-
-    public int SerializedSize => Size;
-
-    public ulong RevenuePoolA { get; init; }
-    public ulong RevenuePoolB { get; init; }
-    public ulong QmineDividendPool { get; init; }
-    public ulong QrwaDividendPool { get; init; }
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), RevenuePoolA);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), RevenuePoolB);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(16), QmineDividendPool);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(24), QrwaDividendPool);
-        return bytes;
-    }
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
 }
 
-/// <summary>Output (empty).</summary>
+/// <summary>Output.</summary>
 public readonly struct GetDividendBalancesOutput : ISmartContractOutput<GetDividendBalancesOutput>
 {
-    public static GetDividendBalancesOutput FromBytes(ReadOnlySpan<byte> data) => new();
+    public ulong RevenuePoolA { get; init; }
+    public ulong RevenuePoolB { get; init; }
+    public ulong DedicatedRevenuePool { get; init; }
+    public ulong PoolAQmineDividend { get; init; }
+    public ulong PoolAQrwaDividend { get; init; }
+    public ulong PoolBQmineDividend { get; init; }
+    public ulong PoolBQrwaDividend { get; init; }
+    public ulong PoolCQmineDividend { get; init; }
+    public ulong PoolCQrwaDividend { get; init; }
+    public ulong PoolDRevenuePool { get; init; }
+    public ulong PoolDQmineDividend { get; init; }
+    public ulong PoolDQrwaDividend { get; init; }
+
+    public static GetDividendBalancesOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetDividendBalancesOutput
+        {
+            RevenuePoolA = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            RevenuePoolB = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            DedicatedRevenuePool = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            PoolAQmineDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[24..]),
+            PoolAQrwaDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            PoolBQmineDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            PoolBQrwaDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            PoolCQmineDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[56..]),
+            PoolCQrwaDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
+            PoolDRevenuePool = BinaryPrimitives.ReadUInt64LittleEndian(data[72..]),
+            PoolDQmineDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[80..]),
+            PoolDQrwaDividend = BinaryPrimitives.ReadUInt64LittleEndian(data[88..])
+        };
+    }
 }
 
 // ═══ Function: GetTotalDistributed (inputType=6) ═══
 
-/// <summary>Input for query.</summary>
+/// <summary>Input for query (empty).</summary>
 public readonly struct GetTotalDistributedInput : ISmartContractInput
 {
-    public const int Size = 16;
-
-    public int SerializedSize => Size;
-
-    public ulong TotalQmineDistributed { get; init; }
-    public ulong TotalQRWADistributed { get; init; }
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), TotalQmineDistributed);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), TotalQRWADistributed);
-        return bytes;
-    }
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
 }
 
-/// <summary>Output (empty).</summary>
+/// <summary>Output.</summary>
 public readonly struct GetTotalDistributedOutput : ISmartContractOutput<GetTotalDistributedOutput>
 {
-    public static GetTotalDistributedOutput FromBytes(ReadOnlySpan<byte> data) => new();
-}
+    public ulong TotalPoolADistributed { get; init; }
+    public ulong TotalPoolBDistributed { get; init; }
+    public ulong TotalPoolCDistributed { get; init; }
+    public ulong TotalPoolDDistributed { get; init; }
+    public ulong PayoutTotalQmineBegin { get; init; }
 
-// ═══ Function: GetActiveAssetReleasePollIds (inputType=7) ═══
-
-/// <summary>Input for query.</summary>
-public readonly struct GetActiveAssetReleasePollIdsInput : ISmartContractInput
-{
-    public const int Size = 8;
-
-    public int SerializedSize => Size;
-
-    public ulong Count { get; init; }
-    public ulong[] Ids { get; init; }
-
-    public byte[] ToBytes()
+    public static GetTotalDistributedOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Count);
-        for (int i = 0; i < 0 && Ids != null && i < Ids.Length; i++)
+        return new GetTotalDistributedOutput
         {
-            BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8 + i * 8), Ids[i]);
-        }
-        return bytes;
+            TotalPoolADistributed = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            TotalPoolBDistributed = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            TotalPoolCDistributed = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            TotalPoolDDistributed = BinaryPrimitives.ReadUInt64LittleEndian(data[24..]),
+            PayoutTotalQmineBegin = BinaryPrimitives.ReadUInt64LittleEndian(data[32..])
+        };
     }
-}
-
-/// <summary>Output (empty).</summary>
-public readonly struct GetActiveAssetReleasePollIdsOutput : ISmartContractOutput<GetActiveAssetReleasePollIdsOutput>
-{
-    public static GetActiveAssetReleasePollIdsOutput FromBytes(ReadOnlySpan<byte> data) => new();
 }
 
 // ═══ Function: GetActiveGovPollIds (inputType=8) ═══
 
-/// <summary>Input for query.</summary>
+/// <summary>Input for query (empty).</summary>
 public readonly struct GetActiveGovPollIdsInput : ISmartContractInput
 {
-    public const int Size = 8;
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
 
-    public int SerializedSize => Size;
-
+/// <summary>Output.</summary>
+public readonly struct GetActiveGovPollIdsOutput : ISmartContractOutput<GetActiveGovPollIdsOutput>
+{
     public ulong Count { get; init; }
     public ulong[] Ids { get; init; }
 
-    public byte[] ToBytes()
+    public static GetActiveGovPollIdsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Count);
-        for (int i = 0; i < 0 && Ids != null && i < Ids.Length; i++)
+        var ids = new ulong[64];
+        for (int i = 0; i < 64; i++)
         {
-            BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8 + i * 8), Ids[i]);
+            ids[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(8 + i * 8)..]);
         }
-        return bytes;
+        return new GetActiveGovPollIdsOutput
+        {
+            Count = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            Ids = ids
+        };
     }
-}
-
-/// <summary>Output (empty).</summary>
-public readonly struct GetActiveGovPollIdsOutput : ISmartContractOutput<GetActiveGovPollIdsOutput>
-{
-    public static GetActiveGovPollIdsOutput FromBytes(ReadOnlySpan<byte> data) => new();
 }
 
 // ═══ Function: GetGeneralAssetBalance (inputType=9) ═══
@@ -336,37 +293,271 @@ public readonly struct GetGeneralAssetBalanceOutput : ISmartContractOutput<GetGe
 
 // ═══ Function: GetGeneralAssets (inputType=10) ═══
 
-/// <summary>Input for query.</summary>
+/// <summary>Input for query (empty).</summary>
 public readonly struct GetGeneralAssetsInput : ISmartContractInput
 {
-    public const int Size = 49160;
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetGeneralAssetsOutput : ISmartContractOutput<GetGeneralAssetsOutput>
+{
+    public ulong Count { get; init; }
+    public QubicAsset[] Assets { get; init; }
+    public ulong[] Balances { get; init; }
+
+    public static GetGeneralAssetsOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var assets = new QubicAsset[1024];
+        for (int i = 0; i < 1024; i++)
+        {
+            assets[i] = QubicAsset.ReadFrom(data[(8 + i * 40)..]);
+        }
+        var balances = new ulong[1024];
+        for (int i = 0; i < 1024; i++)
+        {
+            balances[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(40968 + i * 8)..]);
+        }
+        return new GetGeneralAssetsOutput
+        {
+            Count = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            Assets = assets,
+            Balances = balances
+        };
+    }
+}
+
+// ═══ Function: GetPayoutsQmine (inputType=11) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetPayoutsQmineInput : ISmartContractInput
+{
+    public const int Size = 2;
 
     public int SerializedSize => Size;
 
-    public ulong Count { get; init; }
-    public required QubicAsset[] Assets { get; init; }
-    public ulong[] Balances { get; init; }
+    public ushort Page { get; init; }
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Count);
-        for (int i = 0; i < 1024 && Assets != null && i < Assets.Length; i++)
-        {
-            Assets[i].WriteTo(bytes.AsSpan(8 + i * 40));
-        }
-        for (int i = 0; i < 1024 && Balances != null && i < Balances.Length; i++)
-        {
-            BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(40968 + i * 8), Balances[i]);
-        }
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(0), Page);
         return bytes;
     }
 }
 
-/// <summary>Output (empty).</summary>
-public readonly struct GetGeneralAssetsOutput : ISmartContractOutput<GetGeneralAssetsOutput>
+/// <summary>Output.</summary>
+public readonly struct GetPayoutsQmineOutput : ISmartContractOutput<GetPayoutsQmineOutput>
 {
-    public static GetGeneralAssetsOutput FromBytes(ReadOnlySpan<byte> data) => new();
+    public byte[] Payouts { get; init; }
+    public ushort NextIdx { get; init; }
+    public ushort ReturnedCount { get; init; }
+    public ushort Page { get; init; }
+    public ushort TotalPages { get; init; }
+
+    public static GetPayoutsQmineOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsQmineOutput
+        {
+            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+        };
+    }
+}
+
+// ═══ Function: GetContractAddresses (inputType=12) ═══
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetContractAddressesInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetContractAddressesOutput : ISmartContractOutput<GetContractAddressesOutput>
+{
+    public byte[] DedicatedRevenueAddress { get; init; }
+    public byte[] PoolARevenueAddress { get; init; }
+    public byte[] PoolDRevenueAddress { get; init; }
+    public byte[] FundraisingAddress { get; init; }
+    public byte[] ExchangeAddress { get; init; }
+
+    public static GetContractAddressesOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetContractAddressesOutput
+        {
+            DedicatedRevenueAddress = data[0..].Slice(0, 32).ToArray(),
+            PoolARevenueAddress = data[32..].Slice(0, 32).ToArray(),
+            PoolDRevenueAddress = data[64..].Slice(0, 32).ToArray(),
+            FundraisingAddress = data[96..].Slice(0, 32).ToArray(),
+            ExchangeAddress = data[128..].Slice(0, 32).ToArray()
+        };
+    }
+}
+
+// ═══ Function: GetPayoutsQrwa (inputType=13) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetPayoutsQrwaInput : ISmartContractInput
+{
+    public const int Size = 2;
+
+    public int SerializedSize => Size;
+
+    public ushort Page { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(0), Page);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetPayoutsQrwaOutput : ISmartContractOutput<GetPayoutsQrwaOutput>
+{
+    public byte[] Payouts { get; init; }
+    public ushort NextIdx { get; init; }
+    public ushort ReturnedCount { get; init; }
+    public ushort Page { get; init; }
+    public ushort TotalPages { get; init; }
+
+    public static GetPayoutsQrwaOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsQrwaOutput
+        {
+            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+        };
+    }
+}
+
+// ═══ Function: GetPayoutsDedicated (inputType=14) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetPayoutsDedicatedInput : ISmartContractInput
+{
+    public const int Size = 2;
+
+    public int SerializedSize => Size;
+
+    public ushort Page { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(0), Page);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetPayoutsDedicatedOutput : ISmartContractOutput<GetPayoutsDedicatedOutput>
+{
+    public byte[] Payouts { get; init; }
+    public ushort NextIdx { get; init; }
+    public ushort ReturnedCount { get; init; }
+    public ushort Page { get; init; }
+    public ushort TotalPages { get; init; }
+
+    public static GetPayoutsDedicatedOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsDedicatedOutput
+        {
+            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+        };
+    }
+}
+
+// ═══ Function: GetScDividendTracking (inputType=15) ═══
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetScDividendTrackingInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetScDividendTrackingOutput : ISmartContractOutput<GetScDividendTrackingOutput>
+{
+    public ulong Count { get; init; }
+    public byte[][] ScContractIds { get; init; }
+    public ulong[] CumulativeDividends { get; init; }
+
+    public static GetScDividendTrackingOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var scContractIds = new byte[1024][];
+        for (int i = 0; i < 1024; i++)
+        {
+            scContractIds[i] = data[(8 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        var cumulativeDividends = new ulong[1024];
+        for (int i = 0; i < 1024; i++)
+        {
+            cumulativeDividends[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(32776 + i * 8)..]);
+        }
+        return new GetScDividendTrackingOutput
+        {
+            Count = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            ScContractIds = scContractIds,
+            CumulativeDividends = cumulativeDividends
+        };
+    }
+}
+
+// ═══ Function: GetPayoutsPoolD (inputType=16) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetPayoutsPoolDInput : ISmartContractInput
+{
+    public const int Size = 2;
+
+    public int SerializedSize => Size;
+
+    public ushort Page { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(0), Page);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetPayoutsPoolDOutput : ISmartContractOutput<GetPayoutsPoolDOutput>
+{
+    public byte[] Payouts { get; init; }
+    public ushort NextIdx { get; init; }
+    public ushort ReturnedCount { get; init; }
+    public ushort Page { get; init; }
+    public ushort TotalPages { get; init; }
+
+    public static GetPayoutsPoolDOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsPoolDOutput
+        {
+            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+        };
+    }
 }
 
 // ═══ Procedure: DonateToTreasury (inputType=3) ═══
@@ -437,90 +628,6 @@ public readonly struct VoteGovParamsOutput : ISmartContractOutput<VoteGovParamsO
     public static VoteGovParamsOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new VoteGovParamsOutput
-        {
-            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
-        };
-    }
-}
-
-// ═══ Procedure: CreateAssetReleasePoll (inputType=5) ═══
-
-/// <summary>Input payload for procedure.</summary>
-public sealed class CreateAssetReleasePollPayload : ITransactionPayload, ISmartContractInput
-{
-    public const int Size = 112;
-
-    public ushort InputType => 5;
-    public ushort InputSize => Size;
-    public int SerializedSize => Size;
-
-    public required byte[] ProposalName { get; init; }
-    public required QubicAsset Asset { get; init; }
-    public ulong Amount { get; init; }
-    public required byte[] Destination { get; init; }
-
-    public byte[] GetPayloadBytes() => ToBytes();
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        ProposalName.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
-        Asset.WriteTo(bytes.AsSpan(32));
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(72), Amount);
-        Destination.AsSpan(0, 32).CopyTo(bytes.AsSpan(80));
-        return bytes;
-    }
-}
-
-/// <summary>Output.</summary>
-public readonly struct CreateAssetReleasePollOutput : ISmartContractOutput<CreateAssetReleasePollOutput>
-{
-    public ulong Status { get; init; }
-    public ulong ProposalId { get; init; }
-
-    public static CreateAssetReleasePollOutput FromBytes(ReadOnlySpan<byte> data)
-    {
-        return new CreateAssetReleasePollOutput
-        {
-            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
-            ProposalId = BinaryPrimitives.ReadUInt64LittleEndian(data[8..])
-        };
-    }
-}
-
-// ═══ Procedure: VoteAssetRelease (inputType=6) ═══
-
-/// <summary>Input payload for procedure.</summary>
-public sealed class VoteAssetReleasePayload : ITransactionPayload, ISmartContractInput
-{
-    public const int Size = 16;
-
-    public ushort InputType => 6;
-    public ushort InputSize => Size;
-    public int SerializedSize => Size;
-
-    public ulong ProposalId { get; init; }
-    public ulong Option { get; init; }
-
-    public byte[] GetPayloadBytes() => ToBytes();
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), ProposalId);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Option);
-        return bytes;
-    }
-}
-
-/// <summary>Output.</summary>
-public readonly struct VoteAssetReleaseOutput : ISmartContractOutput<VoteAssetReleaseOutput>
-{
-    public ulong Status { get; init; }
-
-    public static VoteAssetReleaseOutput FromBytes(ReadOnlySpan<byte> data)
-    {
-        return new VoteAssetReleaseOutput
         {
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
         };
@@ -603,6 +710,80 @@ public readonly struct RevokeAssetManagementRightsOutput : ISmartContractOutput<
         {
             TransferredNumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[8..])
+        };
+    }
+}
+
+// ═══ Procedure: SetPoolARevenueAddress (inputType=9) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class SetPoolARevenueAddressPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 32;
+
+    public ushort InputType => 9;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required byte[] NewAddress { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        NewAddress.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct SetPoolARevenueAddressOutput : ISmartContractOutput<SetPoolARevenueAddressOutput>
+{
+    public ulong Status { get; init; }
+
+    public static SetPoolARevenueAddressOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new SetPoolARevenueAddressOutput
+        {
+            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: SetPoolDRevenueAddress (inputType=10) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class SetPoolDRevenueAddressPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 32;
+
+    public ushort InputType => 10;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required byte[] NewAddress { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        NewAddress.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct SetPoolDRevenueAddressOutput : ISmartContractOutput<SetPoolDRevenueAddressOutput>
+{
+    public ulong Status { get; init; }
+
+    public static SetPoolDRevenueAddressOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new SetPoolDRevenueAddressOutput
+        {
+            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
         };
     }
 }

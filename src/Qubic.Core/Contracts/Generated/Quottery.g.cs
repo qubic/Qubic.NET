@@ -21,33 +21,65 @@ public static class QuotteryContract
     /// <summary>Read-only query function IDs.</summary>
     public static class Functions
     {
-        /// <summary>basicInfo (inputType=1).</summary>
+        /// <summary>BasicInfo (inputType=1).</summary>
         public const uint BasicInfo = 1;
-        /// <summary>getBetInfo (inputType=2).</summary>
-        public const uint GetBetInfo = 2;
-        /// <summary>getBetOptionDetail (inputType=3).</summary>
-        public const uint GetBetOptionDetail = 3;
-        /// <summary>getActiveBet (inputType=4).</summary>
-        public const uint GetActiveBet = 4;
-        /// <summary>getBetByCreator (inputType=5).</summary>
-        public const uint GetBetByCreator = 5;
+        /// <summary>GetEventInfo (inputType=2).</summary>
+        public const uint GetEventInfo = 2;
+        /// <summary>GetOrders (inputType=3).</summary>
+        public const uint GetOrders = 3;
+        /// <summary>GetActiveEvent (inputType=4).</summary>
+        public const uint GetActiveEvent = 4;
+        /// <summary>GetEventInfoBatch (inputType=5).</summary>
+        public const uint GetEventInfoBatch = 5;
+        /// <summary>GetUserPosition (inputType=6).</summary>
+        public const uint GetUserPosition = 6;
+        /// <summary>GetApprovedAmount (inputType=7).</summary>
+        public const uint GetApprovedAmount = 7;
+        /// <summary>GetTopProposals (inputType=8).</summary>
+        public const uint GetTopProposals = 8;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
     public static class Procedures
     {
-        /// <summary>issueBet (inputType=1).</summary>
-        public const uint IssueBet = 1;
-        /// <summary>joinBet (inputType=2).</summary>
-        public const uint JoinBet = 2;
-        /// <summary>cancelBet (inputType=3).</summary>
-        public const uint CancelBet = 3;
-        /// <summary>publishResult (inputType=4).</summary>
-        public const uint PublishResult = 4;
+        /// <summary>CreateEvent (inputType=1).</summary>
+        public const uint CreateEvent = 1;
+        /// <summary>AddToAskOrder (inputType=2).</summary>
+        public const uint AddToAskOrder = 2;
+        /// <summary>RemoveAskOrder (inputType=3).</summary>
+        public const uint RemoveAskOrder = 3;
+        /// <summary>AddToBidOrder (inputType=4).</summary>
+        public const uint AddToBidOrder = 4;
+        /// <summary>RemoveBidOrder (inputType=5).</summary>
+        public const uint RemoveBidOrder = 5;
+        /// <summary>PublishResult (inputType=6).</summary>
+        public const uint PublishResult = 6;
+        /// <summary>TryFinalizeEvent (inputType=7).</summary>
+        public const uint TryFinalizeEvent = 7;
+        /// <summary>Dispute (inputType=8).</summary>
+        public const uint Dispute = 8;
+        /// <summary>ResolveDispute (inputType=9).</summary>
+        public const uint ResolveDispute = 9;
+        /// <summary>UserClaimReward (inputType=10).</summary>
+        public const uint UserClaimReward = 10;
+        /// <summary>GOForceClaimReward (inputType=11).</summary>
+        public const uint GOForceClaimReward = 11;
+        /// <summary>TransferQUSD (inputType=12).</summary>
+        public const uint TransferQUSD = 12;
+        /// <summary>TransferShareManagementRights (inputType=13).</summary>
+        public const uint TransferShareManagementRights = 13;
+        /// <summary>CleanMemory (inputType=14).</summary>
+        public const uint CleanMemory = 14;
+        /// <summary>TransferQTRYGOV (inputType=15).</summary>
+        public const uint TransferQTRYGOV = 15;
+        /// <summary>UpdateFeeDiscountList (inputType=20).</summary>
+        public const uint UpdateFeeDiscountList = 20;
+        /// <summary>ProposalVote (inputType=100).</summary>
+        public const uint ProposalVote = 100;
     }
 }
 
-// ═══ Function: basicInfo (inputType=1) ═══
+// ═══ Function: BasicInfo (inputType=1) ═══
 
 /// <summary>Input for query (empty).</summary>
 public readonly struct BasicInfoInput : ISmartContractInput
@@ -59,385 +91,567 @@ public readonly struct BasicInfoInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct BasicInfoOutput : ISmartContractOutput<BasicInfoOutput>
 {
-    public ulong FeePerSlotPerHour { get; init; }
-    public ulong GameOperatorFee { get; init; }
+    public ulong OperationFee { get; init; }
     public ulong ShareholderFee { get; init; }
-    public ulong MinBetSlotAmount { get; init; }
     public ulong BurnFee { get; init; }
-    public uint NIssuedBet { get; init; }
-    public ulong MoneyFlow { get; init; }
-    public ulong MoneyFlowThroughIssueBet { get; init; }
-    public ulong MoneyFlowThroughJoinBet { get; init; }
-    public ulong MoneyFlowThroughFinalizeBet { get; init; }
-    public ulong EarnedAmountForShareHolder { get; init; }
-    public ulong PaidAmountForShareHolder { get; init; }
-    public ulong EarnedAmountForBetWinner { get; init; }
-    public ulong DistributedAmount { get; init; }
+    public ulong NIssuedEvent { get; init; }
+    public ulong ShareholdersRevenue { get; init; }
+    public ulong OperationRevenue { get; init; }
     public ulong BurnedAmount { get; init; }
+    public ulong MFeePerDay { get; init; }
+    public ulong AntiSpamAmount { get; init; }
+    public ulong DepositAmountForDispute { get; init; }
     public byte[] GameOperator { get; init; }
 
     public static BasicInfoOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new BasicInfoOutput
         {
-            FeePerSlotPerHour = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
-            GameOperatorFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
-            ShareholderFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
-            MinBetSlotAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[24..]),
-            BurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
-            NIssuedBet = BinaryPrimitives.ReadUInt32LittleEndian(data[40..]),
-            MoneyFlow = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
-            MoneyFlowThroughIssueBet = BinaryPrimitives.ReadUInt64LittleEndian(data[56..]),
-            MoneyFlowThroughJoinBet = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
-            MoneyFlowThroughFinalizeBet = BinaryPrimitives.ReadUInt64LittleEndian(data[72..]),
-            EarnedAmountForShareHolder = BinaryPrimitives.ReadUInt64LittleEndian(data[80..]),
-            PaidAmountForShareHolder = BinaryPrimitives.ReadUInt64LittleEndian(data[88..]),
-            EarnedAmountForBetWinner = BinaryPrimitives.ReadUInt64LittleEndian(data[96..]),
-            DistributedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[104..]),
-            BurnedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[112..]),
-            GameOperator = data[120..].Slice(0, 32).ToArray()
+            OperationFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            ShareholderFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            BurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            NIssuedEvent = BinaryPrimitives.ReadUInt64LittleEndian(data[24..]),
+            ShareholdersRevenue = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            OperationRevenue = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            BurnedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            MFeePerDay = BinaryPrimitives.ReadUInt64LittleEndian(data[56..]),
+            AntiSpamAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
+            DepositAmountForDispute = BinaryPrimitives.ReadUInt64LittleEndian(data[72..]),
+            GameOperator = data[80..].Slice(0, 32).ToArray()
         };
     }
 }
 
-// ═══ Function: getBetInfo (inputType=2) ═══
+// ═══ Function: GetEventInfo (inputType=2) ═══
 
 /// <summary>Input for query.</summary>
-public readonly struct GetBetInfoInput : ISmartContractInput
-{
-    public const int Size = 4;
-
-    public int SerializedSize => Size;
-
-    public uint BetId { get; init; }
-
-    public byte[] ToBytes()
-    {
-        var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), BetId);
-        return bytes;
-    }
-}
-
-/// <summary>Output.</summary>
-public readonly struct GetBetInfoOutput : ISmartContractOutput<GetBetInfoOutput>
-{
-    public uint BetId { get; init; }
-    public uint NOption { get; init; }
-    public byte[] Creator { get; init; }
-    public byte[] BetDesc { get; init; }
-    public byte[][] OptionDesc { get; init; }
-    public byte[][] OracleProviderId { get; init; }
-    public uint[] OracleFees { get; init; }
-    public uint OpenDate { get; init; }
-    public uint CloseDate { get; init; }
-    public uint EndDate { get; init; }
-    public ulong MinBetAmount { get; init; }
-    public uint MaxBetSlotPerOption { get; init; }
-    public uint[] CurrentBetState { get; init; }
-    public sbyte[] BetResultWonOption { get; init; }
-    public sbyte[] BetResultOPId { get; init; }
-
-    public static GetBetInfoOutput FromBytes(ReadOnlySpan<byte> data)
-    {
-        var optionDesc = new byte[8][];
-        for (int i = 0; i < 8; i++)
-        {
-            optionDesc[i] = data[(72 + i * 32)..].Slice(0, 32).ToArray();
-        }
-        var oracleProviderId = new byte[8][];
-        for (int i = 0; i < 8; i++)
-        {
-            oracleProviderId[i] = data[(328 + i * 32)..].Slice(0, 32).ToArray();
-        }
-        var oracleFees = new uint[8];
-        for (int i = 0; i < 8; i++)
-        {
-            oracleFees[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(584 + i * 4)..]);
-        }
-        var currentBetState = new uint[8];
-        for (int i = 0; i < 8; i++)
-        {
-            currentBetState[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(644 + i * 4)..]);
-        }
-        var betResultWonOption = new sbyte[8];
-        for (int i = 0; i < 8; i++)
-        {
-            betResultWonOption[i] = (sbyte)data.Slice(676 + i * 1, 1)[0];
-        }
-        var betResultOPId = new sbyte[8];
-        for (int i = 0; i < 8; i++)
-        {
-            betResultOPId[i] = (sbyte)data.Slice(684 + i * 1, 1)[0];
-        }
-        return new GetBetInfoOutput
-        {
-            BetId = BinaryPrimitives.ReadUInt32LittleEndian(data[0..]),
-            NOption = BinaryPrimitives.ReadUInt32LittleEndian(data[4..]),
-            Creator = data[8..].Slice(0, 32).ToArray(),
-            BetDesc = data[40..].Slice(0, 32).ToArray(),
-            OptionDesc = optionDesc,
-            OracleProviderId = oracleProviderId,
-            OracleFees = oracleFees,
-            OpenDate = BinaryPrimitives.ReadUInt32LittleEndian(data[616..]),
-            CloseDate = BinaryPrimitives.ReadUInt32LittleEndian(data[620..]),
-            EndDate = BinaryPrimitives.ReadUInt32LittleEndian(data[624..]),
-            MinBetAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[632..]),
-            MaxBetSlotPerOption = BinaryPrimitives.ReadUInt32LittleEndian(data[640..]),
-            CurrentBetState = currentBetState,
-            BetResultWonOption = betResultWonOption,
-            BetResultOPId = betResultOPId
-        };
-    }
-}
-
-// ═══ Function: getBetOptionDetail (inputType=3) ═══
-
-/// <summary>Input for query.</summary>
-public readonly struct GetBetOptionDetailInput : ISmartContractInput
+public readonly struct GetEventInfoInput : ISmartContractInput
 {
     public const int Size = 8;
 
     public int SerializedSize => Size;
 
-    public uint BetId { get; init; }
-    public uint BetOption { get; init; }
+    public ulong EventId { get; init; }
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), BetId);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), BetOption);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
         return bytes;
     }
 }
 
 /// <summary>Output.</summary>
-public readonly struct GetBetOptionDetailOutput : ISmartContractOutput<GetBetOptionDetailOutput>
+public readonly struct GetEventInfoOutput : ISmartContractOutput<GetEventInfoOutput>
 {
-    public byte[][] Bettor { get; init; }
+    public byte[] Qei { get; init; }
+    public int ResultByGO { get; init; }
+    public uint PublishTickTime { get; init; }
+    public byte[] DisputerInfo { get; init; }
+    public uint ComputorsVote0 { get; init; }
+    public uint ComputorsVote1 { get; init; }
 
-    public static GetBetOptionDetailOutput FromBytes(ReadOnlySpan<byte> data)
+    public static GetEventInfoOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var bettor = new byte[1024][];
-        for (int i = 0; i < 1024; i++)
+        return new GetEventInfoOutput
         {
-            bettor[i] = data[(0 + i * 32)..].Slice(0, 32).ToArray();
-        }
-        return new GetBetOptionDetailOutput
-        {
-            Bettor = bettor
+            Qei = [] /* unknown type QtryEventInfo */,
+            ResultByGO = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
+            PublishTickTime = BinaryPrimitives.ReadUInt32LittleEndian(data[4..]),
+            DisputerInfo = [] /* unknown type DepositInfo */,
+            ComputorsVote0 = BinaryPrimitives.ReadUInt32LittleEndian(data[8..]),
+            ComputorsVote1 = BinaryPrimitives.ReadUInt32LittleEndian(data[12..])
         };
     }
 }
 
-// ═══ Function: getActiveBet (inputType=4) ═══
+// ═══ Function: GetOrders (inputType=3) ═══
+
+/// <summary>Nested type from GetOrders.</summary>
+public readonly struct GetOrdersQtryOrderWithPrice
+{
+    public const int Size = 8;
+
+    public byte[] Qo { get; init; }
+    public long Price { get; init; }
+
+    public static GetOrdersQtryOrderWithPrice ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetOrdersQtryOrderWithPrice
+        {
+            Qo = default /* TODO: unknown type QtryOrder */,
+            Price = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+/// <summary>Input for query.</summary>
+public readonly struct GetOrdersInput : ISmartContractInput
+{
+    public const int Size = 32;
+
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+    public ulong Option { get; init; }
+    public ulong IsBid { get; init; }
+    public ulong Offset { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Option);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(16), IsBid);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(24), Offset);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetOrdersOutput : ISmartContractOutput<GetOrdersOutput>
+{
+    public GetOrdersQtryOrderWithPrice[] Orders { get; init; }
+
+    public static GetOrdersOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var orders = new GetOrdersQtryOrderWithPrice[256];
+        for (int i = 0; i < 256; i++)
+        {
+            orders[i] = GetOrdersQtryOrderWithPrice.ReadFrom(data.Slice(0 + i * GetOrdersQtryOrderWithPrice.Size, GetOrdersQtryOrderWithPrice.Size));
+        }
+        return new GetOrdersOutput
+        {
+            Orders = orders
+        };
+    }
+}
+
+// ═══ Function: GetActiveEvent (inputType=4) ═══
 
 /// <summary>Input for query (empty).</summary>
-public readonly struct GetActiveBetInput : ISmartContractInput
+public readonly struct GetActiveEventInput : ISmartContractInput
 {
     public int SerializedSize => 0;
     public byte[] ToBytes() => [];
 }
 
 /// <summary>Output.</summary>
-public readonly struct GetActiveBetOutput : ISmartContractOutput<GetActiveBetOutput>
+public readonly struct GetActiveEventOutput : ISmartContractOutput<GetActiveEventOutput>
 {
-    public uint Count { get; init; }
-    public uint[] ActiveBetId { get; init; }
+    public ulong[] RecentActiveEvent { get; init; }
 
-    public static GetActiveBetOutput FromBytes(ReadOnlySpan<byte> data)
+    public static GetActiveEventOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var activeBetId = new uint[1024];
-        for (int i = 0; i < 1024; i++)
+        var recentActiveEvent = new ulong[0];
+        for (int i = 0; i < 0; i++)
         {
-            activeBetId[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(4 + i * 4)..]);
+            recentActiveEvent[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(0 + i * 8)..]);
         }
-        return new GetActiveBetOutput
+        return new GetActiveEventOutput
         {
-            Count = BinaryPrimitives.ReadUInt32LittleEndian(data[0..]),
-            ActiveBetId = activeBetId
+            RecentActiveEvent = recentActiveEvent
         };
     }
 }
 
-// ═══ Function: getBetByCreator (inputType=5) ═══
+// ═══ Function: GetEventInfoBatch (inputType=5) ═══
 
 /// <summary>Input for query.</summary>
-public readonly struct GetBetByCreatorInput : ISmartContractInput
+public readonly struct GetEventInfoBatchInput : ISmartContractInput
 {
-    public const int Size = 32;
+    public const int Size = 512;
 
     public int SerializedSize => Size;
 
-    public required byte[] Creator { get; init; }
+    public ulong[] EventIds { get; init; }
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        Creator.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        for (int i = 0; i < 64 && EventIds != null && i < EventIds.Length; i++)
+        {
+            BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0 + i * 8), EventIds[i]);
+        }
         return bytes;
     }
 }
 
 /// <summary>Output.</summary>
-public readonly struct GetBetByCreatorOutput : ISmartContractOutput<GetBetByCreatorOutput>
+public readonly struct GetEventInfoBatchOutput : ISmartContractOutput<GetEventInfoBatchOutput>
 {
-    public uint Count { get; init; }
-    public uint[] BetId { get; init; }
+    public byte[] Aqei { get; init; }
 
-    public static GetBetByCreatorOutput FromBytes(ReadOnlySpan<byte> data)
+    public static GetEventInfoBatchOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var betId = new uint[1024];
-        for (int i = 0; i < 1024; i++)
+        return new GetEventInfoBatchOutput
         {
-            betId[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(4 + i * 4)..]);
-        }
-        return new GetBetByCreatorOutput
-        {
-            Count = BinaryPrimitives.ReadUInt32LittleEndian(data[0..]),
-            BetId = betId
+            Aqei = [] /* unknown struct array QtryEventInfo */
         };
     }
 }
 
-// ═══ Procedure: issueBet (inputType=1) ═══
+// ═══ Function: GetUserPosition (inputType=6) ═══
+
+/// <summary>Nested type from GetUserPosition.</summary>
+public readonly struct GetUserPositionPositionInfo
+{
+    public const int Size = 16;
+
+    public ulong Eo { get; init; }
+    public long Amount { get; init; }
+
+    public static GetUserPositionPositionInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetUserPositionPositionInfo
+        {
+            Eo = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            Amount = BinaryPrimitives.ReadInt64LittleEndian(data[8..])
+        };
+    }
+}
+
+/// <summary>Input for query.</summary>
+public readonly struct GetUserPositionInput : ISmartContractInput
+{
+    public const int Size = 32;
+
+    public int SerializedSize => Size;
+
+    public required byte[] Uid { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Uid.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetUserPositionOutput : ISmartContractOutput<GetUserPositionOutput>
+{
+    public long Count { get; init; }
+    public GetUserPositionPositionInfo[] P { get; init; }
+
+    public static GetUserPositionOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var p = new GetUserPositionPositionInfo[1024];
+        for (int i = 0; i < 1024; i++)
+        {
+            p[i] = GetUserPositionPositionInfo.ReadFrom(data.Slice(8 + i * GetUserPositionPositionInfo.Size, GetUserPositionPositionInfo.Size));
+        }
+        return new GetUserPositionOutput
+        {
+            Count = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
+            P = p
+        };
+    }
+}
+
+// ═══ Function: GetApprovedAmount (inputType=7) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetApprovedAmountInput : ISmartContractInput
+{
+    public const int Size = 32;
+
+    public int SerializedSize => Size;
+
+    public required byte[] Pk { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Pk.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetApprovedAmountOutput : ISmartContractOutput<GetApprovedAmountOutput>
+{
+    public ulong Amount { get; init; }
+
+    public static GetApprovedAmountOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetApprovedAmountOutput
+        {
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Function: GetTopProposals (inputType=8) ═══
+
+/// <summary>Nested type from GetTopProposals.</summary>
+public readonly struct GetTopProposalsProposalInfo
+{
+    public const int Size = 8;
+
+    public byte[] Proposed { get; init; }
+    public long TotalVotes { get; init; }
+
+    public static GetTopProposalsProposalInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetTopProposalsProposalInfo
+        {
+            Proposed = default /* TODO: unknown type QtryGOV */,
+            TotalVotes = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetTopProposalsInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetTopProposalsOutput : ISmartContractOutput<GetTopProposalsOutput>
+{
+    public GetTopProposalsProposalInfo[] Top { get; init; }
+    public int UniqueCount { get; init; }
+
+    public static GetTopProposalsOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var top = new GetTopProposalsProposalInfo[4];
+        for (int i = 0; i < 4; i++)
+        {
+            top[i] = GetTopProposalsProposalInfo.ReadFrom(data.Slice(0 + i * GetTopProposalsProposalInfo.Size, GetTopProposalsProposalInfo.Size));
+        }
+        return new GetTopProposalsOutput
+        {
+            Top = top,
+            UniqueCount = BinaryPrimitives.ReadInt32LittleEndian(data[32..])
+        };
+    }
+}
+
+// ═══ Procedure: CreateEvent (inputType=1) ═══
 
 /// <summary>Input payload for procedure.</summary>
-public sealed class IssueBetPayload : ITransactionPayload, ISmartContractInput
+public sealed class CreateEventPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 600;
+    public const int Size = 0;
 
     public ushort InputType => 1;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public required byte[] BetDesc { get; init; }
-    public required byte[][] OptionDesc { get; init; }
-    public required byte[][] OracleProviderId { get; init; }
-    public uint[] OracleFees { get; init; }
-    public uint CloseDate { get; init; }
-    public uint EndDate { get; init; }
-    public ulong AmountPerSlot { get; init; }
-    public uint MaxBetSlotPerOption { get; init; }
-    public uint NumberOfOption { get; init; }
+    public byte[] Qei { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        BetDesc.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
-        for (int i = 0; i < 8 && OptionDesc != null && i < OptionDesc.Length; i++)
-        {
-            OptionDesc[i].AsSpan(0, 32).CopyTo(bytes.AsSpan(32 + i * 32));
-        }
-        for (int i = 0; i < 8 && OracleProviderId != null && i < OracleProviderId.Length; i++)
-        {
-            OracleProviderId[i].AsSpan(0, 32).CopyTo(bytes.AsSpan(288 + i * 32));
-        }
-        for (int i = 0; i < 8 && OracleFees != null && i < OracleFees.Length; i++)
-        {
-            BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(544 + i * 4), OracleFees[i]);
-        }
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(576), CloseDate);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(580), EndDate);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(584), AmountPerSlot);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(592), MaxBetSlotPerOption);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(596), NumberOfOption);
+        // TODO: serialize unknown type QtryEventInfo for Qei
         return bytes;
     }
 }
 
 /// <summary>Output (empty).</summary>
-public readonly struct IssueBetOutput : ISmartContractOutput<IssueBetOutput>
+public readonly struct CreateEventOutput : ISmartContractOutput<CreateEventOutput>
 {
-    public static IssueBetOutput FromBytes(ReadOnlySpan<byte> data) => new();
+    public static CreateEventOutput FromBytes(ReadOnlySpan<byte> data) => new();
 }
 
-// ═══ Procedure: joinBet (inputType=2) ═══
+// ═══ Procedure: AddToAskOrder (inputType=2) ═══
 
 /// <summary>Input payload for procedure.</summary>
-public sealed class JoinBetPayload : ITransactionPayload, ISmartContractInput
+public sealed class AddToAskOrderPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 12;
+    public const int Size = 32;
 
     public ushort InputType => 2;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public uint BetId { get; init; }
-    public uint NumberOfSlot { get; init; }
-    public uint Option { get; init; }
+    public ulong EventId { get; init; }
+    public ulong Option { get; init; }
+    public ulong Amount { get; init; }
+    public long Price { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), BetId);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), NumberOfSlot);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), Option);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Option);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(16), Amount);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(24), Price);
         return bytes;
     }
 }
 
-/// <summary>Output (empty).</summary>
-public readonly struct JoinBetOutput : ISmartContractOutput<JoinBetOutput>
+/// <summary>Output.</summary>
+public readonly struct AddToAskOrderOutput : ISmartContractOutput<AddToAskOrderOutput>
 {
-    public static JoinBetOutput FromBytes(ReadOnlySpan<byte> data) => new();
+    public long Status { get; init; }
+
+    public static AddToAskOrderOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new AddToAskOrderOutput
+        {
+            Status = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
 }
 
-// ═══ Procedure: cancelBet (inputType=3) ═══
+// ═══ Procedure: RemoveAskOrder (inputType=3) ═══
 
 /// <summary>Input payload for procedure.</summary>
-public sealed class CancelBetPayload : ITransactionPayload, ISmartContractInput
+public sealed class RemoveAskOrderPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 4;
+    public const int Size = 32;
 
     public ushort InputType => 3;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public uint BetId { get; init; }
+    public ulong EventId { get; init; }
+    public ulong Option { get; init; }
+    public ulong Amount { get; init; }
+    public long Price { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), BetId);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Option);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(16), Amount);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(24), Price);
         return bytes;
     }
 }
 
-/// <summary>Output (empty).</summary>
-public readonly struct CancelBetOutput : ISmartContractOutput<CancelBetOutput>
+/// <summary>Output.</summary>
+public readonly struct RemoveAskOrderOutput : ISmartContractOutput<RemoveAskOrderOutput>
 {
-    public static CancelBetOutput FromBytes(ReadOnlySpan<byte> data) => new();
+    public long Status { get; init; }
+
+    public static RemoveAskOrderOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new RemoveAskOrderOutput
+        {
+            Status = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
 }
 
-// ═══ Procedure: publishResult (inputType=4) ═══
+// ═══ Procedure: AddToBidOrder (inputType=4) ═══
 
 /// <summary>Input payload for procedure.</summary>
-public sealed class PublishResultPayload : ITransactionPayload, ISmartContractInput
+public sealed class AddToBidOrderPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 8;
+    public const int Size = 32;
 
     public ushort InputType => 4;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public uint BetId { get; init; }
-    public uint Option { get; init; }
+    public ulong EventId { get; init; }
+    public ulong Option { get; init; }
+    public long Amount { get; init; }
+    public long Price { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), BetId);
-        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), Option);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Option);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(16), Amount);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(24), Price);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct AddToBidOrderOutput : ISmartContractOutput<AddToBidOrderOutput>
+{
+    public long Status { get; init; }
+
+    public static AddToBidOrderOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new AddToBidOrderOutput
+        {
+            Status = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: RemoveBidOrder (inputType=5) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class RemoveBidOrderPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 32;
+
+    public ushort InputType => 5;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+    public ulong Option { get; init; }
+    public ulong Amount { get; init; }
+    public long Price { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Option);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(16), Amount);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(24), Price);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct RemoveBidOrderOutput : ISmartContractOutput<RemoveBidOrderOutput>
+{
+    public long Status { get; init; }
+
+    public static RemoveBidOrderOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new RemoveBidOrderOutput
+        {
+            Status = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: PublishResult (inputType=6) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class PublishResultPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 16;
+
+    public ushort InputType => 6;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+    public ulong Option { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(8), Option);
         return bytes;
     }
 }
@@ -446,4 +660,355 @@ public sealed class PublishResultPayload : ITransactionPayload, ISmartContractIn
 public readonly struct PublishResultOutput : ISmartContractOutput<PublishResultOutput>
 {
     public static PublishResultOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: TryFinalizeEvent (inputType=7) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class TryFinalizeEventPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 8;
+
+    public ushort InputType => 7;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        return bytes;
+    }
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct TryFinalizeEventOutput : ISmartContractOutput<TryFinalizeEventOutput>
+{
+    public static TryFinalizeEventOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: Dispute (inputType=8) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class DisputePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 8;
+
+    public ushort InputType => 8;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        return bytes;
+    }
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct DisputeOutput : ISmartContractOutput<DisputeOutput>
+{
+    public static DisputeOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: ResolveDispute (inputType=9) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class ResolveDisputePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 16;
+
+    public ushort InputType => 9;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+    public long Vote { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(8), Vote);
+        return bytes;
+    }
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct ResolveDisputeOutput : ISmartContractOutput<ResolveDisputeOutput>
+{
+    public static ResolveDisputeOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: UserClaimReward (inputType=10) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class UserClaimRewardPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 8;
+
+    public ushort InputType => 10;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        return bytes;
+    }
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct UserClaimRewardOutput : ISmartContractOutput<UserClaimRewardOutput>
+{
+    public static UserClaimRewardOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: GOForceClaimReward (inputType=11) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class GOForceClaimRewardPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 520;
+
+    public ushort InputType => 11;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong EventId { get; init; }
+    public required byte[][] Pubkeys { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), EventId);
+        for (int i = 0; i < 16 && Pubkeys != null && i < Pubkeys.Length; i++)
+        {
+            Pubkeys[i].AsSpan(0, 32).CopyTo(bytes.AsSpan(8 + i * 32));
+        }
+        return bytes;
+    }
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct GOForceClaimRewardOutput : ISmartContractOutput<GOForceClaimRewardOutput>
+{
+    public static GOForceClaimRewardOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: TransferQUSD (inputType=12) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class TransferQUSDPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 40;
+
+    public ushort InputType => 12;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required byte[] Receiver { get; init; }
+    public long Amount { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Receiver.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(32), Amount);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct TransferQUSDOutput : ISmartContractOutput<TransferQUSDOutput>
+{
+    public ulong Amount { get; init; }
+
+    public static TransferQUSDOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new TransferQUSDOutput
+        {
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: TransferShareManagementRights (inputType=13) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class TransferShareManagementRightsPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 56;
+
+    public ushort InputType => 13;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required QubicAsset Asset { get; init; }
+    public long NumberOfShares { get; init; }
+    public uint NewManagingContractIndex { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Asset.WriteTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(40), NumberOfShares);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(48), NewManagingContractIndex);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct TransferShareManagementRightsOutput : ISmartContractOutput<TransferShareManagementRightsOutput>
+{
+    public long TransferredNumberOfShares { get; init; }
+
+    public static TransferShareManagementRightsOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new TransferShareManagementRightsOutput
+        {
+            TransferredNumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: CleanMemory (inputType=14) ═══
+
+/// <summary>Input for procedure (empty payload).</summary>
+public sealed class CleanMemoryPayload : ITransactionPayload, ISmartContractInput
+{
+    public ushort InputType => 14;
+    public ushort InputSize => 0;
+    public int SerializedSize => 0;
+    public byte[] GetPayloadBytes() => [];
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct CleanMemoryOutput : ISmartContractOutput<CleanMemoryOutput>
+{
+    public static CleanMemoryOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: TransferQTRYGOV (inputType=15) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class TransferQTRYGOVPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 40;
+
+    public ushort InputType => 15;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required byte[] Receiver { get; init; }
+    public long Amount { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Receiver.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(32), Amount);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct TransferQTRYGOVOutput : ISmartContractOutput<TransferQTRYGOVOutput>
+{
+    public ulong Amount { get; init; }
+
+    public static TransferQTRYGOVOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new TransferQTRYGOVOutput
+        {
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: UpdateFeeDiscountList (inputType=20) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class UpdateFeeDiscountListPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 48;
+
+    public ushort InputType => 20;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required byte[] UserId { get; init; }
+    public ulong NewFeeRate { get; init; }
+    public ulong Ops { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        UserId.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(32), NewFeeRate);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(40), Ops);
+        return bytes;
+    }
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct UpdateFeeDiscountListOutput : ISmartContractOutput<UpdateFeeDiscountListOutput>
+{
+    public static UpdateFeeDiscountListOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: ProposalVote (inputType=100) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class ProposalVotePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 0;
+
+    public ushort InputType => 100;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public byte[] Proposed { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        // TODO: serialize unknown type QtryGOV for Proposed
+        return bytes;
+    }
+}
+
+/// <summary>Output (empty).</summary>
+public readonly struct ProposalVoteOutput : ISmartContractOutput<ProposalVoteOutput>
+{
+    public static ProposalVoteOutput FromBytes(ReadOnlySpan<byte> data) => new();
 }

@@ -80,6 +80,18 @@ public static class QubicContracts
     /// <summary>QDUEL - Duel contract. (epoch 199)</summary>
     public const int Qduel = 23;
 
+    /// <summary>PULSE - Pulse contract.</summary>
+    public const int Pulse = 24;
+
+    /// <summary>VOTTUNBRIDGE - Vottun bridge contract.</summary>
+    public const int Vottun = 25;
+
+    /// <summary>QUSINO - Qusino contract.</summary>
+    public const int Qusino = 26;
+
+    /// <summary>ESCROW - Escrow contract.</summary>
+    public const int Escrow = 27;
+
     // Single source of truth for contract index → name mapping.
     private static readonly Dictionary<int, string> _contractNames = new()
     {
@@ -88,7 +100,8 @@ public static class QubicContracts
         [Ccf] = "CCF", [Qearn] = "QEarn", [Qvault] = "QVault", [Msvault] = "MSVault",
         [Qbay] = "QBay", [Qswap] = "QSwap", [Nost] = "Nostromo", [Qdraw] = "QDraw",
         [Rl] = "RL", [Qbond] = "QBond", [Qip] = "QIP", [Qraffle] = "QRaffle",
-        [Qrwa] = "QRWA", [Qrp] = "QRP", [Qtf] = "QTF", [Qduel] = "QDuel"
+        [Qrwa] = "QRWA", [Qrp] = "QRP", [Qtf] = "QTF", [Qduel] = "QDuel",
+        [Pulse] = "Pulse", [Vottun] = "Vottun", [Qusino] = "Qusino", [Escrow] = "Escrow"
     };
 
     /// <summary>

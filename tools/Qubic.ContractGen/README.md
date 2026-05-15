@@ -39,6 +39,10 @@ Reads the C++ header files in `deps/qubic-core/src/contracts/` and generates one
 | 21 | Qrp | QReservePool.h |
 | 22 | Qtf | QThirtyFour.h |
 | 23 | Qduel | QDuel.h |
+| 24 | Pulse | Pulse.h |
+| 25 | Vottun | VottunBridge.h |
+| 26 | Qusino | Qusino.h |
+| 27 | Escrow | Escrow.h |
 
 ## Usage
 

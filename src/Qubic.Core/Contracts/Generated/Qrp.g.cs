@@ -80,8 +80,8 @@ public readonly struct GetAllowedSCOutput : ISmartContractOutput<GetAllowedSCOut
 
     public static GetAllowedSCOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var allowedSC = new byte[0][];
-        for (int i = 0; i < 0; i++)
+        var allowedSC = new byte[128][];
+        for (int i = 0; i < 128; i++)
         {
             allowedSC[i] = data[(0 + i * 32)..].Slice(0, 32).ToArray();
         }

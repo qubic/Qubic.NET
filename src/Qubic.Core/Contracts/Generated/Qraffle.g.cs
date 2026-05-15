@@ -308,6 +308,7 @@ public readonly struct GetEndedQuRaffleOutput : ISmartContractOutput<GetEndedQuR
     public ulong EntryAmount { get; init; }
     public uint NumberOfMembers { get; init; }
     public uint WinnerIndex { get; init; }
+    public uint NumberOfDaoMembers { get; init; }
     public int ReturnCode { get; init; }
 
     public static GetEndedQuRaffleOutput FromBytes(ReadOnlySpan<byte> data)
@@ -319,7 +320,8 @@ public readonly struct GetEndedQuRaffleOutput : ISmartContractOutput<GetEndedQuR
             EntryAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
             NumberOfMembers = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
             WinnerIndex = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
-            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[56..])
+            NumberOfDaoMembers = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[60..])
         };
     }
 }

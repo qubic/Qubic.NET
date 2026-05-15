@@ -37,6 +37,8 @@ public static class QutilContract
         public const uint GetFees = 7;
         /// <summary>QueryFeeReserve (inputType=8).</summary>
         public const uint QueryFeeReserve = 8;
+        /// <summary>GetBalances16 (inputType=9).</summary>
+        public const uint GetBalances16 = 9;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -58,6 +60,16 @@ public static class QutilContract
         public const uint DistributeQuToShareholders = 7;
         /// <summary>BurnQubicForContract (inputType=8).</summary>
         public const uint BurnQubicForContract = 8;
+        /// <summary>TransferSharesToManyV1 (inputType=9).</summary>
+        public const uint TransferSharesToManyV1 = 9;
+        /// <summary>TransferSharesManagementRights (inputType=10).</summary>
+        public const uint TransferSharesManagementRights = 10;
+        /// <summary>QueryPriceOracle (inputType=100).</summary>
+        public const uint QueryPriceOracle = 100;
+        /// <summary>SubscribePriceOracle (inputType=101).</summary>
+        public const uint SubscribePriceOracle = 101;
+        /// <summary>UnsubscribeOracle (inputType=102).</summary>
+        public const uint UnsubscribeOracle = 102;
     }
 }
 
@@ -147,21 +159,21 @@ public readonly struct GetCurrentResultOutput : ISmartContractOutput<GetCurrentR
 
     public static GetCurrentResultOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var result = new ulong[0];
-        for (int i = 0; i < 0; i++)
+        var result = new ulong[64];
+        for (int i = 0; i < 64; i++)
         {
             result[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(0 + i * 8)..]);
         }
-        var voter_count = new ulong[0];
-        for (int i = 0; i < 0; i++)
+        var voter_count = new ulong[64];
+        for (int i = 0; i < 64; i++)
         {
-            voter_count[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(0 + i * 8)..]);
+            voter_count[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(512 + i * 8)..]);
         }
         return new GetCurrentResultOutput
         {
             Result = result,
             Voter_count = voter_count,
-            Is_active = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
+            Is_active = BinaryPrimitives.ReadUInt64LittleEndian(data[1024..])
         };
     }
 }
@@ -266,15 +278,15 @@ public readonly struct GetPollInfoOutput : ISmartContractOutput<GetPollInfoOutpu
 
     public static GetPollInfoOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var poll_link = new byte[0];
-        for (int i = 0; i < 0; i++)
+        var poll_link = new byte[256];
+        for (int i = 0; i < 256; i++)
         {
             poll_link[i] = data.Slice(8 + i * 1, 1)[0];
         }
         return new GetPollInfoOutput
         {
             Found = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
-            Poll_info = [] /* unknown type QUTILPoll */,
+            Poll_info = [] /* unknown type Poll */,
             Poll_link = poll_link
         };
     }
@@ -340,6 +352,47 @@ public readonly struct QueryFeeReserveOutput : ISmartContractOutput<QueryFeeRese
         return new QueryFeeReserveOutput
         {
             ReserveAmount = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Function: GetBalances16 (inputType=9) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetBalances16Input : ISmartContractInput
+{
+    public const int Size = 512;
+
+    public int SerializedSize => Size;
+
+    public required byte[][] PublicKeys { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        for (int i = 0; i < 16 && PublicKeys != null && i < PublicKeys.Length; i++)
+        {
+            PublicKeys[i].AsSpan(0, 32).CopyTo(bytes.AsSpan(0 + i * 32));
+        }
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetBalances16Output : ISmartContractOutput<GetBalances16Output>
+{
+    public long[] Balances { get; init; }
+
+    public static GetBalances16Output FromBytes(ReadOnlySpan<byte> data)
+    {
+        var balances = new long[16];
+        for (int i = 0; i < 16; i++)
+        {
+            balances[i] = BinaryPrimitives.ReadInt64LittleEndian(data[(0 + i * 8)..]);
+        }
+        return new GetBalances16Output
+        {
+            Balances = balances
         };
     }
 }
@@ -455,7 +508,7 @@ public readonly struct SendToManyBenchmarkOutput : ISmartContractOutput<SendToMa
 /// <summary>Input payload for procedure.</summary>
 public sealed class CreatePollPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 56;
+    public const int Size = 312;
 
     public ushort InputType => 4;
     public ushort InputSize => Size;
@@ -476,15 +529,15 @@ public sealed class CreatePollPayload : ITransactionPayload, ISmartContractInput
         Poll_name.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
         BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(32), Poll_type);
         BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(40), Min_amount);
-        for (int i = 0; i < 0 && Github_link != null && i < Github_link.Length; i++)
+        for (int i = 0; i < 256 && Github_link != null && i < Github_link.Length; i++)
         {
             bytes.AsSpan(48 + i * 1)[0] = Github_link[i];
         }
         for (int i = 0; i < 0 && Allowed_assets != null && i < Allowed_assets.Length; i++)
         {
-            Allowed_assets[i].WriteTo(bytes.AsSpan(48 + i * 40));
+            Allowed_assets[i].WriteTo(bytes.AsSpan(304 + i * 40));
         }
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(48), Num_assets);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(304), Num_assets);
         return bytes;
     }
 }
@@ -659,6 +712,199 @@ public readonly struct BurnQubicForContractOutput : ISmartContractOutput<BurnQub
         return new BurnQubicForContractOutput
         {
             Amount = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: TransferSharesToManyV1 (inputType=9) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class TransferSharesToManyV1Payload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 40;
+
+    public ushort InputType => 9;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required byte[] Issuer { get; init; }
+    public ulong AssetName { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Issuer.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(32), AssetName);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct TransferSharesToManyV1Output : ISmartContractOutput<TransferSharesToManyV1Output>
+{
+    public int ReturnCode { get; init; }
+
+    public static TransferSharesToManyV1Output FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new TransferSharesToManyV1Output
+        {
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: TransferSharesManagementRights (inputType=10) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class TransferSharesManagementRightsPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 56;
+
+    public ushort InputType => 10;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public required QubicAsset Asset { get; init; }
+    public long NumberOfShares { get; init; }
+    public uint NewManagingContractIndex { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Asset.WriteTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(40), NumberOfShares);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(48), NewManagingContractIndex);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct TransferSharesManagementRightsOutput : ISmartContractOutput<TransferSharesManagementRightsOutput>
+{
+    public long TransferredNumberOfShares { get; init; }
+
+    public static TransferSharesManagementRightsOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new TransferSharesManagementRightsOutput
+        {
+            TransferredNumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: QueryPriceOracle (inputType=100) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class QueryPriceOraclePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 4;
+
+    public ushort InputType => 100;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public uint TimeoutMilliseconds { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), TimeoutMilliseconds);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct QueryPriceOracleOutput : ISmartContractOutput<QueryPriceOracleOutput>
+{
+    public long OracleQueryId { get; init; }
+
+    public static QueryPriceOracleOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new QueryPriceOracleOutput
+        {
+            OracleQueryId = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: SubscribePriceOracle (inputType=101) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class SubscribePriceOraclePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 8;
+
+    public ushort InputType => 101;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public uint SubscriptionPeriodMilliseconds { get; init; }
+    public bool NotifyPreviousValue { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), SubscriptionPeriodMilliseconds);
+        bytes.AsSpan(4, 1)[0] = (byte)(NotifyPreviousValue ? 1 : 0);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct SubscribePriceOracleOutput : ISmartContractOutput<SubscribePriceOracleOutput>
+{
+    public int OracleSubscriptionId { get; init; }
+
+    public static SubscribePriceOracleOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new SubscribePriceOracleOutput
+        {
+            OracleSubscriptionId = BinaryPrimitives.ReadInt32LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: UnsubscribeOracle (inputType=102) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class UnsubscribeOraclePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 4;
+
+    public ushort InputType => 102;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public int SubscriptionId { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(0), SubscriptionId);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct UnsubscribeOracleOutput : ISmartContractOutput<UnsubscribeOracleOutput>
+{
+    public bool Success { get; init; }
+
+    public static UnsubscribeOracleOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new UnsubscribeOracleOutput
+        {
+            Success = (data.Slice(0, 1)[0] != 0)
         };
     }
 }
