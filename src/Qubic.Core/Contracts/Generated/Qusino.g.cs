@@ -92,6 +92,47 @@ public readonly struct GetUserAssetVolumeOutput : ISmartContractOutput<GetUserAs
 
 // ═══ Function: getFailedGameList (inputType=2) ═══
 
+/// <summary>Nested type from GetFailedGameListOutput.</summary>
+public readonly struct GetFailedGameListOutputGameInfo
+{
+    public const int Size = 112;
+
+    public byte[] URI { get; init; }
+    public required byte[] Proposer { get; init; }
+    public uint YesVotes { get; init; }
+    public uint NoVotes { get; init; }
+    public uint ProposedEpoch { get; init; }
+
+    public static GetFailedGameListOutputGameInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var uRI = new byte[64];
+        for (int i = 0; i < 64; i++)
+        {
+            uRI[i] = data.Slice(0 + i * 1, 1)[0];
+        }
+        return new GetFailedGameListOutputGameInfo
+        {
+            URI = uRI,
+            Proposer = data[64..].Slice(0, 32).ToArray(),
+            YesVotes = BinaryPrimitives.ReadUInt32LittleEndian(data[96..]),
+            NoVotes = BinaryPrimitives.ReadUInt32LittleEndian(data[100..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[104..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        for (int i = 0; i < 64 && URI != null && i < URI.Length; i++)
+        {
+            dest.Slice(0 + i * 1)[0] = URI[i];
+        }
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(64));
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(96), YesVotes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(100), NoVotes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(104), ProposedEpoch);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetFailedGameListInput : ISmartContractInput
 {
@@ -112,13 +153,18 @@ public readonly struct GetFailedGameListInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetFailedGameListOutput : ISmartContractOutput<GetFailedGameListOutput>
 {
-    public byte[] Games { get; init; }
+    public GetFailedGameListOutputGameInfo[] Games { get; init; }
 
     public static GetFailedGameListOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var games = new GetFailedGameListOutputGameInfo[32];
+        for (int i = 0; i < 32; i++)
+        {
+            games[i] = GetFailedGameListOutputGameInfo.ReadFrom(data.Slice(0 + i * GetFailedGameListOutputGameInfo.Size, GetFailedGameListOutputGameInfo.Size));
+        }
         return new GetFailedGameListOutput
         {
-            Games = [] /* unknown struct array GameInfo */
+            Games = games
         };
     }
 }
@@ -158,6 +204,47 @@ public readonly struct GetSCInfoOutput : ISmartContractOutput<GetSCInfoOutput>
 
 // ═══ Function: getActiveGameList (inputType=4) ═══
 
+/// <summary>Nested type from GetActiveGameListOutput.</summary>
+public readonly struct GetActiveGameListOutputGameInfo
+{
+    public const int Size = 112;
+
+    public byte[] URI { get; init; }
+    public required byte[] Proposer { get; init; }
+    public uint YesVotes { get; init; }
+    public uint NoVotes { get; init; }
+    public uint ProposedEpoch { get; init; }
+
+    public static GetActiveGameListOutputGameInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var uRI = new byte[64];
+        for (int i = 0; i < 64; i++)
+        {
+            uRI[i] = data.Slice(0 + i * 1, 1)[0];
+        }
+        return new GetActiveGameListOutputGameInfo
+        {
+            URI = uRI,
+            Proposer = data[64..].Slice(0, 32).ToArray(),
+            YesVotes = BinaryPrimitives.ReadUInt32LittleEndian(data[96..]),
+            NoVotes = BinaryPrimitives.ReadUInt32LittleEndian(data[100..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[104..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        for (int i = 0; i < 64 && URI != null && i < URI.Length; i++)
+        {
+            dest.Slice(0 + i * 1)[0] = URI[i];
+        }
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(64));
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(96), YesVotes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(100), NoVotes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(104), ProposedEpoch);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetActiveGameListInput : ISmartContractInput
 {
@@ -178,19 +265,24 @@ public readonly struct GetActiveGameListInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetActiveGameListOutput : ISmartContractOutput<GetActiveGameListOutput>
 {
-    public byte[] Games { get; init; }
+    public GetActiveGameListOutputGameInfo[] Games { get; init; }
     public ulong[] GameIndexes { get; init; }
 
     public static GetActiveGameListOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var games = new GetActiveGameListOutputGameInfo[32];
+        for (int i = 0; i < 32; i++)
+        {
+            games[i] = GetActiveGameListOutputGameInfo.ReadFrom(data.Slice(0 + i * GetActiveGameListOutputGameInfo.Size, GetActiveGameListOutputGameInfo.Size));
+        }
         var gameIndexes = new ulong[32];
         for (int i = 0; i < 32; i++)
         {
-            gameIndexes[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(0 + i * 8)..]);
+            gameIndexes[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(3584 + i * 8)..]);
         }
         return new GetActiveGameListOutput
         {
-            Games = [] /* unknown struct array GameInfo */,
+            Games = games,
             GameIndexes = gameIndexes
         };
     }

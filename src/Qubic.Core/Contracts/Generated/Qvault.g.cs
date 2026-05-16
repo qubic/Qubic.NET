@@ -217,6 +217,56 @@ public readonly struct GetStakedAmountAndVotingPowerOutput : ISmartContractOutpu
 
 // ═══ Function: getGP (inputType=3) ═══
 
+/// <summary>Nested type from GetGPOutput.</summary>
+public readonly struct GetGPOutputGPInfo
+{
+    public const int Size = 312;
+
+    public required byte[] Proposer { get; init; }
+    public uint CurrentTotalVotingPower { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public uint ProposedEpoch { get; init; }
+    public uint CurrentQuorumPercent { get; init; }
+    public byte[] Url { get; init; }
+    public byte Result { get; init; }
+
+    public static GetGPOutputGPInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(52 + i * 1, 1)[0];
+        }
+        return new GetGPOutputGPInfo
+        {
+            Proposer = data[0..].Slice(0, 32).ToArray(),
+            CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[36..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[40..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[44..]),
+            CurrentQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            Url = url,
+            Result = data.Slice(308, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(32), CurrentTotalVotingPower);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(36), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(40), NumberOfNo);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(44), ProposedEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), CurrentQuorumPercent);
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(52 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(308, 1)[0] = Result;
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetGPInput : ISmartContractInput
 {
@@ -238,19 +288,72 @@ public readonly struct GetGPInput : ISmartContractInput
 public readonly struct GetGPOutput : ISmartContractOutput<GetGPOutput>
 {
     public int ReturnCode { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetGPOutputGPInfo Proposal { get; init; }
 
     public static GetGPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetGPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = [] /* unknown type GPInfo */
+            Proposal = GetGPOutputGPInfo.ReadFrom(data.Slice(8, 312))
         };
     }
 }
 
 // ═══ Function: getQCP (inputType=4) ═══
+
+/// <summary>Nested type from GetQCPOutput.</summary>
+public readonly struct GetQCPOutputQCPInfo
+{
+    public const int Size = 320;
+
+    public required byte[] Proposer { get; init; }
+    public uint CurrentTotalVotingPower { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public uint ProposedEpoch { get; init; }
+    public uint CurrentQuorumPercent { get; init; }
+    public uint NewQuorumPercent { get; init; }
+    public byte[] Url { get; init; }
+    public byte Result { get; init; }
+
+    public static GetQCPOutputQCPInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(56 + i * 1, 1)[0];
+        }
+        return new GetQCPOutputQCPInfo
+        {
+            Proposer = data[0..].Slice(0, 32).ToArray(),
+            CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[36..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[40..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[44..]),
+            CurrentQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            NewQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            Url = url,
+            Result = data.Slice(312, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(32), CurrentTotalVotingPower);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(36), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(40), NumberOfNo);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(44), ProposedEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), CurrentQuorumPercent);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), NewQuorumPercent);
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(56 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(312, 1)[0] = Result;
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetQCPInput : ISmartContractInput
@@ -273,19 +376,78 @@ public readonly struct GetQCPInput : ISmartContractInput
 public readonly struct GetQCPOutput : ISmartContractOutput<GetQCPOutput>
 {
     public int ReturnCode { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetQCPOutputQCPInfo Proposal { get; init; }
 
     public static GetQCPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetQCPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = [] /* unknown type QCPInfo */
+            Proposal = GetQCPOutputQCPInfo.ReadFrom(data.Slice(8, 320))
         };
     }
 }
 
 // ═══ Function: getIPOP (inputType=5) ═══
+
+/// <summary>Nested type from GetIPOPOutput.</summary>
+public readonly struct GetIPOPOutputIPOPInfo
+{
+    public const int Size = 336;
+
+    public required byte[] Proposer { get; init; }
+    public ulong TotalWeight { get; init; }
+    public ulong AssignedFund { get; init; }
+    public uint CurrentTotalVotingPower { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public uint ProposedEpoch { get; init; }
+    public uint IpoContractIndex { get; init; }
+    public uint CurrentQuorumPercent { get; init; }
+    public byte[] Url { get; init; }
+    public byte Result { get; init; }
+
+    public static GetIPOPOutputIPOPInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(72 + i * 1, 1)[0];
+        }
+        return new GetIPOPOutputIPOPInfo
+        {
+            Proposer = data[0..].Slice(0, 32).ToArray(),
+            TotalWeight = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            AssignedFund = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            IpoContractIndex = BinaryPrimitives.ReadUInt32LittleEndian(data[64..]),
+            CurrentQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[68..]),
+            Url = url,
+            Result = data.Slice(328, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), TotalWeight);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), AssignedFund);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), CurrentTotalVotingPower);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), NumberOfNo);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(60), ProposedEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(64), IpoContractIndex);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(68), CurrentQuorumPercent);
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(72 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(328, 1)[0] = Result;
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetIPOPInput : ISmartContractInput
@@ -308,19 +470,78 @@ public readonly struct GetIPOPInput : ISmartContractInput
 public readonly struct GetIPOPOutput : ISmartContractOutput<GetIPOPOutput>
 {
     public int ReturnCode { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetIPOPOutputIPOPInfo Proposal { get; init; }
 
     public static GetIPOPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetIPOPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = [] /* unknown type IPOPInfo */
+            Proposal = GetIPOPOutputIPOPInfo.ReadFrom(data.Slice(8, 336))
         };
     }
 }
 
 // ═══ Function: getQEarnP (inputType=6) ═══
+
+/// <summary>Nested type from GetQEarnPOutput.</summary>
+public readonly struct GetQEarnPOutputQEarnPInfo
+{
+    public const int Size = 328;
+
+    public required byte[] Proposer { get; init; }
+    public ulong AmountOfInvestPerEpoch { get; init; }
+    public ulong AssignedFundPerEpoch { get; init; }
+    public uint CurrentTotalVotingPower { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public uint ProposedEpoch { get; init; }
+    public uint CurrentQuorumPercent { get; init; }
+    public byte[] Url { get; init; }
+    public byte NumberOfEpoch { get; init; }
+    public byte Result { get; init; }
+
+    public static GetQEarnPOutputQEarnPInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(68 + i * 1, 1)[0];
+        }
+        return new GetQEarnPOutputQEarnPInfo
+        {
+            Proposer = data[0..].Slice(0, 32).ToArray(),
+            AmountOfInvestPerEpoch = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            AssignedFundPerEpoch = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            CurrentQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[64..]),
+            Url = url,
+            NumberOfEpoch = data.Slice(324, 1)[0],
+            Result = data.Slice(325, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), AmountOfInvestPerEpoch);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), AssignedFundPerEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), CurrentTotalVotingPower);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), NumberOfNo);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(60), ProposedEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(64), CurrentQuorumPercent);
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(68 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(324, 1)[0] = NumberOfEpoch;
+        dest.Slice(325, 1)[0] = Result;
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetQEarnPInput : ISmartContractInput
@@ -343,19 +564,78 @@ public readonly struct GetQEarnPInput : ISmartContractInput
 public readonly struct GetQEarnPOutput : ISmartContractOutput<GetQEarnPOutput>
 {
     public int ReturnCode { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetQEarnPOutputQEarnPInfo Proposal { get; init; }
 
     public static GetQEarnPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetQEarnPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = [] /* unknown type QEarnPInfo */
+            Proposal = GetQEarnPOutputQEarnPInfo.ReadFrom(data.Slice(8, 328))
         };
     }
 }
 
 // ═══ Function: getFundP (inputType=7) ═══
+
+/// <summary>Nested type from GetFundPOutput.</summary>
+public readonly struct GetFundPOutputFundPInfo
+{
+    public const int Size = 328;
+
+    public required byte[] Proposer { get; init; }
+    public ulong PricePerOneQcap { get; init; }
+    public uint CurrentTotalVotingPower { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public uint AmountOfQcap { get; init; }
+    public uint RestSaleAmount { get; init; }
+    public uint ProposedEpoch { get; init; }
+    public uint CurrentQuorumPercent { get; init; }
+    public byte[] Url { get; init; }
+    public byte Result { get; init; }
+
+    public static GetFundPOutputFundPInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(68 + i * 1, 1)[0];
+        }
+        return new GetFundPOutputFundPInfo
+        {
+            Proposer = data[0..].Slice(0, 32).ToArray(),
+            PricePerOneQcap = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[40..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[44..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            AmountOfQcap = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            RestSaleAmount = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            CurrentQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[64..]),
+            Url = url,
+            Result = data.Slice(324, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), PricePerOneQcap);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(40), CurrentTotalVotingPower);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(44), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), NumberOfNo);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), AmountOfQcap);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), RestSaleAmount);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(60), ProposedEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(64), CurrentQuorumPercent);
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(68 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(324, 1)[0] = Result;
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetFundPInput : ISmartContractInput
@@ -378,19 +658,84 @@ public readonly struct GetFundPInput : ISmartContractInput
 public readonly struct GetFundPOutput : ISmartContractOutput<GetFundPOutput>
 {
     public int ReturnCode { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetFundPOutputFundPInfo Proposal { get; init; }
 
     public static GetFundPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetFundPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = [] /* unknown type FundPInfo */
+            Proposal = GetFundPOutputFundPInfo.ReadFrom(data.Slice(8, 328))
         };
     }
 }
 
 // ═══ Function: getMKTP (inputType=8) ═══
+
+/// <summary>Nested type from GetMKTPOutput.</summary>
+public readonly struct GetMKTPOutputMKTPInfo
+{
+    public const int Size = 344;
+
+    public required byte[] Proposer { get; init; }
+    public ulong AmountOfQubic { get; init; }
+    public ulong ShareName { get; init; }
+    public uint CurrentTotalVotingPower { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public uint AmountOfQcap { get; init; }
+    public uint CurrentQuorumPercent { get; init; }
+    public uint ProposedEpoch { get; init; }
+    public uint ShareIndex { get; init; }
+    public uint AmountOfShare { get; init; }
+    public byte[] Url { get; init; }
+    public byte Result { get; init; }
+
+    public static GetMKTPOutputMKTPInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(80 + i * 1, 1)[0];
+        }
+        return new GetMKTPOutputMKTPInfo
+        {
+            Proposer = data[0..].Slice(0, 32).ToArray(),
+            AmountOfQubic = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            ShareName = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            AmountOfQcap = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            CurrentQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[64..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[68..]),
+            ShareIndex = BinaryPrimitives.ReadUInt32LittleEndian(data[72..]),
+            AmountOfShare = BinaryPrimitives.ReadUInt32LittleEndian(data[76..]),
+            Url = url,
+            Result = data.Slice(336, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), AmountOfQubic);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), ShareName);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), CurrentTotalVotingPower);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), NumberOfNo);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(60), AmountOfQcap);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(64), CurrentQuorumPercent);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(68), ProposedEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(72), ShareIndex);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(76), AmountOfShare);
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(80 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(336, 1)[0] = Result;
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetMKTPInput : ISmartContractInput
@@ -413,19 +758,78 @@ public readonly struct GetMKTPInput : ISmartContractInput
 public readonly struct GetMKTPOutput : ISmartContractOutput<GetMKTPOutput>
 {
     public int ReturnCode { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetMKTPOutputMKTPInfo Proposal { get; init; }
 
     public static GetMKTPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetMKTPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = [] /* unknown type MKTPInfo */
+            Proposal = GetMKTPOutputMKTPInfo.ReadFrom(data.Slice(8, 344))
         };
     }
 }
 
 // ═══ Function: getAlloP (inputType=9) ═══
+
+/// <summary>Nested type from GetAlloPOutput.</summary>
+public readonly struct GetAlloPOutputAlloPInfo
+{
+    public const int Size = 328;
+
+    public required byte[] Proposer { get; init; }
+    public uint CurrentTotalVotingPower { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public uint ProposedEpoch { get; init; }
+    public uint CurrentQuorumPercent { get; init; }
+    public uint Reinvested { get; init; }
+    public uint Distributed { get; init; }
+    public uint BurnQcap { get; init; }
+    public byte[] Url { get; init; }
+    public byte Result { get; init; }
+
+    public static GetAlloPOutputAlloPInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(64 + i * 1, 1)[0];
+        }
+        return new GetAlloPOutputAlloPInfo
+        {
+            Proposer = data[0..].Slice(0, 32).ToArray(),
+            CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[36..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[40..]),
+            ProposedEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[44..]),
+            CurrentQuorumPercent = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            Reinvested = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            Distributed = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            BurnQcap = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            Url = url,
+            Result = data.Slice(320, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(32), CurrentTotalVotingPower);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(36), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(40), NumberOfNo);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(44), ProposedEpoch);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), CurrentQuorumPercent);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), Reinvested);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), Distributed);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(60), BurnQcap);
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(64 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(320, 1)[0] = Result;
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetAlloPInput : ISmartContractInput
@@ -448,14 +852,14 @@ public readonly struct GetAlloPInput : ISmartContractInput
 public readonly struct GetAlloPOutput : ISmartContractOutput<GetAlloPOutput>
 {
     public int ReturnCode { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetAlloPOutputAlloPInfo Proposal { get; init; }
 
     public static GetAlloPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetAlloPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = [] /* unknown type AlloPInfo */
+            Proposal = GetAlloPOutputAlloPInfo.ReadFrom(data.Slice(8, 328))
         };
     }
 }

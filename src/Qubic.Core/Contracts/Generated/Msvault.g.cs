@@ -384,6 +384,42 @@ public readonly struct IsShareHolderOutput : ISmartContractOutput<IsShareHolderO
 
 // ═══ Function: getFeeVotes (inputType=14) ═══
 
+/// <summary>Nested type from GetFeeVotesOutput.</summary>
+public readonly struct GetFeeVotesOutputMsVaultFeeVote
+{
+    public const int Size = 48;
+
+    public ulong RegisteringFee { get; init; }
+    public ulong ReleaseFee { get; init; }
+    public ulong ReleaseResetFee { get; init; }
+    public ulong HoldingFee { get; init; }
+    public ulong DepositFee { get; init; }
+    public ulong BurnFee { get; init; }
+
+    public static GetFeeVotesOutputMsVaultFeeVote ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetFeeVotesOutputMsVaultFeeVote
+        {
+            RegisteringFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            ReleaseFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            ReleaseResetFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            HoldingFee = BinaryPrimitives.ReadUInt64LittleEndian(data[24..]),
+            DepositFee = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            BurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), RegisteringFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), ReleaseFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), ReleaseResetFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(24), HoldingFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), DepositFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), BurnFee);
+    }
+}
+
 /// <summary>Input for query (empty).</summary>
 public readonly struct GetFeeVotesInput : ISmartContractInput
 {
@@ -396,15 +432,20 @@ public readonly struct GetFeeVotesOutput : ISmartContractOutput<GetFeeVotesOutpu
 {
     public ulong Status { get; init; }
     public ulong NumberOfFeeVotes { get; init; }
-    public byte[] FeeVotes { get; init; }
+    public GetFeeVotesOutputMsVaultFeeVote[] FeeVotes { get; init; }
 
     public static GetFeeVotesOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var feeVotes = new GetFeeVotesOutputMsVaultFeeVote[64];
+        for (int i = 0; i < 64; i++)
+        {
+            feeVotes[i] = GetFeeVotesOutputMsVaultFeeVote.ReadFrom(data.Slice(16 + i * GetFeeVotesOutputMsVaultFeeVote.Size, GetFeeVotesOutputMsVaultFeeVote.Size));
+        }
         return new GetFeeVotesOutput
         {
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             NumberOfFeeVotes = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
-            FeeVotes = [] /* unknown struct array MsVaultFeeVote */
+            FeeVotes = feeVotes
         };
     }
 }
@@ -475,6 +516,42 @@ public readonly struct GetFeeVotesScoreOutput : ISmartContractOutput<GetFeeVotes
 
 // ═══ Function: getUniqueFeeVotes (inputType=17) ═══
 
+/// <summary>Nested type from GetUniqueFeeVotesOutput.</summary>
+public readonly struct GetUniqueFeeVotesOutputMsVaultFeeVote
+{
+    public const int Size = 48;
+
+    public ulong RegisteringFee { get; init; }
+    public ulong ReleaseFee { get; init; }
+    public ulong ReleaseResetFee { get; init; }
+    public ulong HoldingFee { get; init; }
+    public ulong DepositFee { get; init; }
+    public ulong BurnFee { get; init; }
+
+    public static GetUniqueFeeVotesOutputMsVaultFeeVote ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetUniqueFeeVotesOutputMsVaultFeeVote
+        {
+            RegisteringFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            ReleaseFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            ReleaseResetFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            HoldingFee = BinaryPrimitives.ReadUInt64LittleEndian(data[24..]),
+            DepositFee = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            BurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), RegisteringFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), ReleaseFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), ReleaseResetFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(24), HoldingFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), DepositFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), BurnFee);
+    }
+}
+
 /// <summary>Input for query (empty).</summary>
 public readonly struct GetUniqueFeeVotesInput : ISmartContractInput
 {
@@ -487,15 +564,20 @@ public readonly struct GetUniqueFeeVotesOutput : ISmartContractOutput<GetUniqueF
 {
     public ulong Status { get; init; }
     public ulong NumberOfUniqueFeeVotes { get; init; }
-    public byte[] UniqueFeeVotes { get; init; }
+    public GetUniqueFeeVotesOutputMsVaultFeeVote[] UniqueFeeVotes { get; init; }
 
     public static GetUniqueFeeVotesOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var uniqueFeeVotes = new GetUniqueFeeVotesOutputMsVaultFeeVote[64];
+        for (int i = 0; i < 64; i++)
+        {
+            uniqueFeeVotes[i] = GetUniqueFeeVotesOutputMsVaultFeeVote.ReadFrom(data.Slice(16 + i * GetUniqueFeeVotesOutputMsVaultFeeVote.Size, GetUniqueFeeVotesOutputMsVaultFeeVote.Size));
+        }
         return new GetUniqueFeeVotesOutput
         {
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             NumberOfUniqueFeeVotes = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
-            UniqueFeeVotes = [] /* unknown struct array MsVaultFeeVote */
+            UniqueFeeVotes = uniqueFeeVotes
         };
     }
 }
@@ -534,6 +616,30 @@ public readonly struct GetUniqueFeeVotesRankingOutput : ISmartContractOutput<Get
 
 // ═══ Function: getVaultAssetBalances (inputType=22) ═══
 
+/// <summary>Nested type from GetVaultAssetBalancesOutput.</summary>
+public readonly struct GetVaultAssetBalancesOutputAssetBalance
+{
+    public const int Size = 48;
+
+    public required QubicAsset Asset { get; init; }
+    public ulong Balance { get; init; }
+
+    public static GetVaultAssetBalancesOutputAssetBalance ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetVaultAssetBalancesOutputAssetBalance
+        {
+            Asset = QubicAsset.ReadFrom(data[0..]),
+            Balance = BinaryPrimitives.ReadUInt64LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Asset.WriteTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), Balance);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetVaultAssetBalancesInput : ISmartContractInput
 {
@@ -556,15 +662,20 @@ public readonly struct GetVaultAssetBalancesOutput : ISmartContractOutput<GetVau
 {
     public ulong Status { get; init; }
     public ulong NumberOfAssetTypes { get; init; }
-    public byte[] AssetBalances { get; init; }
+    public GetVaultAssetBalancesOutputAssetBalance[] AssetBalances { get; init; }
 
     public static GetVaultAssetBalancesOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var assetBalances = new GetVaultAssetBalancesOutputAssetBalance[8];
+        for (int i = 0; i < 8; i++)
+        {
+            assetBalances[i] = GetVaultAssetBalancesOutputAssetBalance.ReadFrom(data.Slice(16 + i * GetVaultAssetBalancesOutputAssetBalance.Size, GetVaultAssetBalancesOutputAssetBalance.Size));
+        }
         return new GetVaultAssetBalancesOutput
         {
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             NumberOfAssetTypes = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
-            AssetBalances = [] /* unknown struct array AssetBalance */
+            AssetBalances = assetBalances
         };
     }
 }

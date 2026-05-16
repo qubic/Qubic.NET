@@ -108,14 +108,15 @@ public class CSharpEmitter
         Line();
         EmitSeparator($"Function: {func.Name} (inputType={func.InputType})");
 
-        // Emit nested structs from output first
-        EmitNestedStructs(func.Output, name);
+        // Emit nested structs referenced by input and output
+        EmitNestedStructs(func.Input, $"{name}Input");
+        EmitNestedStructs(func.Output, $"{name}Output");
 
         // Emit input struct
         EmitInputStruct($"{name}Input", func.Input, isPayload: false, inputType: 0);
 
         // Emit output struct
-        EmitOutputStruct($"{name}Output", func.Output, name);
+        EmitOutputStruct($"{name}Output", func.Output, $"{name}Output");
     }
 
     private void EmitProcedureTypes(ContractDefinition contract, ProcedureDef proc)
@@ -125,14 +126,15 @@ public class CSharpEmitter
         Line();
         EmitSeparator($"Procedure: {proc.Name} (inputType={proc.InputType})");
 
-        // Emit nested structs from output first
-        EmitNestedStructs(proc.Output, name);
+        // Emit nested structs referenced by input and output
+        EmitNestedStructs(proc.Input, $"{name}Payload");
+        EmitNestedStructs(proc.Output, $"{name}Output");
 
         // Emit input as ITransactionPayload
         EmitInputStruct($"{name}Payload", proc.Input, isPayload: true, inputType: proc.InputType);
 
         // Emit output struct
-        EmitOutputStruct($"{name}Output", proc.Output, name);
+        EmitOutputStruct($"{name}Output", proc.Output, $"{name}Output");
     }
 
     private void EmitNestedStructs(StructDef structDef, string parentName)
@@ -141,6 +143,10 @@ public class CSharpEmitter
         {
             var structName = $"{parentName}{ToPascalCase(nested.CppName)}";
             var size = ComputeStructSize(nested);
+
+            // Recurse first so sub-nested struct types are declared before any code references them.
+            EmitNestedStructs(nested, structName);
+
             Line();
             Line($"/// <summary>Nested type from {parentName}.</summary>");
             Line($"public readonly struct {structName}");
@@ -149,9 +155,11 @@ public class CSharpEmitter
             Line($"public const int Size = {size};");
             Line();
 
-            EmitProperties(nested);
+            EmitProperties(nested, structName);
             Line();
             EmitReadFromMethod(structName, nested);
+            Line();
+            EmitWriteToMethod(structName, nested);
 
             _indent--;
             Line("}");
@@ -205,11 +213,11 @@ public class CSharpEmitter
             Line($"public ushort InputSize => Size;");
             Line($"public int SerializedSize => Size;");
             Line();
-            EmitProperties(def);
+            EmitProperties(def, structName);
             Line();
             Line($"public byte[] GetPayloadBytes() => ToBytes();");
             Line();
-            EmitToBytesMethod(def, size);
+            EmitToBytesMethod(def, size, structName);
         }
         else
         {
@@ -221,9 +229,9 @@ public class CSharpEmitter
             Line();
             Line($"public int SerializedSize => Size;");
             Line();
-            EmitProperties(def);
+            EmitProperties(def, structName);
             Line();
-            EmitToBytesMethod(def, size);
+            EmitToBytesMethod(def, size, structName);
         }
 
         _indent--;
@@ -259,12 +267,12 @@ public class CSharpEmitter
         Line("}");
     }
 
-    private void EmitProperties(StructDef def)
+    private void EmitProperties(StructDef def, string? parentName = null)
     {
         foreach (var field in def.Fields)
         {
             var propName = ToPascalCase(field.Name);
-            var csType = GetCSharpPropertyType(field);
+            var csType = GetCSharpPropertyType(field, parentName, def);
 
             if (HasRequiredInit(field))
                 Line($"public required {csType} {propName} {{ get; init; }}");
@@ -283,7 +291,7 @@ public class CSharpEmitter
         }
     }
 
-    private void EmitToBytesMethod(StructDef def, int totalSize)
+    private void EmitToBytesMethod(StructDef def, int totalSize, string? parentName = null)
     {
         var fieldOffsets = ComputeFieldOffsets(def, out _, out _);
 
@@ -300,25 +308,34 @@ public class CSharpEmitter
 
             if (field.IsArray)
             {
-                var elemSize = GetTypeSize(field.ArrayElementType ?? field.CppType);
-                if (TypeMapper.IsPrimitive(field.ArrayElementType ?? field.CppType))
+                var elemType = field.ArrayElementType ?? field.CppType;
+                var elemSize = GetTypeSize(elemType);
+                if (TypeMapper.IsPrimitive(elemType))
                 {
                     Line($"for (int i = 0; i < {field.ArrayLength} && {propName} != null && i < {propName}.Length; i++)");
                     Line("{");
                     _indent++;
                     var writeStmt = TypeMapper.GetWriteStatement(
-                        field.ArrayElementType ?? field.CppType,
+                        elemType,
                         $"bytes.AsSpan({offset} + i * {elemSize})",
                         $"{propName}[i]");
                     Line(writeStmt);
                     _indent--;
                     Line("}");
                 }
+                else if (parentName != null && IsKnownNestedStruct(elemType, def))
+                {
+                    var nestedSize = ComputeNestedStructSize(elemType, def);
+                    Line($"for (int i = 0; i < {field.ArrayLength} && {propName} != null && i < {propName}.Length; i++)");
+                    Line("{");
+                    _indent++;
+                    Line($"{propName}[i].WriteTo(bytes.AsSpan({offset} + i * {nestedSize}, {nestedSize}));");
+                    _indent--;
+                    Line("}");
+                }
                 else
                 {
-                    // Nested struct array - skip for now, just advance offset
-                    Line($"// Array<{field.ArrayElementType}, {field.ArrayLength}> - {propName}");
-                    Line($"// TODO: serialize nested struct array");
+                    Line($"// TODO: serialize nested struct array {field.CppType} for {propName}");
                 }
             }
             else if (TypeMapper.IsPrimitive(field.CppType))
@@ -329,9 +346,13 @@ public class CSharpEmitter
                     : $"bytes.AsSpan({offset})";
                 Line(TypeMapper.GetWriteStatement(field.CppType, spanExpr, propName));
             }
+            else if (parentName != null && IsKnownNestedStruct(field.CppType, def))
+            {
+                var nestedSize = ComputeNestedStructSize(field.CppType, def);
+                Line($"{propName}.WriteTo(bytes.AsSpan({offset}, {nestedSize}));");
+            }
             else
             {
-                // Unknown struct type - skip (size unknown)
                 Line($"// TODO: serialize unknown type {field.CppType} for {propName}");
             }
         }
@@ -413,6 +434,12 @@ public class CSharpEmitter
                 var readExpr = TypeMapper.GetReadExpression(field.CppType, spanSlice);
                 assignments.Add($"{propName} = {readExpr}");
             }
+            else if (IsKnownNestedStruct(field.CppType, def))
+            {
+                var nestedTypeName = $"{parentName}{ToPascalCase(field.CppType)}";
+                var nestedSize = ComputeNestedStructSize(field.CppType, def);
+                assignments.Add($"{propName} = {nestedTypeName}.ReadFrom(data.Slice({offset}, {nestedSize}))");
+            }
             else
             {
                 // Unknown struct field - skip with zero offset (we don't know the size)
@@ -430,6 +457,85 @@ public class CSharpEmitter
         }
         _indent--;
         Line("};");
+
+        _indent--;
+        Line("}");
+    }
+
+    private void EmitWriteToMethod(string structName, StructDef def)
+    {
+        var fieldOffsets = ComputeFieldOffsets(def, out _, out _);
+
+        Line($"public void WriteTo(Span<byte> dest)");
+        Line("{");
+        _indent++;
+
+        for (int fi = 0; fi < def.Fields.Count; fi++)
+        {
+            var field = def.Fields[fi];
+            var offset = fieldOffsets[fi];
+            var propName = ToPascalCase(field.Name);
+
+            if (field.IsArray)
+            {
+                var elemType = field.ArrayElementType ?? field.CppType;
+                var elemSize = GetTypeSize(elemType);
+                if (TypeMapper.IsPrimitive(elemType))
+                {
+                    Line($"for (int i = 0; i < {field.ArrayLength} && {propName} != null && i < {propName}.Length; i++)");
+                    Line("{");
+                    _indent++;
+                    var writeStmt = TypeMapper.GetWriteStatement(
+                        elemType,
+                        $"dest.Slice({offset} + i * {elemSize})",
+                        $"{propName}[i]");
+                    Line(writeStmt);
+                    _indent--;
+                    Line("}");
+                }
+                else if (field.NestedStructTypeName != null)
+                {
+                    // Look for the nested struct in def.NestedStructs to get a stable name.
+                    var nestedStructName = $"{structName}{ToPascalCase(field.NestedStructTypeName)}";
+                    var nestedSize = ComputeNestedStructSize(field.NestedStructTypeName, def);
+                    if (nestedSize > 0)
+                    {
+                        Line($"for (int i = 0; i < {field.ArrayLength} && {propName} != null && i < {propName}.Length; i++)");
+                        Line("{");
+                        _indent++;
+                        Line($"{propName}[i].WriteTo(dest.Slice({offset} + i * {nestedSize}, {nestedSize}));");
+                        _indent--;
+                        Line("}");
+                    }
+                    else
+                    {
+                        Line($"// TODO: serialize nested struct array {field.CppType} for {propName}");
+                    }
+                }
+                else
+                {
+                    Line($"// TODO: serialize nested struct array {field.CppType} for {propName}");
+                }
+            }
+            else if (TypeMapper.IsPrimitive(field.CppType))
+            {
+                var size = GetTypeSize(field.CppType);
+                var spanExpr = size == 1
+                    ? $"dest.Slice({offset}, 1)"
+                    : $"dest.Slice({offset})";
+                Line(TypeMapper.GetWriteStatement(field.CppType, spanExpr, propName));
+            }
+            else if (field.NestedStructTypeName != null)
+            {
+                var nestedStructName = $"{structName}{ToPascalCase(field.NestedStructTypeName)}";
+                var nestedSize = ComputeNestedStructSize(field.NestedStructTypeName, def);
+                Line($"{propName}.WriteTo(dest.Slice({offset}, {nestedSize}));");
+            }
+            else
+            {
+                Line($"// TODO: serialize unknown type {field.CppType} for {propName}");
+            }
+        }
 
         _indent--;
         Line("}");
@@ -472,6 +578,19 @@ public class CSharpEmitter
                     Line("}");
                     assignments.Add($"{propName} = {CamelCase(field.Name)}");
                 }
+                else if (IsKnownNestedStruct(elemType, def))
+                {
+                    var nestedTypeName = $"{structName}{ToPascalCase(elemType)}";
+                    var nestedSize = ComputeNestedStructSize(elemType, def);
+                    Line($"var {CamelCase(field.Name)} = new {nestedTypeName}[{field.ArrayLength}];");
+                    Line($"for (int i = 0; i < {field.ArrayLength}; i++)");
+                    Line("{");
+                    _indent++;
+                    Line($"{CamelCase(field.Name)}[i] = {nestedTypeName}.ReadFrom(data.Slice({offset} + i * {nestedSize}, {nestedSize}));");
+                    _indent--;
+                    Line("}");
+                    assignments.Add($"{propName} = {CamelCase(field.Name)}");
+                }
                 else
                 {
                     // Unknown struct array in nested struct - raw bytes fallback
@@ -481,6 +600,12 @@ public class CSharpEmitter
                     else
                         assignments.Add($"{propName} = []");
                 }
+            }
+            else if (IsKnownNestedStruct(field.CppType, def))
+            {
+                var nestedTypeName = $"{structName}{ToPascalCase(field.CppType)}";
+                var nestedSize = ComputeNestedStructSize(field.CppType, def);
+                assignments.Add($"{propName} = {nestedTypeName}.ReadFrom(data.Slice({offset}, {nestedSize}))");
             }
             else
             {
@@ -513,39 +638,29 @@ public class CSharpEmitter
         Line($"// ═══ {title} ═══");
     }
 
-    private string GetCSharpPropertyType(FieldDef field)
+    private string GetCSharpPropertyType(FieldDef field, string? parentName = null, StructDef? def = null)
     {
         if (field.IsArray)
         {
             var elemType = field.ArrayElementType ?? field.CppType;
             if (TypeMapper.IsPrimitive(elemType))
                 return $"{TypeMapper.GetCSharpType(elemType)}[]";
-            // Unknown nested struct element type - use byte[] for raw bytes
-            return "byte[]";
-        }
-        if (TypeMapper.IsPrimitive(field.CppType))
-            return TypeMapper.GetCSharpType(field.CppType);
-        // Unknown struct type - use byte[] for raw bytes
-        return "byte[]";
-    }
-
-    private string GetCSharpOutputPropertyType(FieldDef field, string parentName, StructDef def)
-    {
-        if (field.IsArray)
-        {
-            var elemType = field.ArrayElementType ?? field.CppType;
-            if (TypeMapper.IsPrimitive(elemType))
-                return $"{TypeMapper.GetCSharpType(elemType)}[]";
-            if (IsKnownNestedStruct(elemType, def))
+            if (def != null && parentName != null && IsKnownNestedStruct(elemType, def))
                 return $"{parentName}{ToPascalCase(elemType)}[]";
             // Unknown nested struct element type - use byte[] for raw bytes
             return "byte[]";
         }
         if (TypeMapper.IsPrimitive(field.CppType))
             return TypeMapper.GetCSharpType(field.CppType);
+        // Resolved nested struct - emit the generated readonly struct type.
+        if (def != null && parentName != null && IsKnownNestedStruct(field.CppType, def))
+            return $"{parentName}{ToPascalCase(field.CppType)}";
         // Unknown struct type - use byte[] for raw bytes
         return "byte[]";
     }
+
+    private string GetCSharpOutputPropertyType(FieldDef field, string parentName, StructDef def)
+        => GetCSharpPropertyType(field, parentName, def);
 
     private string GetCSharpArrayElementType(FieldDef field, string parentName, StructDef def)
     {
@@ -583,6 +698,27 @@ public class CSharpEmitter
         if (size > 0) return size;
         // For nested structs, we'd need to look up the size - return 0 as fallback
         return 0;
+    }
+
+    /// <summary>
+    /// Resolves a nested struct's size by searching the parent's NestedStructs list.
+    /// Returns 0 if not found.
+    /// </summary>
+    private int ComputeNestedStructSize(string cppName, StructDef parent)
+    {
+        var nested = parent.NestedStructs.FirstOrDefault(n => n.CppName == cppName);
+        return nested != null ? ComputeStructSize(nested) : 0;
+    }
+
+    /// <summary>
+    /// Resolves a nested struct's alignment by searching the parent's NestedStructs list.
+    /// </summary>
+    private int ComputeNestedStructAlignment(string cppName, StructDef parent)
+    {
+        var nested = parent.NestedStructs.FirstOrDefault(n => n.CppName == cppName);
+        if (nested == null) return 1;
+        ComputeFieldOffsets(nested, out _, out var align);
+        return align;
     }
 
     private int GetTypeAlignment(string cppType)
@@ -637,6 +773,21 @@ public class CSharpEmitter
             {
                 fieldSize = GetTypeSize(field.CppType);
                 fieldAlign = TypeMapper.IsPrimitive(field.CppType) ? GetTypeAlignment(field.CppType) : 1;
+
+                // Non-primitive field: look up in NestedStructs registry
+                if (fieldSize == 0 && !TypeMapper.IsPrimitive(field.CppType))
+                {
+                    var nestedDef = def.NestedStructs.FirstOrDefault(n => n.CppName == field.CppType)
+                                    ?? (field.NestedStructTypeName != null
+                                        ? def.NestedStructs.FirstOrDefault(n => n.CppName == field.NestedStructTypeName)
+                                        : null);
+                    if (nestedDef != null)
+                    {
+                        ComputeFieldOffsets(nestedDef, out var nestedSize, out var nestedAlign);
+                        fieldSize = nestedSize;
+                        fieldAlign = nestedAlign;
+                    }
+                }
             }
 
             // Align the offset for this field

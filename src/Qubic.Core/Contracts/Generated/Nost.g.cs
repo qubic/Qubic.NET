@@ -239,6 +239,48 @@ public readonly struct GetNumberOfInvestedProjectsOutput : ISmartContractOutput<
 
 // ═══ Function: getProjectByIndex (inputType=6) ═══
 
+/// <summary>Nested type from GetProjectByIndexOutput.</summary>
+public readonly struct GetProjectByIndexOutputProjectInfo
+{
+    public const int Size = 72;
+
+    public required byte[] Creator { get; init; }
+    public ulong TokenName { get; init; }
+    public ulong SupplyOfToken { get; init; }
+    public uint StartDate { get; init; }
+    public uint EndDate { get; init; }
+    public uint NumberOfYes { get; init; }
+    public uint NumberOfNo { get; init; }
+    public bool IsCreatedFundarasing { get; init; }
+
+    public static GetProjectByIndexOutputProjectInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetProjectByIndexOutputProjectInfo
+        {
+            Creator = data[0..].Slice(0, 32).ToArray(),
+            TokenName = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            SupplyOfToken = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            StartDate = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            EndDate = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            NumberOfYes = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            NumberOfNo = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            IsCreatedFundarasing = (data.Slice(64, 1)[0] != 0)
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Creator.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), TokenName);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), SupplyOfToken);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), StartDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), EndDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), NumberOfYes);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(60), NumberOfNo);
+        dest.Slice(64, 1)[0] = (byte)(IsCreatedFundarasing ? 1 : 0);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetProjectByIndexInput : ISmartContractInput
 {
@@ -259,18 +301,90 @@ public readonly struct GetProjectByIndexInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetProjectByIndexOutput : ISmartContractOutput<GetProjectByIndexOutput>
 {
-    public byte[] Project { get; init; }
+    public GetProjectByIndexOutputProjectInfo Project { get; init; }
 
     public static GetProjectByIndexOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetProjectByIndexOutput
         {
-            Project = [] /* unknown type projectInfo */
+            Project = GetProjectByIndexOutputProjectInfo.ReadFrom(data.Slice(0, 72))
         };
     }
 }
 
 // ═══ Function: getFundarasingByIndex (inputType=7) ═══
+
+/// <summary>Nested type from GetFundarasingByIndexOutput.</summary>
+public readonly struct GetFundarasingByIndexOutputFundaraisingInfo
+{
+    public const int Size = 80;
+
+    public ulong TokenPrice { get; init; }
+    public ulong SoldAmount { get; init; }
+    public ulong RequiredFunds { get; init; }
+    public ulong RaisedFunds { get; init; }
+    public uint IndexOfProject { get; init; }
+    public uint FirstPhaseStartDate { get; init; }
+    public uint FirstPhaseEndDate { get; init; }
+    public uint SecondPhaseStartDate { get; init; }
+    public uint SecondPhaseEndDate { get; init; }
+    public uint ThirdPhaseStartDate { get; init; }
+    public uint ThirdPhaseEndDate { get; init; }
+    public uint ListingStartDate { get; init; }
+    public uint CliffEndDate { get; init; }
+    public uint VestingEndDate { get; init; }
+    public byte Threshold { get; init; }
+    public byte TGE { get; init; }
+    public byte StepOfVesting { get; init; }
+    public bool IsCreatedToken { get; init; }
+
+    public static GetFundarasingByIndexOutputFundaraisingInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetFundarasingByIndexOutputFundaraisingInfo
+        {
+            TokenPrice = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            SoldAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            RequiredFunds = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            RaisedFunds = BinaryPrimitives.ReadUInt64LittleEndian(data[24..]),
+            IndexOfProject = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
+            FirstPhaseStartDate = BinaryPrimitives.ReadUInt32LittleEndian(data[36..]),
+            FirstPhaseEndDate = BinaryPrimitives.ReadUInt32LittleEndian(data[40..]),
+            SecondPhaseStartDate = BinaryPrimitives.ReadUInt32LittleEndian(data[44..]),
+            SecondPhaseEndDate = BinaryPrimitives.ReadUInt32LittleEndian(data[48..]),
+            ThirdPhaseStartDate = BinaryPrimitives.ReadUInt32LittleEndian(data[52..]),
+            ThirdPhaseEndDate = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            ListingStartDate = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            CliffEndDate = BinaryPrimitives.ReadUInt32LittleEndian(data[64..]),
+            VestingEndDate = BinaryPrimitives.ReadUInt32LittleEndian(data[68..]),
+            Threshold = data.Slice(72, 1)[0],
+            TGE = data.Slice(73, 1)[0],
+            StepOfVesting = data.Slice(74, 1)[0],
+            IsCreatedToken = (data.Slice(75, 1)[0] != 0)
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), TokenPrice);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), SoldAmount);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), RequiredFunds);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(24), RaisedFunds);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(32), IndexOfProject);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(36), FirstPhaseStartDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(40), FirstPhaseEndDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(44), SecondPhaseStartDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(48), SecondPhaseEndDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(52), ThirdPhaseStartDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), ThirdPhaseEndDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(60), ListingStartDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(64), CliffEndDate);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(68), VestingEndDate);
+        dest.Slice(72, 1)[0] = Threshold;
+        dest.Slice(73, 1)[0] = TGE;
+        dest.Slice(74, 1)[0] = StepOfVesting;
+        dest.Slice(75, 1)[0] = (byte)(IsCreatedToken ? 1 : 0);
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetFundarasingByIndexInput : ISmartContractInput
@@ -292,13 +406,13 @@ public readonly struct GetFundarasingByIndexInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetFundarasingByIndexOutput : ISmartContractOutput<GetFundarasingByIndexOutput>
 {
-    public byte[] Fundarasing { get; init; }
+    public GetFundarasingByIndexOutputFundaraisingInfo Fundarasing { get; init; }
 
     public static GetFundarasingByIndexOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetFundarasingByIndexOutput
         {
-            Fundarasing = [] /* unknown type fundaraisingInfo */
+            Fundarasing = GetFundarasingByIndexOutputFundaraisingInfo.ReadFrom(data.Slice(0, 80))
         };
     }
 }
@@ -343,6 +457,33 @@ public readonly struct GetProjectIndexListByCreatorOutput : ISmartContractOutput
 
 // ═══ Function: getInfoUserInvested (inputType=9) ═══
 
+/// <summary>Nested type from GetInfoUserInvestedOutput.</summary>
+public readonly struct GetInfoUserInvestedOutputInvestInfo
+{
+    public const int Size = 24;
+
+    public ulong InvestedAmount { get; init; }
+    public ulong ClaimedAmount { get; init; }
+    public uint IndexOfFundraising { get; init; }
+
+    public static GetInfoUserInvestedOutputInvestInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetInfoUserInvestedOutputInvestInfo
+        {
+            InvestedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            ClaimedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            IndexOfFundraising = BinaryPrimitives.ReadUInt32LittleEndian(data[16..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), InvestedAmount);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), ClaimedAmount);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(16), IndexOfFundraising);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetInfoUserInvestedInput : ISmartContractInput
 {
@@ -363,13 +504,18 @@ public readonly struct GetInfoUserInvestedInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetInfoUserInvestedOutput : ISmartContractOutput<GetInfoUserInvestedOutput>
 {
-    public byte[] ListUserInvested { get; init; }
+    public GetInfoUserInvestedOutputInvestInfo[] ListUserInvested { get; init; }
 
     public static GetInfoUserInvestedOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var listUserInvested = new GetInfoUserInvestedOutputInvestInfo[128];
+        for (int i = 0; i < 128; i++)
+        {
+            listUserInvested[i] = GetInfoUserInvestedOutputInvestInfo.ReadFrom(data.Slice(0 + i * GetInfoUserInvestedOutputInvestInfo.Size, GetInfoUserInvestedOutputInvestInfo.Size));
+        }
         return new GetInfoUserInvestedOutput
         {
-            ListUserInvested = [] /* unknown struct array investInfo */
+            ListUserInvested = listUserInvested
         };
     }
 }

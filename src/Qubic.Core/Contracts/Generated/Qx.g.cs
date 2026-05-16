@@ -82,8 +82,8 @@ public readonly struct FeesOutput : ISmartContractOutput<FeesOutput>
 
 // ═══ Function: AssetAskOrders (inputType=2) ═══
 
-/// <summary>Nested type from AssetAskOrders.</summary>
-public readonly struct AssetAskOrdersOrder
+/// <summary>Nested type from AssetAskOrdersOutput.</summary>
+public readonly struct AssetAskOrdersOutputOrder
 {
     public const int Size = 48;
 
@@ -91,14 +91,21 @@ public readonly struct AssetAskOrdersOrder
     public long Price { get; init; }
     public long NumberOfShares { get; init; }
 
-    public static AssetAskOrdersOrder ReadFrom(ReadOnlySpan<byte> data)
+    public static AssetAskOrdersOutputOrder ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new AssetAskOrdersOrder
+        return new AssetAskOrdersOutputOrder
         {
             Entity = data[0..].Slice(0, 32).ToArray(),
             Price = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
             NumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[40..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Entity.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), Price);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), NumberOfShares);
     }
 }
 
@@ -126,14 +133,14 @@ public readonly struct AssetAskOrdersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct AssetAskOrdersOutput : ISmartContractOutput<AssetAskOrdersOutput>
 {
-    public AssetAskOrdersOrder[] Orders { get; init; }
+    public AssetAskOrdersOutputOrder[] Orders { get; init; }
 
     public static AssetAskOrdersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var orders = new AssetAskOrdersOrder[256];
+        var orders = new AssetAskOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            orders[i] = AssetAskOrdersOrder.ReadFrom(data.Slice(0 + i * AssetAskOrdersOrder.Size, AssetAskOrdersOrder.Size));
+            orders[i] = AssetAskOrdersOutputOrder.ReadFrom(data.Slice(0 + i * AssetAskOrdersOutputOrder.Size, AssetAskOrdersOutputOrder.Size));
         }
         return new AssetAskOrdersOutput
         {
@@ -144,8 +151,8 @@ public readonly struct AssetAskOrdersOutput : ISmartContractOutput<AssetAskOrder
 
 // ═══ Function: AssetBidOrders (inputType=3) ═══
 
-/// <summary>Nested type from AssetBidOrders.</summary>
-public readonly struct AssetBidOrdersOrder
+/// <summary>Nested type from AssetBidOrdersOutput.</summary>
+public readonly struct AssetBidOrdersOutputOrder
 {
     public const int Size = 48;
 
@@ -153,14 +160,21 @@ public readonly struct AssetBidOrdersOrder
     public long Price { get; init; }
     public long NumberOfShares { get; init; }
 
-    public static AssetBidOrdersOrder ReadFrom(ReadOnlySpan<byte> data)
+    public static AssetBidOrdersOutputOrder ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new AssetBidOrdersOrder
+        return new AssetBidOrdersOutputOrder
         {
             Entity = data[0..].Slice(0, 32).ToArray(),
             Price = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
             NumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[40..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Entity.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), Price);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), NumberOfShares);
     }
 }
 
@@ -188,14 +202,14 @@ public readonly struct AssetBidOrdersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct AssetBidOrdersOutput : ISmartContractOutput<AssetBidOrdersOutput>
 {
-    public AssetBidOrdersOrder[] Orders { get; init; }
+    public AssetBidOrdersOutputOrder[] Orders { get; init; }
 
     public static AssetBidOrdersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var orders = new AssetBidOrdersOrder[256];
+        var orders = new AssetBidOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            orders[i] = AssetBidOrdersOrder.ReadFrom(data.Slice(0 + i * AssetBidOrdersOrder.Size, AssetBidOrdersOrder.Size));
+            orders[i] = AssetBidOrdersOutputOrder.ReadFrom(data.Slice(0 + i * AssetBidOrdersOutputOrder.Size, AssetBidOrdersOutputOrder.Size));
         }
         return new AssetBidOrdersOutput
         {
@@ -206,8 +220,8 @@ public readonly struct AssetBidOrdersOutput : ISmartContractOutput<AssetBidOrder
 
 // ═══ Function: EntityAskOrders (inputType=4) ═══
 
-/// <summary>Nested type from EntityAskOrders.</summary>
-public readonly struct EntityAskOrdersOrder
+/// <summary>Nested type from EntityAskOrdersOutput.</summary>
+public readonly struct EntityAskOrdersOutputOrder
 {
     public const int Size = 56;
 
@@ -216,15 +230,23 @@ public readonly struct EntityAskOrdersOrder
     public long Price { get; init; }
     public long NumberOfShares { get; init; }
 
-    public static EntityAskOrdersOrder ReadFrom(ReadOnlySpan<byte> data)
+    public static EntityAskOrdersOutputOrder ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new EntityAskOrdersOrder
+        return new EntityAskOrdersOutputOrder
         {
             Issuer = data[0..].Slice(0, 32).ToArray(),
             AssetName = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
             Price = BinaryPrimitives.ReadInt64LittleEndian(data[40..]),
             NumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[48..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Issuer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), AssetName);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), Price);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(48), NumberOfShares);
     }
 }
 
@@ -250,14 +272,14 @@ public readonly struct EntityAskOrdersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct EntityAskOrdersOutput : ISmartContractOutput<EntityAskOrdersOutput>
 {
-    public EntityAskOrdersOrder[] Orders { get; init; }
+    public EntityAskOrdersOutputOrder[] Orders { get; init; }
 
     public static EntityAskOrdersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var orders = new EntityAskOrdersOrder[256];
+        var orders = new EntityAskOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            orders[i] = EntityAskOrdersOrder.ReadFrom(data.Slice(0 + i * EntityAskOrdersOrder.Size, EntityAskOrdersOrder.Size));
+            orders[i] = EntityAskOrdersOutputOrder.ReadFrom(data.Slice(0 + i * EntityAskOrdersOutputOrder.Size, EntityAskOrdersOutputOrder.Size));
         }
         return new EntityAskOrdersOutput
         {
@@ -268,8 +290,8 @@ public readonly struct EntityAskOrdersOutput : ISmartContractOutput<EntityAskOrd
 
 // ═══ Function: EntityBidOrders (inputType=5) ═══
 
-/// <summary>Nested type from EntityBidOrders.</summary>
-public readonly struct EntityBidOrdersOrder
+/// <summary>Nested type from EntityBidOrdersOutput.</summary>
+public readonly struct EntityBidOrdersOutputOrder
 {
     public const int Size = 56;
 
@@ -278,15 +300,23 @@ public readonly struct EntityBidOrdersOrder
     public long Price { get; init; }
     public long NumberOfShares { get; init; }
 
-    public static EntityBidOrdersOrder ReadFrom(ReadOnlySpan<byte> data)
+    public static EntityBidOrdersOutputOrder ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new EntityBidOrdersOrder
+        return new EntityBidOrdersOutputOrder
         {
             Issuer = data[0..].Slice(0, 32).ToArray(),
             AssetName = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
             Price = BinaryPrimitives.ReadInt64LittleEndian(data[40..]),
             NumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[48..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Issuer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), AssetName);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), Price);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(48), NumberOfShares);
     }
 }
 
@@ -312,14 +342,14 @@ public readonly struct EntityBidOrdersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct EntityBidOrdersOutput : ISmartContractOutput<EntityBidOrdersOutput>
 {
-    public EntityBidOrdersOrder[] Orders { get; init; }
+    public EntityBidOrdersOutputOrder[] Orders { get; init; }
 
     public static EntityBidOrdersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var orders = new EntityBidOrdersOrder[256];
+        var orders = new EntityBidOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            orders[i] = EntityBidOrdersOrder.ReadFrom(data.Slice(0 + i * EntityBidOrdersOrder.Size, EntityBidOrdersOrder.Size));
+            orders[i] = EntityBidOrdersOutputOrder.ReadFrom(data.Slice(0 + i * EntityBidOrdersOutputOrder.Size, EntityBidOrdersOutputOrder.Size));
         }
         return new EntityBidOrdersOutput
         {

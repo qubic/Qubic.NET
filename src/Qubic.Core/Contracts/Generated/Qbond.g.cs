@@ -152,8 +152,8 @@ public readonly struct GetInfoPerEpochOutput : ISmartContractOutput<GetInfoPerEp
 
 // ═══ Function: GetOrders (inputType=4) ═══
 
-/// <summary>Nested type from GetOrders.</summary>
-public readonly struct GetOrdersOrder
+/// <summary>Nested type from GetOrdersOutput.</summary>
+public readonly struct GetOrdersOutputOrder
 {
     public const int Size = 56;
 
@@ -162,15 +162,23 @@ public readonly struct GetOrdersOrder
     public long NumberOfMBonds { get; init; }
     public long Price { get; init; }
 
-    public static GetOrdersOrder ReadFrom(ReadOnlySpan<byte> data)
+    public static GetOrdersOutputOrder ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetOrdersOrder
+        return new GetOrdersOutputOrder
         {
             Owner = data[0..].Slice(0, 32).ToArray(),
             Epoch = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
             NumberOfMBonds = BinaryPrimitives.ReadInt64LittleEndian(data[40..]),
             Price = BinaryPrimitives.ReadInt64LittleEndian(data[48..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Owner.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), Epoch);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), NumberOfMBonds);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(48), Price);
     }
 }
 
@@ -198,20 +206,20 @@ public readonly struct GetOrdersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetOrdersOutput : ISmartContractOutput<GetOrdersOutput>
 {
-    public GetOrdersOrder[] AskOrders { get; init; }
-    public GetOrdersOrder[] BidOrders { get; init; }
+    public GetOrdersOutputOrder[] AskOrders { get; init; }
+    public GetOrdersOutputOrder[] BidOrders { get; init; }
 
     public static GetOrdersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var askOrders = new GetOrdersOrder[256];
+        var askOrders = new GetOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            askOrders[i] = GetOrdersOrder.ReadFrom(data.Slice(0 + i * GetOrdersOrder.Size, GetOrdersOrder.Size));
+            askOrders[i] = GetOrdersOutputOrder.ReadFrom(data.Slice(0 + i * GetOrdersOutputOrder.Size, GetOrdersOutputOrder.Size));
         }
-        var bidOrders = new GetOrdersOrder[256];
+        var bidOrders = new GetOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            bidOrders[i] = GetOrdersOrder.ReadFrom(data.Slice(14336 + i * GetOrdersOrder.Size, GetOrdersOrder.Size));
+            bidOrders[i] = GetOrdersOutputOrder.ReadFrom(data.Slice(14336 + i * GetOrdersOutputOrder.Size, GetOrdersOutputOrder.Size));
         }
         return new GetOrdersOutput
         {
@@ -223,8 +231,8 @@ public readonly struct GetOrdersOutput : ISmartContractOutput<GetOrdersOutput>
 
 // ═══ Function: GetUserOrders (inputType=5) ═══
 
-/// <summary>Nested type from GetUserOrders.</summary>
-public readonly struct GetUserOrdersOrder
+/// <summary>Nested type from GetUserOrdersOutput.</summary>
+public readonly struct GetUserOrdersOutputOrder
 {
     public const int Size = 56;
 
@@ -233,15 +241,23 @@ public readonly struct GetUserOrdersOrder
     public long NumberOfMBonds { get; init; }
     public long Price { get; init; }
 
-    public static GetUserOrdersOrder ReadFrom(ReadOnlySpan<byte> data)
+    public static GetUserOrdersOutputOrder ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetUserOrdersOrder
+        return new GetUserOrdersOutputOrder
         {
             Owner = data[0..].Slice(0, 32).ToArray(),
             Epoch = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
             NumberOfMBonds = BinaryPrimitives.ReadInt64LittleEndian(data[40..]),
             Price = BinaryPrimitives.ReadInt64LittleEndian(data[48..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Owner.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), Epoch);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), NumberOfMBonds);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(48), Price);
     }
 }
 
@@ -269,20 +285,20 @@ public readonly struct GetUserOrdersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetUserOrdersOutput : ISmartContractOutput<GetUserOrdersOutput>
 {
-    public GetUserOrdersOrder[] AskOrders { get; init; }
-    public GetUserOrdersOrder[] BidOrders { get; init; }
+    public GetUserOrdersOutputOrder[] AskOrders { get; init; }
+    public GetUserOrdersOutputOrder[] BidOrders { get; init; }
 
     public static GetUserOrdersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var askOrders = new GetUserOrdersOrder[256];
+        var askOrders = new GetUserOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            askOrders[i] = GetUserOrdersOrder.ReadFrom(data.Slice(0 + i * GetUserOrdersOrder.Size, GetUserOrdersOrder.Size));
+            askOrders[i] = GetUserOrdersOutputOrder.ReadFrom(data.Slice(0 + i * GetUserOrdersOutputOrder.Size, GetUserOrdersOutputOrder.Size));
         }
-        var bidOrders = new GetUserOrdersOrder[256];
+        var bidOrders = new GetUserOrdersOutputOrder[256];
         for (int i = 0; i < 256; i++)
         {
-            bidOrders[i] = GetUserOrdersOrder.ReadFrom(data.Slice(14336 + i * GetUserOrdersOrder.Size, GetUserOrdersOrder.Size));
+            bidOrders[i] = GetUserOrdersOutputOrder.ReadFrom(data.Slice(14336 + i * GetUserOrdersOutputOrder.Size, GetUserOrdersOutputOrder.Size));
         }
         return new GetUserOrdersOutput
         {
@@ -294,8 +310,8 @@ public readonly struct GetUserOrdersOutput : ISmartContractOutput<GetUserOrdersO
 
 // ═══ Function: GetMBondsTable (inputType=6) ═══
 
-/// <summary>Nested type from GetMBondsTable.</summary>
-public readonly struct GetMBondsTableTableEntry
+/// <summary>Nested type from GetMBondsTableOutput.</summary>
+public readonly struct GetMBondsTableOutputTableEntry
 {
     public const int Size = 32;
 
@@ -304,15 +320,23 @@ public readonly struct GetMBondsTableTableEntry
     public long TotalStakedQEarn { get; init; }
     public ulong Apy { get; init; }
 
-    public static GetMBondsTableTableEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetMBondsTableOutputTableEntry ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetMBondsTableTableEntry
+        return new GetMBondsTableOutputTableEntry
         {
             Epoch = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
             TotalStakedQBond = BinaryPrimitives.ReadInt64LittleEndian(data[8..]),
             TotalStakedQEarn = BinaryPrimitives.ReadInt64LittleEndian(data[16..]),
             Apy = BinaryPrimitives.ReadUInt64LittleEndian(data[24..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(0), Epoch);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(8), TotalStakedQBond);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(16), TotalStakedQEarn);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(24), Apy);
     }
 }
 
@@ -326,14 +350,14 @@ public readonly struct GetMBondsTableInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetMBondsTableOutput : ISmartContractOutput<GetMBondsTableOutput>
 {
-    public GetMBondsTableTableEntry[] Info { get; init; }
+    public GetMBondsTableOutputTableEntry[] Info { get; init; }
 
     public static GetMBondsTableOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var info = new GetMBondsTableTableEntry[512];
+        var info = new GetMBondsTableOutputTableEntry[512];
         for (int i = 0; i < 512; i++)
         {
-            info[i] = GetMBondsTableTableEntry.ReadFrom(data.Slice(0 + i * GetMBondsTableTableEntry.Size, GetMBondsTableTableEntry.Size));
+            info[i] = GetMBondsTableOutputTableEntry.ReadFrom(data.Slice(0 + i * GetMBondsTableOutputTableEntry.Size, GetMBondsTableOutputTableEntry.Size));
         }
         return new GetMBondsTableOutput
         {
@@ -344,8 +368,8 @@ public readonly struct GetMBondsTableOutput : ISmartContractOutput<GetMBondsTabl
 
 // ═══ Function: GetUserMBonds (inputType=7) ═══
 
-/// <summary>Nested type from GetUserMBonds.</summary>
-public readonly struct GetUserMBondsMBondEntity
+/// <summary>Nested type from GetUserMBondsOutput.</summary>
+public readonly struct GetUserMBondsOutputMBondEntity
 {
     public const int Size = 24;
 
@@ -353,14 +377,21 @@ public readonly struct GetUserMBondsMBondEntity
     public long Amount { get; init; }
     public ulong Apy { get; init; }
 
-    public static GetUserMBondsMBondEntity ReadFrom(ReadOnlySpan<byte> data)
+    public static GetUserMBondsOutputMBondEntity ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetUserMBondsMBondEntity
+        return new GetUserMBondsOutputMBondEntity
         {
             Epoch = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
             Amount = BinaryPrimitives.ReadInt64LittleEndian(data[8..]),
             Apy = BinaryPrimitives.ReadUInt64LittleEndian(data[16..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(0), Epoch);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(8), Amount);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), Apy);
     }
 }
 
@@ -385,14 +416,14 @@ public readonly struct GetUserMBondsInput : ISmartContractInput
 public readonly struct GetUserMBondsOutput : ISmartContractOutput<GetUserMBondsOutput>
 {
     public long TotalMBondsAmount { get; init; }
-    public GetUserMBondsMBondEntity[] Mbonds { get; init; }
+    public GetUserMBondsOutputMBondEntity[] Mbonds { get; init; }
 
     public static GetUserMBondsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var mbonds = new GetUserMBondsMBondEntity[256];
+        var mbonds = new GetUserMBondsOutputMBondEntity[256];
         for (int i = 0; i < 256; i++)
         {
-            mbonds[i] = GetUserMBondsMBondEntity.ReadFrom(data.Slice(8 + i * GetUserMBondsMBondEntity.Size, GetUserMBondsMBondEntity.Size));
+            mbonds[i] = GetUserMBondsOutputMBondEntity.ReadFrom(data.Slice(8 + i * GetUserMBondsOutputMBondEntity.Size, GetUserMBondsOutputMBondEntity.Size));
         }
         return new GetUserMBondsOutput
         {

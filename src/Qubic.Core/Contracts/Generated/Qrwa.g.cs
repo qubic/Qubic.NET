@@ -71,6 +71,48 @@ public static class QrwaContract
 
 // ═══ Function: GetGovParams (inputType=1) ═══
 
+/// <summary>Nested type from GetGovParamsOutput.</summary>
+public readonly struct GetGovParamsOutputQRWAGovParams
+{
+    public const int Size = 184;
+
+    public required byte[] MAdminAddress { get; init; }
+    public required byte[] ElectricityAddress { get; init; }
+    public required byte[] MaintenanceAddress { get; init; }
+    public required byte[] ReinvestmentAddress { get; init; }
+    public required byte[] QmineDevAddress { get; init; }
+    public ulong ElectricityPercent { get; init; }
+    public ulong MaintenancePercent { get; init; }
+    public ulong ReinvestmentPercent { get; init; }
+
+    public static GetGovParamsOutputQRWAGovParams ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetGovParamsOutputQRWAGovParams
+        {
+            MAdminAddress = data[0..].Slice(0, 32).ToArray(),
+            ElectricityAddress = data[32..].Slice(0, 32).ToArray(),
+            MaintenanceAddress = data[64..].Slice(0, 32).ToArray(),
+            ReinvestmentAddress = data[96..].Slice(0, 32).ToArray(),
+            QmineDevAddress = data[128..].Slice(0, 32).ToArray(),
+            ElectricityPercent = BinaryPrimitives.ReadUInt64LittleEndian(data[160..]),
+            MaintenancePercent = BinaryPrimitives.ReadUInt64LittleEndian(data[168..]),
+            ReinvestmentPercent = BinaryPrimitives.ReadUInt64LittleEndian(data[176..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        MAdminAddress.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        ElectricityAddress.AsSpan(0, 32).CopyTo(dest.Slice(32));
+        MaintenanceAddress.AsSpan(0, 32).CopyTo(dest.Slice(64));
+        ReinvestmentAddress.AsSpan(0, 32).CopyTo(dest.Slice(96));
+        QmineDevAddress.AsSpan(0, 32).CopyTo(dest.Slice(128));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(160), ElectricityPercent);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(168), MaintenancePercent);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(176), ReinvestmentPercent);
+    }
+}
+
 /// <summary>Input for query (empty).</summary>
 public readonly struct GetGovParamsInput : ISmartContractInput
 {
@@ -81,18 +123,90 @@ public readonly struct GetGovParamsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetGovParamsOutput : ISmartContractOutput<GetGovParamsOutput>
 {
-    public byte[] Params { get; init; }
+    public GetGovParamsOutputQRWAGovParams Params { get; init; }
 
     public static GetGovParamsOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetGovParamsOutput
         {
-            Params = [] /* unknown type QRWAGovParams */
+            Params = GetGovParamsOutputQRWAGovParams.ReadFrom(data.Slice(0, 184))
         };
     }
 }
 
 // ═══ Function: GetGovPoll (inputType=2) ═══
+
+/// <summary>Nested type from GetGovPollOutputQRWAGovProposal.</summary>
+public readonly struct GetGovPollOutputQRWAGovProposalQRWAGovParams
+{
+    public const int Size = 184;
+
+    public required byte[] MAdminAddress { get; init; }
+    public required byte[] ElectricityAddress { get; init; }
+    public required byte[] MaintenanceAddress { get; init; }
+    public required byte[] ReinvestmentAddress { get; init; }
+    public required byte[] QmineDevAddress { get; init; }
+    public ulong ElectricityPercent { get; init; }
+    public ulong MaintenancePercent { get; init; }
+    public ulong ReinvestmentPercent { get; init; }
+
+    public static GetGovPollOutputQRWAGovProposalQRWAGovParams ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetGovPollOutputQRWAGovProposalQRWAGovParams
+        {
+            MAdminAddress = data[0..].Slice(0, 32).ToArray(),
+            ElectricityAddress = data[32..].Slice(0, 32).ToArray(),
+            MaintenanceAddress = data[64..].Slice(0, 32).ToArray(),
+            ReinvestmentAddress = data[96..].Slice(0, 32).ToArray(),
+            QmineDevAddress = data[128..].Slice(0, 32).ToArray(),
+            ElectricityPercent = BinaryPrimitives.ReadUInt64LittleEndian(data[160..]),
+            MaintenancePercent = BinaryPrimitives.ReadUInt64LittleEndian(data[168..]),
+            ReinvestmentPercent = BinaryPrimitives.ReadUInt64LittleEndian(data[176..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        MAdminAddress.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        ElectricityAddress.AsSpan(0, 32).CopyTo(dest.Slice(32));
+        MaintenanceAddress.AsSpan(0, 32).CopyTo(dest.Slice(64));
+        ReinvestmentAddress.AsSpan(0, 32).CopyTo(dest.Slice(96));
+        QmineDevAddress.AsSpan(0, 32).CopyTo(dest.Slice(128));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(160), ElectricityPercent);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(168), MaintenancePercent);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(176), ReinvestmentPercent);
+    }
+}
+
+/// <summary>Nested type from GetGovPollOutput.</summary>
+public readonly struct GetGovPollOutputQRWAGovProposal
+{
+    public const int Size = 208;
+
+    public ulong ProposalId { get; init; }
+    public ulong Status { get; init; }
+    public ulong Score { get; init; }
+    public GetGovPollOutputQRWAGovProposalQRWAGovParams Params { get; init; }
+
+    public static GetGovPollOutputQRWAGovProposal ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetGovPollOutputQRWAGovProposal
+        {
+            ProposalId = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            Score = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            Params = GetGovPollOutputQRWAGovProposalQRWAGovParams.ReadFrom(data.Slice(24, 184))
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), ProposalId);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), Status);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), Score);
+        Params.WriteTo(dest.Slice(24, 184));
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetGovPollInput : ISmartContractInput
@@ -114,15 +228,15 @@ public readonly struct GetGovPollInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetGovPollOutput : ISmartContractOutput<GetGovPollOutput>
 {
-    public byte[] Proposal { get; init; }
+    public GetGovPollOutputQRWAGovProposal Proposal { get; init; }
     public ulong Status { get; init; }
 
     public static GetGovPollOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetGovPollOutput
         {
-            Proposal = [] /* unknown type QRWAGovProposal */,
-            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[0..])
+            Proposal = GetGovPollOutputQRWAGovProposal.ReadFrom(data.Slice(0, 208)),
+            Status = BinaryPrimitives.ReadUInt64LittleEndian(data[208..])
         };
     }
 }
@@ -330,6 +444,45 @@ public readonly struct GetGeneralAssetsOutput : ISmartContractOutput<GetGeneralA
 
 // ═══ Function: GetPayoutsQmine (inputType=11) ═══
 
+/// <summary>Nested type from GetPayoutsQmineOutput.</summary>
+public readonly struct GetPayoutsQmineOutputQRWAPayoutEntry
+{
+    public const int Size = 64;
+
+    public required byte[] Recipient { get; init; }
+    public ulong Amount { get; init; }
+    public ulong QmineHolding { get; init; }
+    public ulong QrwaHolding { get; init; }
+    public uint Tick { get; init; }
+    public ushort Epoch { get; init; }
+    public byte PayoutType { get; init; }
+
+    public static GetPayoutsQmineOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsQmineOutputQRWAPayoutEntry
+        {
+            Recipient = data[0..].Slice(0, 32).ToArray(),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            QmineHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            QrwaHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            Tick = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            Epoch = BinaryPrimitives.ReadUInt16LittleEndian(data[60..]),
+            PayoutType = data.Slice(62, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Recipient.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), Amount);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), QmineHolding);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(48), QrwaHolding);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), Tick);
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(60), Epoch);
+        dest.Slice(62, 1)[0] = PayoutType;
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetPayoutsQmineInput : ISmartContractInput
 {
@@ -350,7 +503,7 @@ public readonly struct GetPayoutsQmineInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsQmineOutput : ISmartContractOutput<GetPayoutsQmineOutput>
 {
-    public byte[] Payouts { get; init; }
+    public GetPayoutsQmineOutputQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -358,13 +511,18 @@ public readonly struct GetPayoutsQmineOutput : ISmartContractOutput<GetPayoutsQm
 
     public static GetPayoutsQmineOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var payouts = new GetPayoutsQmineOutputQRWAPayoutEntry[512];
+        for (int i = 0; i < 512; i++)
+        {
+            payouts[i] = GetPayoutsQmineOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsQmineOutputQRWAPayoutEntry.Size, GetPayoutsQmineOutputQRWAPayoutEntry.Size));
+        }
         return new GetPayoutsQmineOutput
         {
-            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
-            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
-            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
-            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
-            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+            Payouts = payouts,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[32768..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[32770..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[32772..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[32774..])
         };
     }
 }
@@ -402,6 +560,45 @@ public readonly struct GetContractAddressesOutput : ISmartContractOutput<GetCont
 
 // ═══ Function: GetPayoutsQrwa (inputType=13) ═══
 
+/// <summary>Nested type from GetPayoutsQrwaOutput.</summary>
+public readonly struct GetPayoutsQrwaOutputQRWAPayoutEntry
+{
+    public const int Size = 64;
+
+    public required byte[] Recipient { get; init; }
+    public ulong Amount { get; init; }
+    public ulong QmineHolding { get; init; }
+    public ulong QrwaHolding { get; init; }
+    public uint Tick { get; init; }
+    public ushort Epoch { get; init; }
+    public byte PayoutType { get; init; }
+
+    public static GetPayoutsQrwaOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsQrwaOutputQRWAPayoutEntry
+        {
+            Recipient = data[0..].Slice(0, 32).ToArray(),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            QmineHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            QrwaHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            Tick = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            Epoch = BinaryPrimitives.ReadUInt16LittleEndian(data[60..]),
+            PayoutType = data.Slice(62, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Recipient.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), Amount);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), QmineHolding);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(48), QrwaHolding);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), Tick);
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(60), Epoch);
+        dest.Slice(62, 1)[0] = PayoutType;
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetPayoutsQrwaInput : ISmartContractInput
 {
@@ -422,7 +619,7 @@ public readonly struct GetPayoutsQrwaInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsQrwaOutput : ISmartContractOutput<GetPayoutsQrwaOutput>
 {
-    public byte[] Payouts { get; init; }
+    public GetPayoutsQrwaOutputQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -430,18 +627,62 @@ public readonly struct GetPayoutsQrwaOutput : ISmartContractOutput<GetPayoutsQrw
 
     public static GetPayoutsQrwaOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var payouts = new GetPayoutsQrwaOutputQRWAPayoutEntry[512];
+        for (int i = 0; i < 512; i++)
+        {
+            payouts[i] = GetPayoutsQrwaOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsQrwaOutputQRWAPayoutEntry.Size, GetPayoutsQrwaOutputQRWAPayoutEntry.Size));
+        }
         return new GetPayoutsQrwaOutput
         {
-            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
-            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
-            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
-            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
-            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+            Payouts = payouts,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[32768..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[32770..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[32772..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[32774..])
         };
     }
 }
 
 // ═══ Function: GetPayoutsDedicated (inputType=14) ═══
+
+/// <summary>Nested type from GetPayoutsDedicatedOutput.</summary>
+public readonly struct GetPayoutsDedicatedOutputQRWAPayoutEntry
+{
+    public const int Size = 64;
+
+    public required byte[] Recipient { get; init; }
+    public ulong Amount { get; init; }
+    public ulong QmineHolding { get; init; }
+    public ulong QrwaHolding { get; init; }
+    public uint Tick { get; init; }
+    public ushort Epoch { get; init; }
+    public byte PayoutType { get; init; }
+
+    public static GetPayoutsDedicatedOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsDedicatedOutputQRWAPayoutEntry
+        {
+            Recipient = data[0..].Slice(0, 32).ToArray(),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            QmineHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            QrwaHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            Tick = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            Epoch = BinaryPrimitives.ReadUInt16LittleEndian(data[60..]),
+            PayoutType = data.Slice(62, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Recipient.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), Amount);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), QmineHolding);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(48), QrwaHolding);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), Tick);
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(60), Epoch);
+        dest.Slice(62, 1)[0] = PayoutType;
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetPayoutsDedicatedInput : ISmartContractInput
@@ -463,7 +704,7 @@ public readonly struct GetPayoutsDedicatedInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsDedicatedOutput : ISmartContractOutput<GetPayoutsDedicatedOutput>
 {
-    public byte[] Payouts { get; init; }
+    public GetPayoutsDedicatedOutputQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -471,13 +712,18 @@ public readonly struct GetPayoutsDedicatedOutput : ISmartContractOutput<GetPayou
 
     public static GetPayoutsDedicatedOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var payouts = new GetPayoutsDedicatedOutputQRWAPayoutEntry[512];
+        for (int i = 0; i < 512; i++)
+        {
+            payouts[i] = GetPayoutsDedicatedOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsDedicatedOutputQRWAPayoutEntry.Size, GetPayoutsDedicatedOutputQRWAPayoutEntry.Size));
+        }
         return new GetPayoutsDedicatedOutput
         {
-            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
-            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
-            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
-            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
-            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+            Payouts = payouts,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[32768..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[32770..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[32772..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[32774..])
         };
     }
 }
@@ -521,6 +767,45 @@ public readonly struct GetScDividendTrackingOutput : ISmartContractOutput<GetScD
 
 // ═══ Function: GetPayoutsPoolD (inputType=16) ═══
 
+/// <summary>Nested type from GetPayoutsPoolDOutput.</summary>
+public readonly struct GetPayoutsPoolDOutputQRWAPayoutEntry
+{
+    public const int Size = 64;
+
+    public required byte[] Recipient { get; init; }
+    public ulong Amount { get; init; }
+    public ulong QmineHolding { get; init; }
+    public ulong QrwaHolding { get; init; }
+    public uint Tick { get; init; }
+    public ushort Epoch { get; init; }
+    public byte PayoutType { get; init; }
+
+    public static GetPayoutsPoolDOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetPayoutsPoolDOutputQRWAPayoutEntry
+        {
+            Recipient = data[0..].Slice(0, 32).ToArray(),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            QmineHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            QrwaHolding = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            Tick = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            Epoch = BinaryPrimitives.ReadUInt16LittleEndian(data[60..]),
+            PayoutType = data.Slice(62, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Recipient.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), Amount);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), QmineHolding);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(48), QrwaHolding);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(56), Tick);
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(60), Epoch);
+        dest.Slice(62, 1)[0] = PayoutType;
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetPayoutsPoolDInput : ISmartContractInput
 {
@@ -541,7 +826,7 @@ public readonly struct GetPayoutsPoolDInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsPoolDOutput : ISmartContractOutput<GetPayoutsPoolDOutput>
 {
-    public byte[] Payouts { get; init; }
+    public GetPayoutsPoolDOutputQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -549,13 +834,18 @@ public readonly struct GetPayoutsPoolDOutput : ISmartContractOutput<GetPayoutsPo
 
     public static GetPayoutsPoolDOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var payouts = new GetPayoutsPoolDOutputQRWAPayoutEntry[512];
+        for (int i = 0; i < 512; i++)
+        {
+            payouts[i] = GetPayoutsPoolDOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsPoolDOutputQRWAPayoutEntry.Size, GetPayoutsPoolDOutputQRWAPayoutEntry.Size));
+        }
         return new GetPayoutsPoolDOutput
         {
-            Payouts = [] /* unknown struct array QRWAPayoutEntry */,
-            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
-            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
-            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
-            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[6..])
+            Payouts = payouts,
+            NextIdx = BinaryPrimitives.ReadUInt16LittleEndian(data[32768..]),
+            ReturnedCount = BinaryPrimitives.ReadUInt16LittleEndian(data[32770..]),
+            Page = BinaryPrimitives.ReadUInt16LittleEndian(data[32772..]),
+            TotalPages = BinaryPrimitives.ReadUInt16LittleEndian(data[32774..])
         };
     }
 }
@@ -599,23 +889,65 @@ public readonly struct DonateToTreasuryOutput : ISmartContractOutput<DonateToTre
 
 // ═══ Procedure: VoteGovParams (inputType=4) ═══
 
+/// <summary>Nested type from VoteGovParamsPayload.</summary>
+public readonly struct VoteGovParamsPayloadQRWAGovParams
+{
+    public const int Size = 184;
+
+    public required byte[] MAdminAddress { get; init; }
+    public required byte[] ElectricityAddress { get; init; }
+    public required byte[] MaintenanceAddress { get; init; }
+    public required byte[] ReinvestmentAddress { get; init; }
+    public required byte[] QmineDevAddress { get; init; }
+    public ulong ElectricityPercent { get; init; }
+    public ulong MaintenancePercent { get; init; }
+    public ulong ReinvestmentPercent { get; init; }
+
+    public static VoteGovParamsPayloadQRWAGovParams ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new VoteGovParamsPayloadQRWAGovParams
+        {
+            MAdminAddress = data[0..].Slice(0, 32).ToArray(),
+            ElectricityAddress = data[32..].Slice(0, 32).ToArray(),
+            MaintenanceAddress = data[64..].Slice(0, 32).ToArray(),
+            ReinvestmentAddress = data[96..].Slice(0, 32).ToArray(),
+            QmineDevAddress = data[128..].Slice(0, 32).ToArray(),
+            ElectricityPercent = BinaryPrimitives.ReadUInt64LittleEndian(data[160..]),
+            MaintenancePercent = BinaryPrimitives.ReadUInt64LittleEndian(data[168..]),
+            ReinvestmentPercent = BinaryPrimitives.ReadUInt64LittleEndian(data[176..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        MAdminAddress.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        ElectricityAddress.AsSpan(0, 32).CopyTo(dest.Slice(32));
+        MaintenanceAddress.AsSpan(0, 32).CopyTo(dest.Slice(64));
+        ReinvestmentAddress.AsSpan(0, 32).CopyTo(dest.Slice(96));
+        QmineDevAddress.AsSpan(0, 32).CopyTo(dest.Slice(128));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(160), ElectricityPercent);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(168), MaintenancePercent);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(176), ReinvestmentPercent);
+    }
+}
+
 /// <summary>Input payload for procedure.</summary>
 public sealed class VoteGovParamsPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 0;
+    public const int Size = 184;
 
     public ushort InputType => 4;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public byte[] Proposal { get; init; }
+    public VoteGovParamsPayloadQRWAGovParams Proposal { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        // TODO: serialize unknown type QRWAGovParams for Proposal
+        Proposal.WriteTo(bytes.AsSpan(0, 184));
         return bytes;
     }
 }

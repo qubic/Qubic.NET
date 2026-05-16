@@ -91,6 +91,144 @@ public readonly struct GetProposalIndicesOutput : ISmartContractOutput<GetPropos
 
 // ═══ Function: GetProposal (inputType=2) ═══
 
+/// <summary>Nested type from GetProposalOutput.</summary>
+public readonly struct GetProposalOutputSubscriptionData
+{
+    public const int Size = 312;
+
+    public required byte[] Destination { get; init; }
+    public byte[] Url { get; init; }
+    public byte WeeksPerPeriod { get; init; }
+    public byte[] _padding1 { get; init; }
+    public byte[] _padding2 { get; init; }
+    public uint NumberOfPeriods { get; init; }
+    public ulong AmountPerPeriod { get; init; }
+    public uint StartEpoch { get; init; }
+    public int CurrentPeriod { get; init; }
+
+    public static GetProposalOutputSubscriptionData ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(32 + i * 1, 1)[0];
+        }
+        var _padding1 = new byte[1];
+        for (int i = 0; i < 1; i++)
+        {
+            _padding1[i] = data.Slice(289 + i * 1, 1)[0];
+        }
+        var _padding2 = new byte[2];
+        for (int i = 0; i < 2; i++)
+        {
+            _padding2[i] = data.Slice(290 + i * 1, 1)[0];
+        }
+        return new GetProposalOutputSubscriptionData
+        {
+            Destination = data[0..].Slice(0, 32).ToArray(),
+            Url = url,
+            WeeksPerPeriod = data.Slice(288, 1)[0],
+            _padding1 = _padding1,
+            _padding2 = _padding2,
+            NumberOfPeriods = BinaryPrimitives.ReadUInt32LittleEndian(data[292..]),
+            AmountPerPeriod = BinaryPrimitives.ReadUInt64LittleEndian(data[296..]),
+            StartEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[304..]),
+            CurrentPeriod = BinaryPrimitives.ReadInt32LittleEndian(data[308..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Destination.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(32 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(288, 1)[0] = WeeksPerPeriod;
+        for (int i = 0; i < 1 && _padding1 != null && i < _padding1.Length; i++)
+        {
+            dest.Slice(289 + i * 1)[0] = _padding1[i];
+        }
+        for (int i = 0; i < 2 && _padding2 != null && i < _padding2.Length; i++)
+        {
+            dest.Slice(290 + i * 1)[0] = _padding2[i];
+        }
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(292), NumberOfPeriods);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(296), AmountPerPeriod);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(304), StartEpoch);
+        BinaryPrimitives.WriteInt32LittleEndian(dest.Slice(308), CurrentPeriod);
+    }
+}
+
+/// <summary>Nested type from GetProposalOutput.</summary>
+public readonly struct GetProposalOutputSubscriptionProposalData
+{
+    public const int Size = 344;
+
+    public required byte[] ProposerId { get; init; }
+    public required byte[] Destination { get; init; }
+    public byte[] Url { get; init; }
+    public byte WeeksPerPeriod { get; init; }
+    public byte[] _padding0 { get; init; }
+    public byte[] _padding1 { get; init; }
+    public uint NumberOfPeriods { get; init; }
+    public ulong AmountPerPeriod { get; init; }
+    public uint StartEpoch { get; init; }
+
+    public static GetProposalOutputSubscriptionProposalData ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var url = new byte[256];
+        for (int i = 0; i < 256; i++)
+        {
+            url[i] = data.Slice(64 + i * 1, 1)[0];
+        }
+        var _padding0 = new byte[1];
+        for (int i = 0; i < 1; i++)
+        {
+            _padding0[i] = data.Slice(321 + i * 1, 1)[0];
+        }
+        var _padding1 = new byte[2];
+        for (int i = 0; i < 2; i++)
+        {
+            _padding1[i] = data.Slice(322 + i * 1, 1)[0];
+        }
+        return new GetProposalOutputSubscriptionProposalData
+        {
+            ProposerId = data[0..].Slice(0, 32).ToArray(),
+            Destination = data[32..].Slice(0, 32).ToArray(),
+            Url = url,
+            WeeksPerPeriod = data.Slice(320, 1)[0],
+            _padding0 = _padding0,
+            _padding1 = _padding1,
+            NumberOfPeriods = BinaryPrimitives.ReadUInt32LittleEndian(data[324..]),
+            AmountPerPeriod = BinaryPrimitives.ReadUInt64LittleEndian(data[328..]),
+            StartEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[336..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        ProposerId.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        Destination.AsSpan(0, 32).CopyTo(dest.Slice(32));
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(64 + i * 1)[0] = Url[i];
+        }
+        dest.Slice(320, 1)[0] = WeeksPerPeriod;
+        for (int i = 0; i < 1 && _padding0 != null && i < _padding0.Length; i++)
+        {
+            dest.Slice(321 + i * 1)[0] = _padding0[i];
+        }
+        for (int i = 0; i < 2 && _padding1 != null && i < _padding1.Length; i++)
+        {
+            dest.Slice(322 + i * 1)[0] = _padding1[i];
+        }
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(324), NumberOfPeriods);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(328), AmountPerPeriod);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(336), StartEpoch);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetProposalInput : ISmartContractInput
 {
@@ -120,8 +258,8 @@ public readonly struct GetProposalOutput : ISmartContractOutput<GetProposalOutpu
     public byte[] _padding1 { get; init; }
     public byte[] ProposerPublicKey { get; init; }
     public byte[] Proposal { get; init; }
-    public byte[] Subscription { get; init; }
-    public byte[] SubscriptionProposal { get; init; }
+    public GetProposalOutputSubscriptionData Subscription { get; init; }
+    public GetProposalOutputSubscriptionProposalData SubscriptionProposal { get; init; }
 
     public static GetProposalOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -144,13 +282,43 @@ public readonly struct GetProposalOutput : ISmartContractOutput<GetProposalOutpu
             _padding1 = _padding1,
             ProposerPublicKey = data[8..].Slice(0, 32).ToArray(),
             Proposal = [] /* unknown type ProposalDataT */,
-            Subscription = [] /* unknown type SubscriptionData */,
-            SubscriptionProposal = [] /* unknown type SubscriptionProposalData */
+            Subscription = GetProposalOutputSubscriptionData.ReadFrom(data.Slice(40, 312)),
+            SubscriptionProposal = GetProposalOutputSubscriptionProposalData.ReadFrom(data.Slice(352, 344))
         };
     }
 }
 
 // ═══ Function: GetVote (inputType=3) ═══
+
+/// <summary>Nested type from GetVoteOutput.</summary>
+public readonly struct GetVoteOutputProposalSingleVoteDataV1
+{
+    public const int Size = 16;
+
+    public ushort ProposalIndex { get; init; }
+    public ushort ProposalType { get; init; }
+    public uint ProposalTick { get; init; }
+    public long VoteValue { get; init; }
+
+    public static GetVoteOutputProposalSingleVoteDataV1 ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetVoteOutputProposalSingleVoteDataV1
+        {
+            ProposalIndex = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
+            ProposalType = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
+            ProposalTick = BinaryPrimitives.ReadUInt32LittleEndian(data[4..]),
+            VoteValue = BinaryPrimitives.ReadInt64LittleEndian(data[8..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(0), ProposalIndex);
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(2), ProposalType);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(4), ProposalTick);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(8), VoteValue);
+    }
+}
 
 /// <summary>Input for query.</summary>
 public readonly struct GetVoteInput : ISmartContractInput
@@ -175,14 +343,14 @@ public readonly struct GetVoteInput : ISmartContractInput
 public readonly struct GetVoteOutput : ISmartContractOutput<GetVoteOutput>
 {
     public bool Okay { get; init; }
-    public byte[] Vote { get; init; }
+    public GetVoteOutputProposalSingleVoteDataV1 Vote { get; init; }
 
     public static GetVoteOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetVoteOutput
         {
             Okay = (data.Slice(0, 1)[0] != 0),
-            Vote = [] /* unknown type ProposalSingleVoteDataV1 */
+            Vote = GetVoteOutputProposalSingleVoteDataV1.ReadFrom(data.Slice(8, 16))
         };
     }
 }
@@ -224,8 +392,8 @@ public readonly struct GetVotingResultsOutput : ISmartContractOutput<GetVotingRe
 
 // ═══ Function: GetLatestTransfers (inputType=5) ═══
 
-/// <summary>Nested type from GetLatestTransfers.</summary>
-public readonly struct GetLatestTransfersLatestTransfersEntry
+/// <summary>Nested type from GetLatestTransfersOutput.</summary>
+public readonly struct GetLatestTransfersOutputLatestTransfersEntry
 {
     public const int Size = 304;
 
@@ -235,14 +403,14 @@ public readonly struct GetLatestTransfersLatestTransfersEntry
     public uint Tick { get; init; }
     public bool Success { get; init; }
 
-    public static GetLatestTransfersLatestTransfersEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetLatestTransfersOutputLatestTransfersEntry ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(32 + i * 1, 1)[0];
         }
-        return new GetLatestTransfersLatestTransfersEntry
+        return new GetLatestTransfersOutputLatestTransfersEntry
         {
             Destination = data[0..].Slice(0, 32).ToArray(),
             Url = url,
@@ -250,6 +418,18 @@ public readonly struct GetLatestTransfersLatestTransfersEntry
             Tick = BinaryPrimitives.ReadUInt32LittleEndian(data[296..]),
             Success = (data.Slice(300, 1)[0] != 0)
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Destination.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(32 + i * 1)[0] = Url[i];
+        }
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(288), Amount);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(296), Tick);
+        dest.Slice(300, 1)[0] = (byte)(Success ? 1 : 0);
     }
 }
 
@@ -263,14 +443,14 @@ public readonly struct GetLatestTransfersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetLatestTransfersOutput : ISmartContractOutput<GetLatestTransfersOutput>
 {
-    public GetLatestTransfersLatestTransfersEntry[] Entries { get; init; }
+    public GetLatestTransfersOutputLatestTransfersEntry[] Entries { get; init; }
 
     public static GetLatestTransfersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var entries = new GetLatestTransfersLatestTransfersEntry[128];
+        var entries = new GetLatestTransfersOutputLatestTransfersEntry[128];
         for (int i = 0; i < 128; i++)
         {
-            entries[i] = GetLatestTransfersLatestTransfersEntry.ReadFrom(data.Slice(0 + i * GetLatestTransfersLatestTransfersEntry.Size, GetLatestTransfersLatestTransfersEntry.Size));
+            entries[i] = GetLatestTransfersOutputLatestTransfersEntry.ReadFrom(data.Slice(0 + i * GetLatestTransfersOutputLatestTransfersEntry.Size, GetLatestTransfersOutputLatestTransfersEntry.Size));
         }
         return new GetLatestTransfersOutput
         {
@@ -304,8 +484,8 @@ public readonly struct GetProposalFeeOutput : ISmartContractOutput<GetProposalFe
 
 // ═══ Function: GetRegularPayments (inputType=7) ═══
 
-/// <summary>Nested type from GetRegularPayments.</summary>
-public readonly struct GetRegularPaymentsRegularPaymentEntry
+/// <summary>Nested type from GetRegularPaymentsOutput.</summary>
+public readonly struct GetRegularPaymentsOutputRegularPaymentEntry
 {
     public const int Size = 312;
 
@@ -318,7 +498,7 @@ public readonly struct GetRegularPaymentsRegularPaymentEntry
     public byte[] _padding0 { get; init; }
     public byte[] _padding1 { get; init; }
 
-    public static GetRegularPaymentsRegularPaymentEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetRegularPaymentsOutputRegularPaymentEntry ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
@@ -335,7 +515,7 @@ public readonly struct GetRegularPaymentsRegularPaymentEntry
         {
             _padding1[i] = data.Slice(306 + i * 1, 1)[0];
         }
-        return new GetRegularPaymentsRegularPaymentEntry
+        return new GetRegularPaymentsOutputRegularPaymentEntry
         {
             Destination = data[0..].Slice(0, 32).ToArray(),
             Url = url,
@@ -346,6 +526,27 @@ public readonly struct GetRegularPaymentsRegularPaymentEntry
             _padding0 = _padding0,
             _padding1 = _padding1
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Destination.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        for (int i = 0; i < 256 && Url != null && i < Url.Length; i++)
+        {
+            dest.Slice(32 + i * 1)[0] = Url[i];
+        }
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(288), Amount);
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(296), Tick);
+        BinaryPrimitives.WriteInt32LittleEndian(dest.Slice(300), PeriodIndex);
+        dest.Slice(304, 1)[0] = (byte)(Success ? 1 : 0);
+        for (int i = 0; i < 1 && _padding0 != null && i < _padding0.Length; i++)
+        {
+            dest.Slice(305 + i * 1)[0] = _padding0[i];
+        }
+        for (int i = 0; i < 2 && _padding1 != null && i < _padding1.Length; i++)
+        {
+            dest.Slice(306 + i * 1)[0] = _padding1[i];
+        }
     }
 }
 
@@ -359,14 +560,14 @@ public readonly struct GetRegularPaymentsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetRegularPaymentsOutput : ISmartContractOutput<GetRegularPaymentsOutput>
 {
-    public GetRegularPaymentsRegularPaymentEntry[] Entries { get; init; }
+    public GetRegularPaymentsOutputRegularPaymentEntry[] Entries { get; init; }
 
     public static GetRegularPaymentsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var entries = new GetRegularPaymentsRegularPaymentEntry[128];
+        var entries = new GetRegularPaymentsOutputRegularPaymentEntry[128];
         for (int i = 0; i < 128; i++)
         {
-            entries[i] = GetRegularPaymentsRegularPaymentEntry.ReadFrom(data.Slice(0 + i * GetRegularPaymentsRegularPaymentEntry.Size, GetRegularPaymentsRegularPaymentEntry.Size));
+            entries[i] = GetRegularPaymentsOutputRegularPaymentEntry.ReadFrom(data.Slice(0 + i * GetRegularPaymentsOutputRegularPaymentEntry.Size, GetRegularPaymentsOutputRegularPaymentEntry.Size));
         }
         return new GetRegularPaymentsOutput
         {
@@ -429,18 +630,43 @@ public readonly struct SetProposalOutput : ISmartContractOutput<SetProposalOutpu
 
 // ═══ Procedure: Vote (inputType=2) ═══
 
-/// <summary>Input for procedure (empty payload).</summary>
+/// <summary>Input payload for procedure.</summary>
 public sealed class VotePayload : ITransactionPayload, ISmartContractInput
 {
+    public const int Size = 16;
+
     public ushort InputType => 2;
-    public ushort InputSize => 0;
-    public int SerializedSize => 0;
-    public byte[] GetPayloadBytes() => [];
-    public byte[] ToBytes() => [];
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ushort ProposalIndex { get; init; }
+    public ushort ProposalType { get; init; }
+    public uint ProposalTick { get; init; }
+    public long VoteValue { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(0), ProposalIndex);
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(2), ProposalType);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), ProposalTick);
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(8), VoteValue);
+        return bytes;
+    }
 }
 
-/// <summary>Output (empty).</summary>
+/// <summary>Output.</summary>
 public readonly struct VoteOutput : ISmartContractOutput<VoteOutput>
 {
-    public static VoteOutput FromBytes(ReadOnlySpan<byte> data) => new();
+    public bool Okay { get; init; }
+
+    public static VoteOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new VoteOutput
+        {
+            Okay = (data.Slice(0, 1)[0] != 0)
+        };
+    }
 }

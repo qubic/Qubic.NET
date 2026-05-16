@@ -45,6 +45,94 @@ public static class EscrowContract
 
 // ═══ Function: GetDeals (inputType=1) ═══
 
+/// <summary>Nested type from GetDealsOutputDeal.</summary>
+public readonly struct GetDealsOutputDealAssetWithAmount
+{
+    public const int Size = 48;
+
+    public required byte[] Issuer { get; init; }
+    public ulong Name { get; init; }
+    public ulong Amount { get; init; }
+
+    public static GetDealsOutputDealAssetWithAmount ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetDealsOutputDealAssetWithAmount
+        {
+            Issuer = data[0..].Slice(0, 32).ToArray(),
+            Name = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Issuer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), Name);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), Amount);
+    }
+}
+
+/// <summary>Nested type from GetDealsOutput.</summary>
+public readonly struct GetDealsOutputDeal
+{
+    public const int Size = 464;
+
+    public long Index { get; init; }
+    public required byte[] AcceptorId { get; init; }
+    public ulong OfferedQU { get; init; }
+    public ulong OfferedAssetsNumber { get; init; }
+    public GetDealsOutputDealAssetWithAmount[] OfferedAssets { get; init; }
+    public ulong RequestedQU { get; init; }
+    public ulong RequestedAssetsNumber { get; init; }
+    public GetDealsOutputDealAssetWithAmount[] RequestedAssets { get; init; }
+    public ushort CreationEpoch { get; init; }
+
+    public static GetDealsOutputDeal ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var offeredAssets = new GetDealsOutputDealAssetWithAmount[4];
+        for (int i = 0; i < 4; i++)
+        {
+            offeredAssets[i] = GetDealsOutputDealAssetWithAmount.ReadFrom(data.Slice(56 + i * 48, 48));
+        }
+        var requestedAssets = new GetDealsOutputDealAssetWithAmount[4];
+        for (int i = 0; i < 4; i++)
+        {
+            requestedAssets[i] = GetDealsOutputDealAssetWithAmount.ReadFrom(data.Slice(264 + i * 48, 48));
+        }
+        return new GetDealsOutputDeal
+        {
+            Index = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
+            AcceptorId = data[8..].Slice(0, 32).ToArray(),
+            OfferedQU = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            OfferedAssetsNumber = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            OfferedAssets = offeredAssets,
+            RequestedQU = BinaryPrimitives.ReadUInt64LittleEndian(data[248..]),
+            RequestedAssetsNumber = BinaryPrimitives.ReadUInt64LittleEndian(data[256..]),
+            RequestedAssets = requestedAssets,
+            CreationEpoch = BinaryPrimitives.ReadUInt16LittleEndian(data[456..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(0), Index);
+        AcceptorId.AsSpan(0, 32).CopyTo(dest.Slice(8));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), OfferedQU);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(48), OfferedAssetsNumber);
+        for (int i = 0; i < 4 && OfferedAssets != null && i < OfferedAssets.Length; i++)
+        {
+            OfferedAssets[i].WriteTo(dest.Slice(56 + i * 48, 48));
+        }
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(248), RequestedQU);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(256), RequestedAssetsNumber);
+        for (int i = 0; i < 4 && RequestedAssets != null && i < RequestedAssets.Length; i++)
+        {
+            RequestedAssets[i].WriteTo(dest.Slice(264 + i * 48, 48));
+        }
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(456), CreationEpoch);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetDealsInput : ISmartContractInput
 {
@@ -72,20 +160,35 @@ public readonly struct GetDealsOutput : ISmartContractOutput<GetDealsOutput>
     public ulong OwnedDealsAmount { get; init; }
     public ulong ProposedDealsAmount { get; init; }
     public ulong PublicDealsAmount { get; init; }
-    public byte[] OwnedDeals { get; init; }
-    public byte[] ProposedDeals { get; init; }
-    public byte[] PublicDeals { get; init; }
+    public GetDealsOutputDeal[] OwnedDeals { get; init; }
+    public GetDealsOutputDeal[] ProposedDeals { get; init; }
+    public GetDealsOutputDeal[] PublicDeals { get; init; }
 
     public static GetDealsOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var ownedDeals = new GetDealsOutputDeal[8];
+        for (int i = 0; i < 8; i++)
+        {
+            ownedDeals[i] = GetDealsOutputDeal.ReadFrom(data.Slice(24 + i * GetDealsOutputDeal.Size, GetDealsOutputDeal.Size));
+        }
+        var proposedDeals = new GetDealsOutputDeal[32];
+        for (int i = 0; i < 32; i++)
+        {
+            proposedDeals[i] = GetDealsOutputDeal.ReadFrom(data.Slice(3736 + i * GetDealsOutputDeal.Size, GetDealsOutputDeal.Size));
+        }
+        var publicDeals = new GetDealsOutputDeal[64];
+        for (int i = 0; i < 64; i++)
+        {
+            publicDeals[i] = GetDealsOutputDeal.ReadFrom(data.Slice(18584 + i * GetDealsOutputDeal.Size, GetDealsOutputDeal.Size));
+        }
         return new GetDealsOutput
         {
             OwnedDealsAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             ProposedDealsAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
             PublicDealsAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
-            OwnedDeals = [] /* unknown struct array Deal */,
-            ProposedDeals = [] /* unknown struct array Deal */,
-            PublicDeals = [] /* unknown struct array Deal */
+            OwnedDeals = ownedDeals,
+            ProposedDeals = proposedDeals,
+            PublicDeals = publicDeals
         };
     }
 }
@@ -127,10 +230,37 @@ public readonly struct GetFreeAssetAmountOutput : ISmartContractOutput<GetFreeAs
 
 // ═══ Procedure: CreateDeal (inputType=1) ═══
 
+/// <summary>Nested type from CreateDealPayload.</summary>
+public readonly struct CreateDealPayloadAssetWithAmount
+{
+    public const int Size = 48;
+
+    public required byte[] Issuer { get; init; }
+    public ulong Name { get; init; }
+    public ulong Amount { get; init; }
+
+    public static CreateDealPayloadAssetWithAmount ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new CreateDealPayloadAssetWithAmount
+        {
+            Issuer = data[0..].Slice(0, 32).ToArray(),
+            Name = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Issuer.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), Name);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(40), Amount);
+    }
+}
+
 /// <summary>Input payload for procedure.</summary>
 public sealed class CreateDealPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 64;
+    public const int Size = 448;
 
     public ushort InputType => 1;
     public ushort InputSize => Size;
@@ -139,10 +269,10 @@ public sealed class CreateDealPayload : ITransactionPayload, ISmartContractInput
     public required byte[] AcceptorId { get; init; }
     public ulong OfferedQU { get; init; }
     public ulong OfferedAssetsNumber { get; init; }
-    public byte[] OfferedAssets { get; init; }
+    public CreateDealPayloadAssetWithAmount[] OfferedAssets { get; init; }
     public ulong RequestedQU { get; init; }
     public ulong RequestedAssetsNumber { get; init; }
-    public byte[] RequestedAssets { get; init; }
+    public CreateDealPayloadAssetWithAmount[] RequestedAssets { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
@@ -152,12 +282,16 @@ public sealed class CreateDealPayload : ITransactionPayload, ISmartContractInput
         AcceptorId.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
         BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(32), OfferedQU);
         BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(40), OfferedAssetsNumber);
-        // Array<AssetWithAmount, 4> - OfferedAssets
-        // TODO: serialize nested struct array
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(48), RequestedQU);
-        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(56), RequestedAssetsNumber);
-        // Array<AssetWithAmount, 4> - RequestedAssets
-        // TODO: serialize nested struct array
+        for (int i = 0; i < 4 && OfferedAssets != null && i < OfferedAssets.Length; i++)
+        {
+            OfferedAssets[i].WriteTo(bytes.AsSpan(48 + i * 48, 48));
+        }
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(240), RequestedQU);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(248), RequestedAssetsNumber);
+        for (int i = 0; i < 4 && RequestedAssets != null && i < RequestedAssets.Length; i++)
+        {
+            RequestedAssets[i].WriteTo(bytes.AsSpan(256 + i * 48, 48));
+        }
         return bytes;
     }
 }

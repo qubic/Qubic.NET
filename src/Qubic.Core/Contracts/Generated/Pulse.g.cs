@@ -312,6 +312,33 @@ public readonly struct GetBalanceOutput : ISmartContractOutput<GetBalanceOutput>
 
 // ═══ Function: GetWinners (inputType=9) ═══
 
+/// <summary>Nested type from GetWinnersOutput.</summary>
+public readonly struct GetWinnersOutputWinnerInfo
+{
+    public const int Size = 48;
+
+    public required byte[] WinnerAddress { get; init; }
+    public ulong Revenue { get; init; }
+    public ushort Epoch { get; init; }
+
+    public static GetWinnersOutputWinnerInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetWinnersOutputWinnerInfo
+        {
+            WinnerAddress = data[0..].Slice(0, 32).ToArray(),
+            Revenue = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            Epoch = BinaryPrimitives.ReadUInt16LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        WinnerAddress.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(32), Revenue);
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(40), Epoch);
+    }
+}
+
 /// <summary>Input for query (empty).</summary>
 public readonly struct GetWinnersInput : ISmartContractInput
 {
@@ -322,17 +349,22 @@ public readonly struct GetWinnersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetWinnersOutput : ISmartContractOutput<GetWinnersOutput>
 {
-    public byte[] Winners { get; init; }
+    public GetWinnersOutputWinnerInfo[] Winners { get; init; }
     public ulong WinnersCounter { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetWinnersOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var winners = new GetWinnersOutputWinnerInfo[1024];
+        for (int i = 0; i < 1024; i++)
+        {
+            winners[i] = GetWinnersOutputWinnerInfo.ReadFrom(data.Slice(0 + i * GetWinnersOutputWinnerInfo.Size, GetWinnersOutputWinnerInfo.Size));
+        }
         return new GetWinnersOutput
         {
-            Winners = [] /* unknown struct array WinnerInfo */,
-            WinnersCounter = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
-            ReturnCode = data.Slice(8, 1)[0]
+            Winners = winners,
+            WinnersCounter = BinaryPrimitives.ReadUInt64LittleEndian(data[49152..]),
+            ReturnCode = data.Slice(49160, 1)[0]
         };
     }
 }
@@ -376,6 +408,33 @@ public readonly struct GetAutoParticipationOutput : ISmartContractOutput<GetAuto
 
 // ═══ Function: GetAutoStats (inputType=11) ═══
 
+/// <summary>Nested type from GetAutoStatsOutput.</summary>
+public readonly struct GetAutoStatsOutputAutoParticipant
+{
+    public const int Size = 48;
+
+    public required byte[] Player { get; init; }
+    public long Deposit { get; init; }
+    public ushort DesiredTickets { get; init; }
+
+    public static GetAutoStatsOutputAutoParticipant ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetAutoStatsOutputAutoParticipant
+        {
+            Player = data[0..].Slice(0, 32).ToArray(),
+            Deposit = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
+            DesiredTickets = BinaryPrimitives.ReadUInt16LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Player.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), Deposit);
+        BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(40), DesiredTickets);
+    }
+}
+
 /// <summary>Input for query (empty).</summary>
 public readonly struct GetAutoStatsInput : ISmartContractInput
 {
@@ -386,7 +445,7 @@ public readonly struct GetAutoStatsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetAutoStatsOutput : ISmartContractOutput<GetAutoStatsOutput>
 {
-    public byte[] Participants { get; init; }
+    public GetAutoStatsOutputAutoParticipant[] Participants { get; init; }
     public ushort MaxAutoParticipants { get; init; }
     public ushort MaxAutoTicketsPerUser { get; init; }
     public ushort RoundSlotsLeft { get; init; }
@@ -394,9 +453,14 @@ public readonly struct GetAutoStatsOutput : ISmartContractOutput<GetAutoStatsOut
 
     public static GetAutoStatsOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var participants = new GetAutoStatsOutputAutoParticipant[0];
+        for (int i = 0; i < 0; i++)
+        {
+            participants[i] = GetAutoStatsOutputAutoParticipant.ReadFrom(data.Slice(0 + i * GetAutoStatsOutputAutoParticipant.Size, GetAutoStatsOutputAutoParticipant.Size));
+        }
         return new GetAutoStatsOutput
         {
-            Participants = [] /* unknown struct array AutoParticipant */,
+            Participants = participants,
             MaxAutoParticipants = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
             MaxAutoTicketsPerUser = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
             RoundSlotsLeft = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
@@ -407,11 +471,24 @@ public readonly struct GetAutoStatsOutput : ISmartContractOutput<GetAutoStatsOut
 
 // ═══ Function: ValidateDigits (inputType=12) ═══
 
-/// <summary>Input for query (empty).</summary>
+/// <summary>Input for query.</summary>
 public readonly struct ValidateDigitsInput : ISmartContractInput
 {
-    public int SerializedSize => 0;
-    public byte[] ToBytes() => [];
+    public const int Size = 8;
+
+    public int SerializedSize => Size;
+
+    public byte[] Digits { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        for (int i = 0; i < 8 && Digits != null && i < Digits.Length; i++)
+        {
+            bytes.AsSpan(0 + i * 1)[0] = Digits[i];
+        }
+        return bytes;
+    }
 }
 
 /// <summary>Output.</summary>
@@ -430,6 +507,38 @@ public readonly struct ValidateDigitsOutput : ISmartContractOutput<ValidateDigit
 
 // ═══ Function: GetPlayers (inputType=13) ═══
 
+/// <summary>Nested type from GetPlayersOutput.</summary>
+public readonly struct GetPlayersOutputTicket
+{
+    public const int Size = 40;
+
+    public required byte[] Player { get; init; }
+    public byte[] Digits { get; init; }
+
+    public static GetPlayersOutputTicket ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var digits = new byte[8];
+        for (int i = 0; i < 8; i++)
+        {
+            digits[i] = data.Slice(32 + i * 1, 1)[0];
+        }
+        return new GetPlayersOutputTicket
+        {
+            Player = data[0..].Slice(0, 32).ToArray(),
+            Digits = digits
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Player.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        for (int i = 0; i < 8 && Digits != null && i < Digits.Length; i++)
+        {
+            dest.Slice(32 + i * 1)[0] = Digits[i];
+        }
+    }
+}
+
 /// <summary>Input for query (empty).</summary>
 public readonly struct GetPlayersInput : ISmartContractInput
 {
@@ -440,15 +549,20 @@ public readonly struct GetPlayersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
 {
-    public byte[] Players { get; init; }
+    public GetPlayersOutputTicket[] Players { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetPlayersOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var players = new GetPlayersOutputTicket[1024];
+        for (int i = 0; i < 1024; i++)
+        {
+            players[i] = GetPlayersOutputTicket.ReadFrom(data.Slice(0 + i * GetPlayersOutputTicket.Size, GetPlayersOutputTicket.Size));
+        }
         return new GetPlayersOutput
         {
-            Players = [] /* unknown struct array Ticket */,
-            ReturnCode = data.Slice(0, 1)[0]
+            Players = players,
+            ReturnCode = data.Slice(40960, 1)[0]
         };
     }
 }

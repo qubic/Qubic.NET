@@ -124,6 +124,90 @@ public readonly struct BasicInfoOutput : ISmartContractOutput<BasicInfoOutput>
 
 // ═══ Function: GetEventInfo (inputType=2) ═══
 
+/// <summary>Nested type from GetEventInfoOutput.</summary>
+public readonly struct GetEventInfoOutputQtryEventInfo
+{
+    public const int Size = 280;
+
+    public ulong Eid { get; init; }
+    public ulong OpenDate { get; init; }
+    public ulong EndDate { get; init; }
+    public required byte[][] Desc { get; init; }
+    public required byte[][] Option0Desc { get; init; }
+    public required byte[][] Option1Desc { get; init; }
+
+    public static GetEventInfoOutputQtryEventInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var desc = new byte[4][];
+        for (int i = 0; i < 4; i++)
+        {
+            desc[i] = data[(24 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        var option0Desc = new byte[2][];
+        for (int i = 0; i < 2; i++)
+        {
+            option0Desc[i] = data[(152 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        var option1Desc = new byte[2][];
+        for (int i = 0; i < 2; i++)
+        {
+            option1Desc[i] = data[(216 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        return new GetEventInfoOutputQtryEventInfo
+        {
+            Eid = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            OpenDate = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            EndDate = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            Desc = desc,
+            Option0Desc = option0Desc,
+            Option1Desc = option1Desc
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), Eid);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), OpenDate);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), EndDate);
+        for (int i = 0; i < 4 && Desc != null && i < Desc.Length; i++)
+        {
+            Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(24 + i * 32));
+        }
+        for (int i = 0; i < 2 && Option0Desc != null && i < Option0Desc.Length; i++)
+        {
+            Option0Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(152 + i * 32));
+        }
+        for (int i = 0; i < 2 && Option1Desc != null && i < Option1Desc.Length; i++)
+        {
+            Option1Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(216 + i * 32));
+        }
+    }
+}
+
+/// <summary>Nested type from GetEventInfoOutput.</summary>
+public readonly struct GetEventInfoOutputDepositInfo
+{
+    public const int Size = 40;
+
+    public required byte[] Pubkey { get; init; }
+    public long Amount { get; init; }
+
+    public static GetEventInfoOutputDepositInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetEventInfoOutputDepositInfo
+        {
+            Pubkey = data[0..].Slice(0, 32).ToArray(),
+            Amount = BinaryPrimitives.ReadInt64LittleEndian(data[32..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Pubkey.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), Amount);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetEventInfoInput : ISmartContractInput
 {
@@ -144,10 +228,10 @@ public readonly struct GetEventInfoInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetEventInfoOutput : ISmartContractOutput<GetEventInfoOutput>
 {
-    public byte[] Qei { get; init; }
+    public GetEventInfoOutputQtryEventInfo Qei { get; init; }
     public int ResultByGO { get; init; }
     public uint PublishTickTime { get; init; }
-    public byte[] DisputerInfo { get; init; }
+    public GetEventInfoOutputDepositInfo DisputerInfo { get; init; }
     public uint ComputorsVote0 { get; init; }
     public uint ComputorsVote1 { get; init; }
 
@@ -155,33 +239,63 @@ public readonly struct GetEventInfoOutput : ISmartContractOutput<GetEventInfoOut
     {
         return new GetEventInfoOutput
         {
-            Qei = [] /* unknown type QtryEventInfo */,
-            ResultByGO = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            PublishTickTime = BinaryPrimitives.ReadUInt32LittleEndian(data[4..]),
-            DisputerInfo = [] /* unknown type DepositInfo */,
-            ComputorsVote0 = BinaryPrimitives.ReadUInt32LittleEndian(data[8..]),
-            ComputorsVote1 = BinaryPrimitives.ReadUInt32LittleEndian(data[12..])
+            Qei = GetEventInfoOutputQtryEventInfo.ReadFrom(data.Slice(0, 280)),
+            ResultByGO = BinaryPrimitives.ReadInt32LittleEndian(data[280..]),
+            PublishTickTime = BinaryPrimitives.ReadUInt32LittleEndian(data[284..]),
+            DisputerInfo = GetEventInfoOutputDepositInfo.ReadFrom(data.Slice(288, 40)),
+            ComputorsVote0 = BinaryPrimitives.ReadUInt32LittleEndian(data[328..]),
+            ComputorsVote1 = BinaryPrimitives.ReadUInt32LittleEndian(data[332..])
         };
     }
 }
 
 // ═══ Function: GetOrders (inputType=3) ═══
 
-/// <summary>Nested type from GetOrders.</summary>
-public readonly struct GetOrdersQtryOrderWithPrice
+/// <summary>Nested type from GetOrdersOutputQtryOrderWithPrice.</summary>
+public readonly struct GetOrdersOutputQtryOrderWithPriceQtryOrder
 {
-    public const int Size = 8;
+    public const int Size = 40;
 
-    public byte[] Qo { get; init; }
+    public required byte[] Entity { get; init; }
+    public long Amount { get; init; }
+
+    public static GetOrdersOutputQtryOrderWithPriceQtryOrder ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetOrdersOutputQtryOrderWithPriceQtryOrder
+        {
+            Entity = data[0..].Slice(0, 32).ToArray(),
+            Amount = BinaryPrimitives.ReadInt64LittleEndian(data[32..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Entity.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), Amount);
+    }
+}
+
+/// <summary>Nested type from GetOrdersOutput.</summary>
+public readonly struct GetOrdersOutputQtryOrderWithPrice
+{
+    public const int Size = 48;
+
+    public GetOrdersOutputQtryOrderWithPriceQtryOrder Qo { get; init; }
     public long Price { get; init; }
 
-    public static GetOrdersQtryOrderWithPrice ReadFrom(ReadOnlySpan<byte> data)
+    public static GetOrdersOutputQtryOrderWithPrice ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetOrdersQtryOrderWithPrice
+        return new GetOrdersOutputQtryOrderWithPrice
         {
-            Qo = default /* TODO: unknown type QtryOrder */,
-            Price = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+            Qo = GetOrdersOutputQtryOrderWithPriceQtryOrder.ReadFrom(data.Slice(0, 40)),
+            Price = BinaryPrimitives.ReadInt64LittleEndian(data[40..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Qo.WriteTo(dest.Slice(0, 40));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), Price);
     }
 }
 
@@ -211,14 +325,14 @@ public readonly struct GetOrdersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetOrdersOutput : ISmartContractOutput<GetOrdersOutput>
 {
-    public GetOrdersQtryOrderWithPrice[] Orders { get; init; }
+    public GetOrdersOutputQtryOrderWithPrice[] Orders { get; init; }
 
     public static GetOrdersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var orders = new GetOrdersQtryOrderWithPrice[256];
+        var orders = new GetOrdersOutputQtryOrderWithPrice[256];
         for (int i = 0; i < 256; i++)
         {
-            orders[i] = GetOrdersQtryOrderWithPrice.ReadFrom(data.Slice(0 + i * GetOrdersQtryOrderWithPrice.Size, GetOrdersQtryOrderWithPrice.Size));
+            orders[i] = GetOrdersOutputQtryOrderWithPrice.ReadFrom(data.Slice(0 + i * GetOrdersOutputQtryOrderWithPrice.Size, GetOrdersOutputQtryOrderWithPrice.Size));
         }
         return new GetOrdersOutput
         {
@@ -257,6 +371,66 @@ public readonly struct GetActiveEventOutput : ISmartContractOutput<GetActiveEven
 
 // ═══ Function: GetEventInfoBatch (inputType=5) ═══
 
+/// <summary>Nested type from GetEventInfoBatchOutput.</summary>
+public readonly struct GetEventInfoBatchOutputQtryEventInfo
+{
+    public const int Size = 280;
+
+    public ulong Eid { get; init; }
+    public ulong OpenDate { get; init; }
+    public ulong EndDate { get; init; }
+    public required byte[][] Desc { get; init; }
+    public required byte[][] Option0Desc { get; init; }
+    public required byte[][] Option1Desc { get; init; }
+
+    public static GetEventInfoBatchOutputQtryEventInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var desc = new byte[4][];
+        for (int i = 0; i < 4; i++)
+        {
+            desc[i] = data[(24 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        var option0Desc = new byte[2][];
+        for (int i = 0; i < 2; i++)
+        {
+            option0Desc[i] = data[(152 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        var option1Desc = new byte[2][];
+        for (int i = 0; i < 2; i++)
+        {
+            option1Desc[i] = data[(216 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        return new GetEventInfoBatchOutputQtryEventInfo
+        {
+            Eid = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            OpenDate = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            EndDate = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            Desc = desc,
+            Option0Desc = option0Desc,
+            Option1Desc = option1Desc
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), Eid);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), OpenDate);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), EndDate);
+        for (int i = 0; i < 4 && Desc != null && i < Desc.Length; i++)
+        {
+            Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(24 + i * 32));
+        }
+        for (int i = 0; i < 2 && Option0Desc != null && i < Option0Desc.Length; i++)
+        {
+            Option0Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(152 + i * 32));
+        }
+        for (int i = 0; i < 2 && Option1Desc != null && i < Option1Desc.Length; i++)
+        {
+            Option1Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(216 + i * 32));
+        }
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetEventInfoBatchInput : ISmartContractInput
 {
@@ -280,34 +454,45 @@ public readonly struct GetEventInfoBatchInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetEventInfoBatchOutput : ISmartContractOutput<GetEventInfoBatchOutput>
 {
-    public byte[] Aqei { get; init; }
+    public GetEventInfoBatchOutputQtryEventInfo[] Aqei { get; init; }
 
     public static GetEventInfoBatchOutput FromBytes(ReadOnlySpan<byte> data)
     {
+        var aqei = new GetEventInfoBatchOutputQtryEventInfo[64];
+        for (int i = 0; i < 64; i++)
+        {
+            aqei[i] = GetEventInfoBatchOutputQtryEventInfo.ReadFrom(data.Slice(0 + i * GetEventInfoBatchOutputQtryEventInfo.Size, GetEventInfoBatchOutputQtryEventInfo.Size));
+        }
         return new GetEventInfoBatchOutput
         {
-            Aqei = [] /* unknown struct array QtryEventInfo */
+            Aqei = aqei
         };
     }
 }
 
 // ═══ Function: GetUserPosition (inputType=6) ═══
 
-/// <summary>Nested type from GetUserPosition.</summary>
-public readonly struct GetUserPositionPositionInfo
+/// <summary>Nested type from GetUserPositionOutput.</summary>
+public readonly struct GetUserPositionOutputPositionInfo
 {
     public const int Size = 16;
 
     public ulong Eo { get; init; }
     public long Amount { get; init; }
 
-    public static GetUserPositionPositionInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetUserPositionOutputPositionInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetUserPositionPositionInfo
+        return new GetUserPositionOutputPositionInfo
         {
             Eo = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             Amount = BinaryPrimitives.ReadInt64LittleEndian(data[8..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), Eo);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(8), Amount);
     }
 }
 
@@ -332,14 +517,14 @@ public readonly struct GetUserPositionInput : ISmartContractInput
 public readonly struct GetUserPositionOutput : ISmartContractOutput<GetUserPositionOutput>
 {
     public long Count { get; init; }
-    public GetUserPositionPositionInfo[] P { get; init; }
+    public GetUserPositionOutputPositionInfo[] P { get; init; }
 
     public static GetUserPositionOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var p = new GetUserPositionPositionInfo[1024];
+        var p = new GetUserPositionOutputPositionInfo[1024];
         for (int i = 0; i < 1024; i++)
         {
-            p[i] = GetUserPositionPositionInfo.ReadFrom(data.Slice(8 + i * GetUserPositionPositionInfo.Size, GetUserPositionPositionInfo.Size));
+            p[i] = GetUserPositionOutputPositionInfo.ReadFrom(data.Slice(8 + i * GetUserPositionOutputPositionInfo.Size, GetUserPositionOutputPositionInfo.Size));
         }
         return new GetUserPositionOutput
         {
@@ -384,21 +569,63 @@ public readonly struct GetApprovedAmountOutput : ISmartContractOutput<GetApprove
 
 // ═══ Function: GetTopProposals (inputType=8) ═══
 
-/// <summary>Nested type from GetTopProposals.</summary>
-public readonly struct GetTopProposalsProposalInfo
+/// <summary>Nested type from GetTopProposalsOutputProposalInfo.</summary>
+public readonly struct GetTopProposalsOutputProposalInfoQtryGOV
 {
-    public const int Size = 8;
+    public const int Size = 72;
 
-    public byte[] Proposed { get; init; }
+    public ulong MShareHolderFee { get; init; }
+    public ulong MBurnFee { get; init; }
+    public ulong MOperationFee { get; init; }
+    public long MFeePerDay { get; init; }
+    public long MDepositAmountForDispute { get; init; }
+    public required byte[] MOperationId { get; init; }
+
+    public static GetTopProposalsOutputProposalInfoQtryGOV ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new GetTopProposalsOutputProposalInfoQtryGOV
+        {
+            MShareHolderFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            MBurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            MOperationFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            MFeePerDay = BinaryPrimitives.ReadInt64LittleEndian(data[24..]),
+            MDepositAmountForDispute = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
+            MOperationId = data[40..].Slice(0, 32).ToArray()
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), MShareHolderFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), MBurnFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), MOperationFee);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(24), MFeePerDay);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), MDepositAmountForDispute);
+        MOperationId.AsSpan(0, 32).CopyTo(dest.Slice(40));
+    }
+}
+
+/// <summary>Nested type from GetTopProposalsOutput.</summary>
+public readonly struct GetTopProposalsOutputProposalInfo
+{
+    public const int Size = 80;
+
+    public GetTopProposalsOutputProposalInfoQtryGOV Proposed { get; init; }
     public long TotalVotes { get; init; }
 
-    public static GetTopProposalsProposalInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetTopProposalsOutputProposalInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetTopProposalsProposalInfo
+        return new GetTopProposalsOutputProposalInfo
         {
-            Proposed = default /* TODO: unknown type QtryGOV */,
-            TotalVotes = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+            Proposed = GetTopProposalsOutputProposalInfoQtryGOV.ReadFrom(data.Slice(0, 72)),
+            TotalVotes = BinaryPrimitives.ReadInt64LittleEndian(data[72..])
         };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Proposed.WriteTo(dest.Slice(0, 72));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(72), TotalVotes);
     }
 }
 
@@ -412,43 +639,103 @@ public readonly struct GetTopProposalsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetTopProposalsOutput : ISmartContractOutput<GetTopProposalsOutput>
 {
-    public GetTopProposalsProposalInfo[] Top { get; init; }
+    public GetTopProposalsOutputProposalInfo[] Top { get; init; }
     public int UniqueCount { get; init; }
 
     public static GetTopProposalsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var top = new GetTopProposalsProposalInfo[4];
+        var top = new GetTopProposalsOutputProposalInfo[4];
         for (int i = 0; i < 4; i++)
         {
-            top[i] = GetTopProposalsProposalInfo.ReadFrom(data.Slice(0 + i * GetTopProposalsProposalInfo.Size, GetTopProposalsProposalInfo.Size));
+            top[i] = GetTopProposalsOutputProposalInfo.ReadFrom(data.Slice(0 + i * GetTopProposalsOutputProposalInfo.Size, GetTopProposalsOutputProposalInfo.Size));
         }
         return new GetTopProposalsOutput
         {
             Top = top,
-            UniqueCount = BinaryPrimitives.ReadInt32LittleEndian(data[32..])
+            UniqueCount = BinaryPrimitives.ReadInt32LittleEndian(data[320..])
         };
     }
 }
 
 // ═══ Procedure: CreateEvent (inputType=1) ═══
 
+/// <summary>Nested type from CreateEventPayload.</summary>
+public readonly struct CreateEventPayloadQtryEventInfo
+{
+    public const int Size = 280;
+
+    public ulong Eid { get; init; }
+    public ulong OpenDate { get; init; }
+    public ulong EndDate { get; init; }
+    public required byte[][] Desc { get; init; }
+    public required byte[][] Option0Desc { get; init; }
+    public required byte[][] Option1Desc { get; init; }
+
+    public static CreateEventPayloadQtryEventInfo ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var desc = new byte[4][];
+        for (int i = 0; i < 4; i++)
+        {
+            desc[i] = data[(24 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        var option0Desc = new byte[2][];
+        for (int i = 0; i < 2; i++)
+        {
+            option0Desc[i] = data[(152 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        var option1Desc = new byte[2][];
+        for (int i = 0; i < 2; i++)
+        {
+            option1Desc[i] = data[(216 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        return new CreateEventPayloadQtryEventInfo
+        {
+            Eid = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            OpenDate = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            EndDate = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            Desc = desc,
+            Option0Desc = option0Desc,
+            Option1Desc = option1Desc
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), Eid);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), OpenDate);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), EndDate);
+        for (int i = 0; i < 4 && Desc != null && i < Desc.Length; i++)
+        {
+            Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(24 + i * 32));
+        }
+        for (int i = 0; i < 2 && Option0Desc != null && i < Option0Desc.Length; i++)
+        {
+            Option0Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(152 + i * 32));
+        }
+        for (int i = 0; i < 2 && Option1Desc != null && i < Option1Desc.Length; i++)
+        {
+            Option1Desc[i].AsSpan(0, 32).CopyTo(dest.Slice(216 + i * 32));
+        }
+    }
+}
+
 /// <summary>Input payload for procedure.</summary>
 public sealed class CreateEventPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 0;
+    public const int Size = 280;
 
     public ushort InputType => 1;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public byte[] Qei { get; init; }
+    public CreateEventPayloadQtryEventInfo Qei { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        // TODO: serialize unknown type QtryEventInfo for Qei
+        Qei.WriteTo(bytes.AsSpan(0, 280));
         return bytes;
     }
 }
@@ -986,23 +1273,59 @@ public readonly struct UpdateFeeDiscountListOutput : ISmartContractOutput<Update
 
 // ═══ Procedure: ProposalVote (inputType=100) ═══
 
+/// <summary>Nested type from ProposalVotePayload.</summary>
+public readonly struct ProposalVotePayloadQtryGOV
+{
+    public const int Size = 72;
+
+    public ulong MShareHolderFee { get; init; }
+    public ulong MBurnFee { get; init; }
+    public ulong MOperationFee { get; init; }
+    public long MFeePerDay { get; init; }
+    public long MDepositAmountForDispute { get; init; }
+    public required byte[] MOperationId { get; init; }
+
+    public static ProposalVotePayloadQtryGOV ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new ProposalVotePayloadQtryGOV
+        {
+            MShareHolderFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            MBurnFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            MOperationFee = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            MFeePerDay = BinaryPrimitives.ReadInt64LittleEndian(data[24..]),
+            MDepositAmountForDispute = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
+            MOperationId = data[40..].Slice(0, 32).ToArray()
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), MShareHolderFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(8), MBurnFee);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(16), MOperationFee);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(24), MFeePerDay);
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(32), MDepositAmountForDispute);
+        MOperationId.AsSpan(0, 32).CopyTo(dest.Slice(40));
+    }
+}
+
 /// <summary>Input payload for procedure.</summary>
 public sealed class ProposalVotePayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 0;
+    public const int Size = 72;
 
     public ushort InputType => 100;
     public ushort InputSize => Size;
     public int SerializedSize => Size;
 
-    public byte[] Proposed { get; init; }
+    public ProposalVotePayloadQtryGOV Proposed { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
     public byte[] ToBytes()
     {
         var bytes = new byte[Size];
-        // TODO: serialize unknown type QtryGOV for Proposed
+        Proposed.WriteTo(bytes.AsSpan(0, 72));
         return bytes;
     }
 }

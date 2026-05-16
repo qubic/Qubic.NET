@@ -63,6 +63,64 @@ public static class VottunContract
 
 // ═══ Function: getOrder (inputType=1) ═══
 
+/// <summary>Nested type from GetOrderOutput.</summary>
+public readonly struct GetOrderOutputOrderResponse
+{
+    public const int Size = 224;
+
+    public required byte[] OriginAccount { get; init; }
+    public byte[] DestinationAccount { get; init; }
+    public ulong OrderId { get; init; }
+    public ulong Amount { get; init; }
+    public byte[] Memo { get; init; }
+    public uint SourceChain { get; init; }
+    public required byte[] QubicDestination { get; init; }
+    public byte Status { get; init; }
+
+    public static GetOrderOutputOrderResponse ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var destinationAccount = new byte[64];
+        for (int i = 0; i < 64; i++)
+        {
+            destinationAccount[i] = data.Slice(32 + i * 1, 1)[0];
+        }
+        var memo = new byte[64];
+        for (int i = 0; i < 64; i++)
+        {
+            memo[i] = data.Slice(112 + i * 1, 1)[0];
+        }
+        return new GetOrderOutputOrderResponse
+        {
+            OriginAccount = data[0..].Slice(0, 32).ToArray(),
+            DestinationAccount = destinationAccount,
+            OrderId = BinaryPrimitives.ReadUInt64LittleEndian(data[96..]),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[104..]),
+            Memo = memo,
+            SourceChain = BinaryPrimitives.ReadUInt32LittleEndian(data[176..]),
+            QubicDestination = data[184..].Slice(0, 32).ToArray(),
+            Status = data.Slice(216, 1)[0]
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        OriginAccount.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        for (int i = 0; i < 64 && DestinationAccount != null && i < DestinationAccount.Length; i++)
+        {
+            dest.Slice(32 + i * 1)[0] = DestinationAccount[i];
+        }
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(96), OrderId);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(104), Amount);
+        for (int i = 0; i < 64 && Memo != null && i < Memo.Length; i++)
+        {
+            dest.Slice(112 + i * 1)[0] = Memo[i];
+        }
+        BinaryPrimitives.WriteUInt32LittleEndian(dest.Slice(176), SourceChain);
+        QubicDestination.AsSpan(0, 32).CopyTo(dest.Slice(184));
+        dest.Slice(216, 1)[0] = Status;
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetOrderInput : ISmartContractInput
 {
@@ -84,7 +142,7 @@ public readonly struct GetOrderInput : ISmartContractInput
 public readonly struct GetOrderOutput : ISmartContractOutput<GetOrderOutput>
 {
     public byte Status { get; init; }
-    public byte[] Order { get; init; }
+    public GetOrderOutputOrderResponse Order { get; init; }
     public byte[] Message { get; init; }
 
     public static GetOrderOutput FromBytes(ReadOnlySpan<byte> data)
@@ -92,12 +150,12 @@ public readonly struct GetOrderOutput : ISmartContractOutput<GetOrderOutput>
         var message = new byte[32];
         for (int i = 0; i < 32; i++)
         {
-            message[i] = data.Slice(1 + i * 1, 1)[0];
+            message[i] = data.Slice(232 + i * 1, 1)[0];
         }
         return new GetOrderOutput
         {
             Status = data.Slice(0, 1)[0],
-            Order = [] /* unknown type OrderResponse */,
+            Order = GetOrderOutputOrderResponse.ReadFrom(data.Slice(8, 224)),
             Message = message
         };
     }
@@ -228,6 +286,62 @@ public readonly struct GetOrderByDetailsOutput : ISmartContractOutput<GetOrderBy
 
 // ═══ Function: getContractInfo (inputType=6) ═══
 
+/// <summary>Nested type from GetContractInfoOutput.</summary>
+public readonly struct GetContractInfoOutputBridgeOrder
+{
+    public const int Size = 152;
+
+    public required byte[] QubicSender { get; init; }
+    public required byte[] QubicDestination { get; init; }
+    public byte[] EthAddress { get; init; }
+    public ulong OrderId { get; init; }
+    public ulong Amount { get; init; }
+    public byte OrderType { get; init; }
+    public byte Status { get; init; }
+    public bool FromQubicToEthereum { get; init; }
+    public bool TokensReceived { get; init; }
+    public bool TokensLocked { get; init; }
+
+    public static GetContractInfoOutputBridgeOrder ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var ethAddress = new byte[64];
+        for (int i = 0; i < 64; i++)
+        {
+            ethAddress[i] = data.Slice(64 + i * 1, 1)[0];
+        }
+        return new GetContractInfoOutputBridgeOrder
+        {
+            QubicSender = data[0..].Slice(0, 32).ToArray(),
+            QubicDestination = data[32..].Slice(0, 32).ToArray(),
+            EthAddress = ethAddress,
+            OrderId = BinaryPrimitives.ReadUInt64LittleEndian(data[128..]),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[136..]),
+            OrderType = data.Slice(144, 1)[0],
+            Status = data.Slice(145, 1)[0],
+            FromQubicToEthereum = (data.Slice(146, 1)[0] != 0),
+            TokensReceived = (data.Slice(147, 1)[0] != 0),
+            TokensLocked = (data.Slice(148, 1)[0] != 0)
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        QubicSender.AsSpan(0, 32).CopyTo(dest.Slice(0));
+        QubicDestination.AsSpan(0, 32).CopyTo(dest.Slice(32));
+        for (int i = 0; i < 64 && EthAddress != null && i < EthAddress.Length; i++)
+        {
+            dest.Slice(64 + i * 1)[0] = EthAddress[i];
+        }
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(128), OrderId);
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(136), Amount);
+        dest.Slice(144, 1)[0] = OrderType;
+        dest.Slice(145, 1)[0] = Status;
+        dest.Slice(146, 1)[0] = (byte)(FromQubicToEthereum ? 1 : 0);
+        dest.Slice(147, 1)[0] = (byte)(TokensReceived ? 1 : 0);
+        dest.Slice(148, 1)[0] = (byte)(TokensLocked ? 1 : 0);
+    }
+}
+
 /// <summary>Input for query (empty).</summary>
 public readonly struct GetContractInfoInput : ISmartContractInput
 {
@@ -245,7 +359,7 @@ public readonly struct GetContractInfoOutput : ISmartContractOutput<GetContractI
     public ulong EarnedFees { get; init; }
     public uint TradeFeeBillionths { get; init; }
     public uint SourceChain { get; init; }
-    public byte[] FirstOrders { get; init; }
+    public GetContractInfoOutputBridgeOrder[] FirstOrders { get; init; }
     public ulong TotalOrdersFound { get; init; }
     public ulong EmptySlots { get; init; }
     public byte[][] MultisigAdmins { get; init; }
@@ -260,10 +374,15 @@ public readonly struct GetContractInfoOutput : ISmartContractOutput<GetContractI
         {
             managers[i] = data[(0 + i * 32)..].Slice(0, 32).ToArray();
         }
+        var firstOrders = new GetContractInfoOutputBridgeOrder[16];
+        for (int i = 0; i < 16; i++)
+        {
+            firstOrders[i] = GetContractInfoOutputBridgeOrder.ReadFrom(data.Slice(552 + i * GetContractInfoOutputBridgeOrder.Size, GetContractInfoOutputBridgeOrder.Size));
+        }
         var multisigAdmins = new byte[16][];
         for (int i = 0; i < 16; i++)
         {
-            multisigAdmins[i] = data[(568 + i * 32)..].Slice(0, 32).ToArray();
+            multisigAdmins[i] = data[(3000 + i * 32)..].Slice(0, 32).ToArray();
         }
         return new GetContractInfoOutput
         {
@@ -274,13 +393,13 @@ public readonly struct GetContractInfoOutput : ISmartContractOutput<GetContractI
             EarnedFees = BinaryPrimitives.ReadUInt64LittleEndian(data[536..]),
             TradeFeeBillionths = BinaryPrimitives.ReadUInt32LittleEndian(data[544..]),
             SourceChain = BinaryPrimitives.ReadUInt32LittleEndian(data[548..]),
-            FirstOrders = [] /* unknown struct array BridgeOrder */,
-            TotalOrdersFound = BinaryPrimitives.ReadUInt64LittleEndian(data[552..]),
-            EmptySlots = BinaryPrimitives.ReadUInt64LittleEndian(data[560..]),
+            FirstOrders = firstOrders,
+            TotalOrdersFound = BinaryPrimitives.ReadUInt64LittleEndian(data[2984..]),
+            EmptySlots = BinaryPrimitives.ReadUInt64LittleEndian(data[2992..]),
             MultisigAdmins = multisigAdmins,
-            NumberOfAdmins = data.Slice(1080, 1)[0],
-            RequiredApprovals = data.Slice(1081, 1)[0],
-            TotalProposals = BinaryPrimitives.ReadUInt64LittleEndian(data[1088..])
+            NumberOfAdmins = data.Slice(3512, 1)[0],
+            RequiredApprovals = data.Slice(3513, 1)[0],
+            TotalProposals = BinaryPrimitives.ReadUInt64LittleEndian(data[3520..])
         };
     }
 }
@@ -314,6 +433,59 @@ public readonly struct GetAvailableFeesOutput : ISmartContractOutput<GetAvailabl
 
 // ═══ Function: getProposal (inputType=8) ═══
 
+/// <summary>Nested type from GetProposalOutput.</summary>
+public readonly struct GetProposalOutputAdminProposal
+{
+    public const int Size = 608;
+
+    public ulong ProposalId { get; init; }
+    public byte ProposalType { get; init; }
+    public required byte[] TargetAddress { get; init; }
+    public required byte[] OldAddress { get; init; }
+    public ulong Amount { get; init; }
+    public required byte[][] Approvals { get; init; }
+    public byte ApprovalsCount { get; init; }
+    public bool Executed { get; init; }
+    public bool Active { get; init; }
+
+    public static GetProposalOutputAdminProposal ReadFrom(ReadOnlySpan<byte> data)
+    {
+        var approvals = new byte[16][];
+        for (int i = 0; i < 16; i++)
+        {
+            approvals[i] = data[(88 + i * 32)..].Slice(0, 32).ToArray();
+        }
+        return new GetProposalOutputAdminProposal
+        {
+            ProposalId = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            ProposalType = data.Slice(8, 1)[0],
+            TargetAddress = data[16..].Slice(0, 32).ToArray(),
+            OldAddress = data[48..].Slice(0, 32).ToArray(),
+            Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[80..]),
+            Approvals = approvals,
+            ApprovalsCount = data.Slice(600, 1)[0],
+            Executed = (data.Slice(601, 1)[0] != 0),
+            Active = (data.Slice(602, 1)[0] != 0)
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(0), ProposalId);
+        dest.Slice(8, 1)[0] = ProposalType;
+        TargetAddress.AsSpan(0, 32).CopyTo(dest.Slice(16));
+        OldAddress.AsSpan(0, 32).CopyTo(dest.Slice(48));
+        BinaryPrimitives.WriteUInt64LittleEndian(dest.Slice(80), Amount);
+        for (int i = 0; i < 16 && Approvals != null && i < Approvals.Length; i++)
+        {
+            Approvals[i].AsSpan(0, 32).CopyTo(dest.Slice(88 + i * 32));
+        }
+        dest.Slice(600, 1)[0] = ApprovalsCount;
+        dest.Slice(601, 1)[0] = (byte)(Executed ? 1 : 0);
+        dest.Slice(602, 1)[0] = (byte)(Active ? 1 : 0);
+    }
+}
+
 /// <summary>Input for query.</summary>
 public readonly struct GetProposalInput : ISmartContractInput
 {
@@ -335,14 +507,14 @@ public readonly struct GetProposalInput : ISmartContractInput
 public readonly struct GetProposalOutput : ISmartContractOutput<GetProposalOutput>
 {
     public byte Status { get; init; }
-    public byte[] Proposal { get; init; }
+    public GetProposalOutputAdminProposal Proposal { get; init; }
 
     public static GetProposalOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetProposalOutput
         {
             Status = data.Slice(0, 1)[0],
-            Proposal = [] /* unknown type AdminProposal */
+            Proposal = GetProposalOutputAdminProposal.ReadFrom(data.Slice(8, 608))
         };
     }
 }

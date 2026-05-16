@@ -21,6 +21,8 @@ public static class TypeMapper
         ["bool"] = new("bool", 1, 1),
         // Asset contains id (m256i) → 8-byte alignment
         ["Asset"] = new("QubicAsset", 40, 8, false),
+        // DateAndTime from qpi.h is just a uint64 value internally.
+        ["DateAndTime"] = new("ulong", 8, 8),
     };
 
     public static bool IsPrimitive(string cppType) => PrimitiveTypes.ContainsKey(cppType);
@@ -67,6 +69,7 @@ public static class TypeMapper
             "sint8" => $"(sbyte){spanExpr}[0]",
             "bit" or "bool" => $"({spanExpr}[0] != 0)",
             "Asset" => $"QubicAsset.ReadFrom({spanExpr})",
+            "DateAndTime" => $"BinaryPrimitives.ReadUInt64LittleEndian({spanExpr})",
             _ => $"default /* TODO: unknown type {cppType} */"
         };
     }
@@ -101,6 +104,7 @@ public static class TypeMapper
             "sint8" => $"{destExpr}[0] = (byte){valueExpr};",
             "bit" or "bool" => $"{destExpr}[0] = (byte)({valueExpr} ? 1 : 0);",
             "Asset" => $"{valueExpr}.WriteTo({destExpr});",
+            "DateAndTime" => $"BinaryPrimitives.WriteUInt64LittleEndian({destExpr}, {valueExpr});",
             _ => $"// TODO: serialize unknown type {cppType}"
         };
     }

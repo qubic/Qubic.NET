@@ -10,6 +10,24 @@ public class CppHeaderParser
     private readonly Dictionary<string, string> _contractTypedefs = new(); // typedefs inside the contract struct
     private readonly List<string> _warnings = [];
 
+    // Well-known structs defined in qpi.h. Hand-rolled because we only parse one
+    // header per contract and qpi.h isn't on that path. Sizes verified against
+    // static_assert lines in qpi.h.
+    private static readonly Dictionary<string, StructDef> QpiKnownStructs = new()
+    {
+        ["ProposalSingleVoteDataV1"] = new StructDef
+        {
+            CppName = "ProposalSingleVoteDataV1",
+            Fields =
+            [
+                new FieldDef { CppType = "uint16", Name = "proposalIndex" },
+                new FieldDef { CppType = "uint16", Name = "proposalType" },
+                new FieldDef { CppType = "uint32", Name = "proposalTick" },
+                new FieldDef { CppType = "sint64", Name = "voteValue" },
+            ]
+        }
+    };
+
     public List<string> Warnings => _warnings;
 
     public ContractDefinition Parse(string headerPath, int contractIndex, string csharpName, string cppStructName)
@@ -54,6 +72,8 @@ public class CppHeaderParser
             var func = new FunctionDef { Name = name, InputType = id };
             func.Input = ResolveStruct(structDefs, $"{name}_input", name, "input");
             func.Output = ResolveStruct(structDefs, $"{name}_output", name, "output");
+            ResolveNestedStructFields(func.Input);
+            ResolveNestedStructFields(func.Output);
             contract.Functions.Add(func);
         }
 
@@ -62,10 +82,81 @@ public class CppHeaderParser
             var proc = new ProcedureDef { Name = name, InputType = id };
             proc.Input = ResolveStruct(structDefs, $"{name}_input", name, "input");
             proc.Output = ResolveStruct(structDefs, $"{name}_output", name, "output");
+            ResolveNestedStructFields(proc.Input);
+            ResolveNestedStructFields(proc.Output);
             contract.Procedures.Add(proc);
         }
 
         return contract;
+    }
+
+    /// <summary>
+    /// For each non-primitive, non-array field, look up its struct in our
+    /// collected file-scope and contract-internal struct registries and attach
+    /// it to the parent's NestedStructs list so the emitter can size and
+    /// serialize it. Recurses into the attached struct so multi-level nesting
+    /// (e.g., QtryEventInfo contains DateAndTime) works.
+    /// </summary>
+    private void ResolveNestedStructFields(StructDef def)
+    {
+        // Use a visited set to handle structs that reference themselves transitively.
+        ResolveNestedStructFieldsImpl(def, []);
+    }
+
+    private void ResolveNestedStructFieldsImpl(StructDef def, HashSet<string> visited)
+    {
+        if (!string.IsNullOrEmpty(def.CppName) && !visited.Add(def.CppName))
+            return;
+
+        var seenInThisStruct = new HashSet<string>(def.NestedStructs.Select(n => n.CppName));
+
+        foreach (var field in def.Fields)
+        {
+            // Plain (non-array) field whose type is a non-primitive struct we know about.
+            if (!field.IsArray && !TypeMapper.IsPrimitive(field.CppType))
+            {
+                var resolved = LookupStruct(field.CppType);
+                if (resolved != null)
+                {
+                    field.NestedStructTypeName = field.CppType;
+                    if (seenInThisStruct.Add(resolved.CppName))
+                    {
+                        def.NestedStructs.Add(resolved);
+                        ResolveNestedStructFieldsImpl(resolved, visited);
+                    }
+                }
+            }
+            // Array of structs: ParseFieldLine already sets NestedStructTypeName for
+            // non-primitive element types. Make sure the struct is attached to def.NestedStructs.
+            else if (field.IsArray && field.NestedStructTypeName != null
+                     && !TypeMapper.IsPrimitive(field.ArrayElementType ?? field.CppType))
+            {
+                if (!seenInThisStruct.Contains(field.NestedStructTypeName))
+                {
+                    var resolved = LookupStruct(field.NestedStructTypeName);
+                    if (resolved != null)
+                    {
+                        seenInThisStruct.Add(resolved.CppName);
+                        def.NestedStructs.Add(resolved);
+                        ResolveNestedStructFieldsImpl(resolved, visited);
+                    }
+                }
+                else
+                {
+                    // Already attached — still recurse so its sub-nested types get resolved.
+                    var existing = def.NestedStructs.First(n => n.CppName == field.NestedStructTypeName);
+                    ResolveNestedStructFieldsImpl(existing, visited);
+                }
+            }
+        }
+    }
+
+    private StructDef? LookupStruct(string typeName)
+    {
+        if (_fileStructs.TryGetValue(typeName, out var fs)) return fs;
+        if (_contractInternalStructs.TryGetValue(typeName, out var cs)) return cs;
+        if (QpiKnownStructs.TryGetValue(typeName, out var qs)) return qs;
+        return null;
     }
 
     // QPI array typedefs from qpi.h (e.g., id_8 = Array<id, 8>)
@@ -350,7 +441,12 @@ public class CppHeaderParser
             {
                 var sourceType = tdm.Groups[1].Value.Trim();
                 var targetName = $"{tdm.Groups[2].Value}_{tdm.Groups[3].Value}";
-                var sd = ResolveTypedefToStruct(sourceType);
+                // Source may already exist in `result` (e.g., struct Success_output { ... }
+                // was captured as result["Success_output"] by the _input/_output regex).
+                // Prefer that over ResolveTypedefToStruct's narrower lookup.
+                var sd = result.TryGetValue(sourceType, out var existing)
+                    ? existing
+                    : ResolveTypedefToStruct(sourceType);
                 result[targetName] = sd;
                 continue;
             }
@@ -381,7 +477,10 @@ public class CppHeaderParser
             // Inside a _input/_output struct (or __internal__ struct)
             if (currentStructName != null)
             {
-                if (braceClose > 0 && depth <= structDepth)
+                // structDepth is the struct's body depth. After braceClose, depth drops
+                // below body depth → struct is closed. (Using < not <= so a method's
+                // closing `}` inside the struct body doesn't end the struct itself.)
+                if (braceClose > 0 && depth < structDepth)
                 {
                     // Closing the struct
                     var closedDef = new StructDef
@@ -421,7 +520,10 @@ public class CppHeaderParser
                     continue;
                 }
 
-                if (currentFields != null)
+                // Only treat as a field at the struct's immediate body depth.
+                // Anything deeper is inside a method body, sub-block, etc. — skip,
+                // otherwise we'd misparse expressions like `mFoo != NULL_ID;` as fields.
+                if (currentFields != null && depth == structDepth)
                     ParseFieldLine(line, currentFields, []);
                 continue;
             }
@@ -431,6 +533,10 @@ public class CppHeaderParser
             if (sm.Success && (inPublic || depth == 1) && !line.Contains("_locals"))
             {
                 var sName = $"{sm.Groups[1].Value}_{sm.Groups[2].Value}";
+                // Forward declaration `struct Name_input;` — no body, skip entirely so
+                // we don't enter struct-parse mode and swallow the rest of the contract.
+                if (braceOpen == 0 && line.TrimEnd().EndsWith(';'))
+                    continue;
                 // Handle single-line empty structs: struct name_input {};
                 if (braceOpen > 0 && braceClose > 0 && braceOpen == braceClose)
                 {
@@ -440,7 +546,10 @@ public class CppHeaderParser
                 currentStructName = sName;
                 currentFields = [];
                 currentNested = [];
-                structDepth = depth;
+                // structDepth = depth INSIDE the struct's body. When `{` is on the same
+                // line, `depth` has already been incremented to that value; when on the
+                // next line, body depth is depth+1.
+                structDepth = braceOpen > 0 ? depth : depth + 1;
                 continue;
             }
 
@@ -452,6 +561,10 @@ public class CppHeaderParser
                 && !line.Contains("_locals") && !line.Contains("_input") && !line.Contains("_output"))
             {
                 var structName = gsm.Groups[1].Value;
+                // Forward declaration `struct Name;` — skip; otherwise we trap the parser
+                // in a phantom struct that swallows every subsequent declaration.
+                if (braceOpen == 0 && line.TrimEnd().EndsWith(';'))
+                    continue;
                 // Handle single-line empty structs: struct Name {};
                 if (braceOpen > 0 && braceClose > 0 && braceOpen == braceClose)
                 {
@@ -462,7 +575,7 @@ public class CppHeaderParser
                 currentStructName = $"__internal__{structName}";
                 currentFields = [];
                 currentNested = [];
-                structDepth = depth;
+                structDepth = braceOpen > 0 ? depth : depth + 1;
                 continue;
             }
 
@@ -536,6 +649,10 @@ public class CppHeaderParser
         // Check if it's a contract-internal struct
         if (_contractInternalStructs.TryGetValue(sourceType, out var cisd))
             return cisd;
+
+        // Check if it's a well-known qpi.h struct
+        if (QpiKnownStructs.TryGetValue(sourceType, out var qsd))
+            return qsd;
 
         // Check if it's a file-level typedef alias (e.g., typedef Array<T,N> Name)
         if (_fileTypedefs.TryGetValue(sourceType, out var typedefTarget))
