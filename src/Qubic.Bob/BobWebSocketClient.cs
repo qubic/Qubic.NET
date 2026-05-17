@@ -1105,12 +1105,21 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
         return CallAsync<List<BobTransferResponse>>("qubic_getTransfers", parameters.ToArray(), cancellationToken);
     }
 
-    /// <summary>Gets the asset balance for an identity and asset.</summary>
+    /// <summary>
+    /// Gets the asset balance for an identity. <paramref name="manageSCIndex"/> must
+    /// be the contract index that manages this asset's shares — 0 for issuer-managed
+    /// assets, 1 (Qx) for QDOGE and other QX-managed shares, etc. Passing the wrong
+    /// index makes the node return -1 for both balances.
+    /// </summary>
     public Task<BobAssetBalanceResponse?> GetAssetBalanceAsync(
         string identity,
-        string assetId,
+        string issuer,
+        string assetName,
+        uint manageSCIndex = 0,
         CancellationToken cancellationToken = default)
-        => CallAsync<BobAssetBalanceResponse?>("qubic_getAssetBalance", new object[] { identity, assetId }, cancellationToken);
+        => CallAsync<BobAssetBalanceResponse?>("qubic_getAssetBalance",
+            new object[] { identity, issuer, assetName, manageSCIndex },
+            cancellationToken);
 
     // --- Transactions ---
 

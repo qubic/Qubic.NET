@@ -136,16 +136,26 @@ public sealed class BobClient : IDisposable
     }
 
     /// <summary>
-    /// Gets asset balance for an identity.
+    /// Gets the asset balance for an identity. <paramref name="manageSCIndex"/> must
+    /// be the contract index that manages this asset's shares — 0 for issuer-managed
+    /// assets, 1 (Qx) for QDOGE and other QX-managed shares, etc. Passing the wrong
+    /// index makes the node return -1 for both balances.
     /// </summary>
+    /// <remarks>
+    /// <see cref="QubicAssetBalance.NumberOfShares"/> is populated from the response's
+    /// <c>possessionBalance</c> — that's the amount actually controlled by the owner.
+    /// Use <see cref="QubicBackendService.GetAssetBalanceFullAsync"/> /
+    /// <see cref="BobWebSocketClient.GetAssetBalanceAsync"/> directly if you need both.
+    /// </remarks>
     public async Task<QubicAssetBalance?> GetAssetBalanceAsync(
         QubicIdentity identity,
-        string assetId,
+        QubicAsset asset,
+        uint manageSCIndex = 0,
         CancellationToken cancellationToken = default)
     {
         var response = await CallAsync<BobAssetBalanceResponse>(
             "qubic_getAssetBalance",
-            new object[] { identity.Identity, assetId },
+            new object[] { identity.Identity, asset.Issuer.Identity, asset.Name, manageSCIndex },
             cancellationToken);
 
         if (response is null || string.IsNullOrEmpty(response.Issuer))
@@ -159,7 +169,7 @@ public sealed class BobClient : IDisposable
                 Name = response.AssetName
             },
             Owner = identity,
-            NumberOfShares = response.AmountValue
+            NumberOfShares = response.PossessionBalanceValue
         };
     }
 
