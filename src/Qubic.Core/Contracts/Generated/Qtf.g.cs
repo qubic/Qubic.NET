@@ -92,8 +92,8 @@ public readonly struct GetTicketPriceOutput : ISmartContractOutput<GetTicketPric
 
 // ═══ Function: GetNextEpochData (inputType=2) ═══
 
-/// <summary>Nested type from GetNextEpochDataOutput.</summary>
-public readonly struct GetNextEpochDataOutputNextEpochData
+/// <summary>Nested type from GetNextEpochData.</summary>
+public readonly struct GetNextEpochDataNextEpochData
 {
     public const int Size = 24;
 
@@ -102,9 +102,9 @@ public readonly struct GetNextEpochDataOutputNextEpochData
     public byte NewSchedule { get; init; }
     public byte NewDrawHour { get; init; }
 
-    public static GetNextEpochDataOutputNextEpochData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetNextEpochDataNextEpochData ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetNextEpochDataOutputNextEpochData
+        return new GetNextEpochDataNextEpochData
         {
             NewTicketPrice = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             NewTargetJackpot = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
@@ -132,21 +132,21 @@ public readonly struct GetNextEpochDataInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetNextEpochDataOutput : ISmartContractOutput<GetNextEpochDataOutput>
 {
-    public GetNextEpochDataOutputNextEpochData NextEpochData { get; init; }
+    public GetNextEpochDataNextEpochData NextEpochData { get; init; }
 
     public static GetNextEpochDataOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetNextEpochDataOutput
         {
-            NextEpochData = GetNextEpochDataOutputNextEpochData.ReadFrom(data.Slice(0, 24))
+            NextEpochData = GetNextEpochDataNextEpochData.ReadFrom(data.Slice(0, 24))
         };
     }
 }
 
 // ═══ Function: GetWinnerData (inputType=3) ═══
 
-/// <summary>Nested type from GetWinnerDataOutputWinnerData.</summary>
-public readonly struct GetWinnerDataOutputWinnerDataWinnerPlayerData
+/// <summary>Nested type from GetWinnerDataWinnerData.</summary>
+public readonly struct GetWinnerDataWinnerDataWinnerPlayerData
 {
     public const int Size = 40;
 
@@ -154,14 +154,14 @@ public readonly struct GetWinnerDataOutputWinnerDataWinnerPlayerData
     public byte[] RandomValues { get; init; }
     public uint WonAmount { get; init; }
 
-    public static GetWinnerDataOutputWinnerDataWinnerPlayerData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetWinnerDataWinnerDataWinnerPlayerData ReadFrom(ReadOnlySpan<byte> data)
     {
         var randomValues = new byte[4];
         for (int i = 0; i < 4; i++)
         {
             randomValues[i] = data.Slice(32 + i * 1, 1)[0];
         }
-        return new GetWinnerDataOutputWinnerDataWinnerPlayerData
+        return new GetWinnerDataWinnerDataWinnerPlayerData
         {
             Player = data[0..].Slice(0, 32).ToArray(),
             RandomValues = randomValues,
@@ -180,29 +180,29 @@ public readonly struct GetWinnerDataOutputWinnerDataWinnerPlayerData
     }
 }
 
-/// <summary>Nested type from GetWinnerDataOutput.</summary>
-public readonly struct GetWinnerDataOutputWinnerData
+/// <summary>Nested type from GetWinnerData.</summary>
+public readonly struct GetWinnerDataWinnerData
 {
     public const int Size = 40984;
 
-    public GetWinnerDataOutputWinnerDataWinnerPlayerData[] Winners { get; init; }
+    public GetWinnerDataWinnerDataWinnerPlayerData[] Winners { get; init; }
     public byte[] WinnerValues { get; init; }
     public ulong WinnerCounter { get; init; }
     public ushort Epoch { get; init; }
 
-    public static GetWinnerDataOutputWinnerData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetWinnerDataWinnerData ReadFrom(ReadOnlySpan<byte> data)
     {
-        var winners = new GetWinnerDataOutputWinnerDataWinnerPlayerData[1024];
+        var winners = new GetWinnerDataWinnerDataWinnerPlayerData[1024];
         for (int i = 0; i < 1024; i++)
         {
-            winners[i] = GetWinnerDataOutputWinnerDataWinnerPlayerData.ReadFrom(data.Slice(0 + i * 40, 40));
+            winners[i] = GetWinnerDataWinnerDataWinnerPlayerData.ReadFrom(data.Slice(0 + i * 40, 40));
         }
         var winnerValues = new byte[4];
         for (int i = 0; i < 4; i++)
         {
             winnerValues[i] = data.Slice(40960 + i * 1, 1)[0];
         }
-        return new GetWinnerDataOutputWinnerData
+        return new GetWinnerDataWinnerData
         {
             Winners = winners,
             WinnerValues = winnerValues,
@@ -236,21 +236,21 @@ public readonly struct GetWinnerDataInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetWinnerDataOutput : ISmartContractOutput<GetWinnerDataOutput>
 {
-    public GetWinnerDataOutputWinnerData WinnerData { get; init; }
+    public GetWinnerDataWinnerData WinnerData { get; init; }
 
     public static GetWinnerDataOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetWinnerDataOutput
         {
-            WinnerData = GetWinnerDataOutputWinnerData.ReadFrom(data.Slice(0, 40984))
+            WinnerData = GetWinnerDataWinnerData.ReadFrom(data.Slice(0, 40984))
         };
     }
 }
 
 // ═══ Function: GetPools (inputType=4) ═══
 
-/// <summary>Nested type from GetPoolsOutput.</summary>
-public readonly struct GetPoolsOutputPoolsSnapshot
+/// <summary>Nested type from GetPools.</summary>
+public readonly struct GetPoolsPoolsSnapshot
 {
     public const int Size = 32;
 
@@ -260,9 +260,9 @@ public readonly struct GetPoolsOutputPoolsSnapshot
     public byte FrActive { get; init; }
     public ushort RoundsSinceK4 { get; init; }
 
-    public static GetPoolsOutputPoolsSnapshot ReadFrom(ReadOnlySpan<byte> data)
+    public static GetPoolsPoolsSnapshot ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetPoolsOutputPoolsSnapshot
+        return new GetPoolsPoolsSnapshot
         {
             Jackpot = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             Reserve = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
@@ -292,13 +292,13 @@ public readonly struct GetPoolsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPoolsOutput : ISmartContractOutput<GetPoolsOutput>
 {
-    public GetPoolsOutputPoolsSnapshot Pools { get; init; }
+    public GetPoolsPoolsSnapshot Pools { get; init; }
 
     public static GetPoolsOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetPoolsOutput
         {
-            Pools = GetPoolsOutputPoolsSnapshot.ReadFrom(data.Slice(0, 32))
+            Pools = GetPoolsPoolsSnapshot.ReadFrom(data.Slice(0, 32))
         };
     }
 }
@@ -454,22 +454,22 @@ public readonly struct EstimatePrizePayoutsOutput : ISmartContractOutput<Estimat
 
 // ═══ Function: GetPlayers (inputType=10) ═══
 
-/// <summary>Nested type from GetPlayersOutput.</summary>
-public readonly struct GetPlayersOutputPlayerData
+/// <summary>Nested type from GetPlayers.</summary>
+public readonly struct GetPlayersPlayerData
 {
     public const int Size = 40;
 
     public required byte[] Player { get; init; }
     public byte[] RandomValues { get; init; }
 
-    public static GetPlayersOutputPlayerData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetPlayersPlayerData ReadFrom(ReadOnlySpan<byte> data)
     {
         var randomValues = new byte[4];
         for (int i = 0; i < 4; i++)
         {
             randomValues[i] = data.Slice(32 + i * 1, 1)[0];
         }
-        return new GetPlayersOutputPlayerData
+        return new GetPlayersPlayerData
         {
             Player = data[0..].Slice(0, 32).ToArray(),
             RandomValues = randomValues
@@ -496,15 +496,15 @@ public readonly struct GetPlayersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
 {
-    public GetPlayersOutputPlayerData[] Players { get; init; }
+    public GetPlayersPlayerData[] Players { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetPlayersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var players = new GetPlayersOutputPlayerData[1024];
+        var players = new GetPlayersPlayerData[1024];
         for (int i = 0; i < 1024; i++)
         {
-            players[i] = GetPlayersOutputPlayerData.ReadFrom(data.Slice(0 + i * GetPlayersOutputPlayerData.Size, GetPlayersOutputPlayerData.Size));
+            players[i] = GetPlayersPlayerData.ReadFrom(data.Slice(0 + i * GetPlayersPlayerData.Size, GetPlayersPlayerData.Size));
         }
         return new GetPlayersOutput
         {
@@ -516,21 +516,21 @@ public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
 
 // ═══ Function: GetWinningCombinationsHistory (inputType=11) ═══
 
-/// <summary>Nested type from GetWinningCombinationsHistoryOutput.</summary>
-public readonly struct GetWinningCombinationsHistoryOutputWinningCombination
+/// <summary>Nested type from GetWinningCombinationsHistory.</summary>
+public readonly struct GetWinningCombinationsHistoryWinningCombination
 {
     public const int Size = 4;
 
     public byte[] Values { get; init; }
 
-    public static GetWinningCombinationsHistoryOutputWinningCombination ReadFrom(ReadOnlySpan<byte> data)
+    public static GetWinningCombinationsHistoryWinningCombination ReadFrom(ReadOnlySpan<byte> data)
     {
         var values = new byte[4];
         for (int i = 0; i < 4; i++)
         {
             values[i] = data.Slice(0 + i * 1, 1)[0];
         }
-        return new GetWinningCombinationsHistoryOutputWinningCombination
+        return new GetWinningCombinationsHistoryWinningCombination
         {
             Values = values
         };
@@ -555,15 +555,15 @@ public readonly struct GetWinningCombinationsHistoryInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetWinningCombinationsHistoryOutput : ISmartContractOutput<GetWinningCombinationsHistoryOutput>
 {
-    public GetWinningCombinationsHistoryOutputWinningCombination[] History { get; init; }
+    public GetWinningCombinationsHistoryWinningCombination[] History { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetWinningCombinationsHistoryOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var history = new GetWinningCombinationsHistoryOutputWinningCombination[128];
+        var history = new GetWinningCombinationsHistoryWinningCombination[128];
         for (int i = 0; i < 128; i++)
         {
-            history[i] = GetWinningCombinationsHistoryOutputWinningCombination.ReadFrom(data.Slice(0 + i * GetWinningCombinationsHistoryOutputWinningCombination.Size, GetWinningCombinationsHistoryOutputWinningCombination.Size));
+            history[i] = GetWinningCombinationsHistoryWinningCombination.ReadFrom(data.Slice(0 + i * GetWinningCombinationsHistoryWinningCombination.Size, GetWinningCombinationsHistoryWinningCombination.Size));
         }
         return new GetWinningCombinationsHistoryOutput
         {

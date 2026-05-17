@@ -88,8 +88,8 @@ public readonly struct GetPercentFeesOutput : ISmartContractOutput<GetPercentFee
 
 // ═══ Function: GetRooms (inputType=2) ═══
 
-/// <summary>Nested type from GetRoomsOutput.</summary>
-public readonly struct GetRoomsOutputRoomInfo
+/// <summary>Nested type from GetRooms.</summary>
+public readonly struct GetRoomsRoomInfo
 {
     public const int Size = 120;
 
@@ -100,9 +100,9 @@ public readonly struct GetRoomsOutputRoomInfo
     public ulong CloseTimer { get; init; }
     public ulong LastUpdate { get; init; }
 
-    public static GetRoomsOutputRoomInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetRoomsRoomInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetRoomsOutputRoomInfo
+        return new GetRoomsRoomInfo
         {
             RoomId = data[0..].Slice(0, 32).ToArray(),
             Owner = data[32..].Slice(0, 32).ToArray(),
@@ -134,15 +134,15 @@ public readonly struct GetRoomsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetRoomsOutput : ISmartContractOutput<GetRoomsOutput>
 {
-    public GetRoomsOutputRoomInfo[] Rooms { get; init; }
+    public GetRoomsRoomInfo[] Rooms { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetRoomsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var rooms = new GetRoomsOutputRoomInfo[512];
+        var rooms = new GetRoomsRoomInfo[512];
         for (int i = 0; i < 512; i++)
         {
-            rooms[i] = GetRoomsOutputRoomInfo.ReadFrom(data.Slice(0 + i * GetRoomsOutputRoomInfo.Size, GetRoomsOutputRoomInfo.Size));
+            rooms[i] = GetRoomsRoomInfo.ReadFrom(data.Slice(0 + i * GetRoomsRoomInfo.Size, GetRoomsRoomInfo.Size));
         }
         return new GetRoomsOutput
         {
@@ -263,8 +263,8 @@ public readonly struct CalculateRevenueOutput : ISmartContractOutput<CalculateRe
 
 // ═══ Function: GetLastWinners (inputType=6) ═══
 
-/// <summary>Nested type from GetLastWinnersOutput.</summary>
-public readonly struct GetLastWinnersOutputWinnerData
+/// <summary>Nested type from GetLastWinners.</summary>
+public readonly struct GetLastWinnersWinnerData
 {
     public const int Size = 104;
 
@@ -273,9 +273,9 @@ public readonly struct GetLastWinnersOutputWinnerData
     public required byte[] Winner { get; init; }
     public ulong Revenue { get; init; }
 
-    public static GetLastWinnersOutputWinnerData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetLastWinnersWinnerData ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetLastWinnersOutputWinnerData
+        return new GetLastWinnersWinnerData
         {
             Player1 = data[0..].Slice(0, 32).ToArray(),
             Player2 = data[32..].Slice(0, 32).ToArray(),
@@ -303,15 +303,15 @@ public readonly struct GetLastWinnersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetLastWinnersOutput : ISmartContractOutput<GetLastWinnersOutput>
 {
-    public GetLastWinnersOutputWinnerData[] Winners { get; init; }
+    public GetLastWinnersWinnerData[] Winners { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetLastWinnersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var winners = new GetLastWinnersOutputWinnerData[128];
+        var winners = new GetLastWinnersWinnerData[128];
         for (int i = 0; i < 128; i++)
         {
-            winners[i] = GetLastWinnersOutputWinnerData.ReadFrom(data.Slice(0 + i * GetLastWinnersOutputWinnerData.Size, GetLastWinnersOutputWinnerData.Size));
+            winners[i] = GetLastWinnersWinnerData.ReadFrom(data.Slice(0 + i * GetLastWinnersWinnerData.Size, GetLastWinnersWinnerData.Size));
         }
         return new GetLastWinnersOutput
         {

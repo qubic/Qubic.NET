@@ -91,8 +91,8 @@ public readonly struct GetProposalIndicesOutput : ISmartContractOutput<GetPropos
 
 // ═══ Function: GetProposal (inputType=2) ═══
 
-/// <summary>Nested type from GetProposalOutput.</summary>
-public readonly struct GetProposalOutputSubscriptionData
+/// <summary>Nested type from GetProposal.</summary>
+public readonly struct GetProposalSubscriptionData
 {
     public const int Size = 312;
 
@@ -106,7 +106,7 @@ public readonly struct GetProposalOutputSubscriptionData
     public uint StartEpoch { get; init; }
     public int CurrentPeriod { get; init; }
 
-    public static GetProposalOutputSubscriptionData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetProposalSubscriptionData ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
@@ -123,7 +123,7 @@ public readonly struct GetProposalOutputSubscriptionData
         {
             _padding2[i] = data.Slice(290 + i * 1, 1)[0];
         }
-        return new GetProposalOutputSubscriptionData
+        return new GetProposalSubscriptionData
         {
             Destination = data[0..].Slice(0, 32).ToArray(),
             Url = url,
@@ -160,8 +160,8 @@ public readonly struct GetProposalOutputSubscriptionData
     }
 }
 
-/// <summary>Nested type from GetProposalOutput.</summary>
-public readonly struct GetProposalOutputSubscriptionProposalData
+/// <summary>Nested type from GetProposal.</summary>
+public readonly struct GetProposalSubscriptionProposalData
 {
     public const int Size = 344;
 
@@ -175,7 +175,7 @@ public readonly struct GetProposalOutputSubscriptionProposalData
     public ulong AmountPerPeriod { get; init; }
     public uint StartEpoch { get; init; }
 
-    public static GetProposalOutputSubscriptionProposalData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetProposalSubscriptionProposalData ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
@@ -192,7 +192,7 @@ public readonly struct GetProposalOutputSubscriptionProposalData
         {
             _padding1[i] = data.Slice(322 + i * 1, 1)[0];
         }
-        return new GetProposalOutputSubscriptionProposalData
+        return new GetProposalSubscriptionProposalData
         {
             ProposerId = data[0..].Slice(0, 32).ToArray(),
             Destination = data[32..].Slice(0, 32).ToArray(),
@@ -258,8 +258,8 @@ public readonly struct GetProposalOutput : ISmartContractOutput<GetProposalOutpu
     public byte[] _padding1 { get; init; }
     public byte[] ProposerPublicKey { get; init; }
     public byte[] Proposal { get; init; }
-    public GetProposalOutputSubscriptionData Subscription { get; init; }
-    public GetProposalOutputSubscriptionProposalData SubscriptionProposal { get; init; }
+    public GetProposalSubscriptionData Subscription { get; init; }
+    public GetProposalSubscriptionProposalData SubscriptionProposal { get; init; }
 
     public static GetProposalOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -282,16 +282,16 @@ public readonly struct GetProposalOutput : ISmartContractOutput<GetProposalOutpu
             _padding1 = _padding1,
             ProposerPublicKey = data[8..].Slice(0, 32).ToArray(),
             Proposal = [] /* unknown type ProposalDataT */,
-            Subscription = GetProposalOutputSubscriptionData.ReadFrom(data.Slice(40, 312)),
-            SubscriptionProposal = GetProposalOutputSubscriptionProposalData.ReadFrom(data.Slice(352, 344))
+            Subscription = GetProposalSubscriptionData.ReadFrom(data.Slice(40, 312)),
+            SubscriptionProposal = GetProposalSubscriptionProposalData.ReadFrom(data.Slice(352, 344))
         };
     }
 }
 
 // ═══ Function: GetVote (inputType=3) ═══
 
-/// <summary>Nested type from GetVoteOutput.</summary>
-public readonly struct GetVoteOutputProposalSingleVoteDataV1
+/// <summary>Nested type from GetVote.</summary>
+public readonly struct GetVoteProposalSingleVoteDataV1
 {
     public const int Size = 16;
 
@@ -300,9 +300,9 @@ public readonly struct GetVoteOutputProposalSingleVoteDataV1
     public uint ProposalTick { get; init; }
     public long VoteValue { get; init; }
 
-    public static GetVoteOutputProposalSingleVoteDataV1 ReadFrom(ReadOnlySpan<byte> data)
+    public static GetVoteProposalSingleVoteDataV1 ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetVoteOutputProposalSingleVoteDataV1
+        return new GetVoteProposalSingleVoteDataV1
         {
             ProposalIndex = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
             ProposalType = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
@@ -343,14 +343,14 @@ public readonly struct GetVoteInput : ISmartContractInput
 public readonly struct GetVoteOutput : ISmartContractOutput<GetVoteOutput>
 {
     public bool Okay { get; init; }
-    public GetVoteOutputProposalSingleVoteDataV1 Vote { get; init; }
+    public GetVoteProposalSingleVoteDataV1 Vote { get; init; }
 
     public static GetVoteOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetVoteOutput
         {
             Okay = (data.Slice(0, 1)[0] != 0),
-            Vote = GetVoteOutputProposalSingleVoteDataV1.ReadFrom(data.Slice(8, 16))
+            Vote = GetVoteProposalSingleVoteDataV1.ReadFrom(data.Slice(8, 16))
         };
     }
 }
@@ -392,8 +392,8 @@ public readonly struct GetVotingResultsOutput : ISmartContractOutput<GetVotingRe
 
 // ═══ Function: GetLatestTransfers (inputType=5) ═══
 
-/// <summary>Nested type from GetLatestTransfersOutput.</summary>
-public readonly struct GetLatestTransfersOutputLatestTransfersEntry
+/// <summary>Nested type from GetLatestTransfers.</summary>
+public readonly struct GetLatestTransfersLatestTransfersEntry
 {
     public const int Size = 304;
 
@@ -403,14 +403,14 @@ public readonly struct GetLatestTransfersOutputLatestTransfersEntry
     public uint Tick { get; init; }
     public bool Success { get; init; }
 
-    public static GetLatestTransfersOutputLatestTransfersEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetLatestTransfersLatestTransfersEntry ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(32 + i * 1, 1)[0];
         }
-        return new GetLatestTransfersOutputLatestTransfersEntry
+        return new GetLatestTransfersLatestTransfersEntry
         {
             Destination = data[0..].Slice(0, 32).ToArray(),
             Url = url,
@@ -443,14 +443,14 @@ public readonly struct GetLatestTransfersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetLatestTransfersOutput : ISmartContractOutput<GetLatestTransfersOutput>
 {
-    public GetLatestTransfersOutputLatestTransfersEntry[] Entries { get; init; }
+    public GetLatestTransfersLatestTransfersEntry[] Entries { get; init; }
 
     public static GetLatestTransfersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var entries = new GetLatestTransfersOutputLatestTransfersEntry[128];
+        var entries = new GetLatestTransfersLatestTransfersEntry[128];
         for (int i = 0; i < 128; i++)
         {
-            entries[i] = GetLatestTransfersOutputLatestTransfersEntry.ReadFrom(data.Slice(0 + i * GetLatestTransfersOutputLatestTransfersEntry.Size, GetLatestTransfersOutputLatestTransfersEntry.Size));
+            entries[i] = GetLatestTransfersLatestTransfersEntry.ReadFrom(data.Slice(0 + i * GetLatestTransfersLatestTransfersEntry.Size, GetLatestTransfersLatestTransfersEntry.Size));
         }
         return new GetLatestTransfersOutput
         {
@@ -484,8 +484,8 @@ public readonly struct GetProposalFeeOutput : ISmartContractOutput<GetProposalFe
 
 // ═══ Function: GetRegularPayments (inputType=7) ═══
 
-/// <summary>Nested type from GetRegularPaymentsOutput.</summary>
-public readonly struct GetRegularPaymentsOutputRegularPaymentEntry
+/// <summary>Nested type from GetRegularPayments.</summary>
+public readonly struct GetRegularPaymentsRegularPaymentEntry
 {
     public const int Size = 312;
 
@@ -498,7 +498,7 @@ public readonly struct GetRegularPaymentsOutputRegularPaymentEntry
     public byte[] _padding0 { get; init; }
     public byte[] _padding1 { get; init; }
 
-    public static GetRegularPaymentsOutputRegularPaymentEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetRegularPaymentsRegularPaymentEntry ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
@@ -515,7 +515,7 @@ public readonly struct GetRegularPaymentsOutputRegularPaymentEntry
         {
             _padding1[i] = data.Slice(306 + i * 1, 1)[0];
         }
-        return new GetRegularPaymentsOutputRegularPaymentEntry
+        return new GetRegularPaymentsRegularPaymentEntry
         {
             Destination = data[0..].Slice(0, 32).ToArray(),
             Url = url,
@@ -560,14 +560,14 @@ public readonly struct GetRegularPaymentsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetRegularPaymentsOutput : ISmartContractOutput<GetRegularPaymentsOutput>
 {
-    public GetRegularPaymentsOutputRegularPaymentEntry[] Entries { get; init; }
+    public GetRegularPaymentsRegularPaymentEntry[] Entries { get; init; }
 
     public static GetRegularPaymentsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var entries = new GetRegularPaymentsOutputRegularPaymentEntry[128];
+        var entries = new GetRegularPaymentsRegularPaymentEntry[128];
         for (int i = 0; i < 128; i++)
         {
-            entries[i] = GetRegularPaymentsOutputRegularPaymentEntry.ReadFrom(data.Slice(0 + i * GetRegularPaymentsOutputRegularPaymentEntry.Size, GetRegularPaymentsOutputRegularPaymentEntry.Size));
+            entries[i] = GetRegularPaymentsRegularPaymentEntry.ReadFrom(data.Slice(0 + i * GetRegularPaymentsRegularPaymentEntry.Size, GetRegularPaymentsRegularPaymentEntry.Size));
         }
         return new GetRegularPaymentsOutput
         {

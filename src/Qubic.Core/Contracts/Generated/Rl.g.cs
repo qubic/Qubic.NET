@@ -120,8 +120,8 @@ public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
 
 // ═══ Function: GetWinners (inputType=3) ═══
 
-/// <summary>Nested type from GetWinnersOutput.</summary>
-public readonly struct GetWinnersOutputWinnerInfo
+/// <summary>Nested type from GetWinners.</summary>
+public readonly struct GetWinnersWinnerInfo
 {
     public const int Size = 48;
 
@@ -131,9 +131,9 @@ public readonly struct GetWinnersOutputWinnerInfo
     public ushort Epoch { get; init; }
     public byte DayOfWeek { get; init; }
 
-    public static GetWinnersOutputWinnerInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetWinnersWinnerInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetWinnersOutputWinnerInfo
+        return new GetWinnersWinnerInfo
         {
             WinnerAddress = data[0..].Slice(0, 32).ToArray(),
             Revenue = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -163,16 +163,16 @@ public readonly struct GetWinnersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetWinnersOutput : ISmartContractOutput<GetWinnersOutput>
 {
-    public GetWinnersOutputWinnerInfo[] Winners { get; init; }
+    public GetWinnersWinnerInfo[] Winners { get; init; }
     public ulong WinnersCounter { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetWinnersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var winners = new GetWinnersOutputWinnerInfo[1024];
+        var winners = new GetWinnersWinnerInfo[1024];
         for (int i = 0; i < 1024; i++)
         {
-            winners[i] = GetWinnersOutputWinnerInfo.ReadFrom(data.Slice(0 + i * GetWinnersOutputWinnerInfo.Size, GetWinnersOutputWinnerInfo.Size));
+            winners[i] = GetWinnersWinnerInfo.ReadFrom(data.Slice(0 + i * GetWinnersWinnerInfo.Size, GetWinnersWinnerInfo.Size));
         }
         return new GetWinnersOutput
         {
@@ -277,17 +277,17 @@ public readonly struct GetBalanceOutput : ISmartContractOutput<GetBalanceOutput>
 
 // ═══ Function: GetNextEpochData (inputType=8) ═══
 
-/// <summary>Nested type from GetNextEpochDataOutput.</summary>
-public readonly struct GetNextEpochDataOutputNextEpochData
+/// <summary>Nested type from GetNextEpochData.</summary>
+public readonly struct GetNextEpochDataNextEpochData
 {
     public const int Size = 16;
 
     public ulong NewPrice { get; init; }
     public byte Schedule { get; init; }
 
-    public static GetNextEpochDataOutputNextEpochData ReadFrom(ReadOnlySpan<byte> data)
+    public static GetNextEpochDataNextEpochData ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetNextEpochDataOutputNextEpochData
+        return new GetNextEpochDataNextEpochData
         {
             NewPrice = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             Schedule = data.Slice(8, 1)[0]
@@ -311,13 +311,13 @@ public readonly struct GetNextEpochDataInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetNextEpochDataOutput : ISmartContractOutput<GetNextEpochDataOutput>
 {
-    public GetNextEpochDataOutputNextEpochData NextEpochData { get; init; }
+    public GetNextEpochDataNextEpochData NextEpochData { get; init; }
 
     public static GetNextEpochDataOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetNextEpochDataOutput
         {
-            NextEpochData = GetNextEpochDataOutputNextEpochData.ReadFrom(data.Slice(0, 16))
+            NextEpochData = GetNextEpochDataNextEpochData.ReadFrom(data.Slice(0, 16))
         };
     }
 }

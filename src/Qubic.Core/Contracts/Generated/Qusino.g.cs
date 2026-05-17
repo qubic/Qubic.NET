@@ -92,8 +92,8 @@ public readonly struct GetUserAssetVolumeOutput : ISmartContractOutput<GetUserAs
 
 // ═══ Function: getFailedGameList (inputType=2) ═══
 
-/// <summary>Nested type from GetFailedGameListOutput.</summary>
-public readonly struct GetFailedGameListOutputGameInfo
+/// <summary>Nested type from GetFailedGameList.</summary>
+public readonly struct GetFailedGameListGameInfo
 {
     public const int Size = 112;
 
@@ -103,14 +103,14 @@ public readonly struct GetFailedGameListOutputGameInfo
     public uint NoVotes { get; init; }
     public uint ProposedEpoch { get; init; }
 
-    public static GetFailedGameListOutputGameInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetFailedGameListGameInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var uRI = new byte[64];
         for (int i = 0; i < 64; i++)
         {
             uRI[i] = data.Slice(0 + i * 1, 1)[0];
         }
-        return new GetFailedGameListOutputGameInfo
+        return new GetFailedGameListGameInfo
         {
             URI = uRI,
             Proposer = data[64..].Slice(0, 32).ToArray(),
@@ -153,14 +153,14 @@ public readonly struct GetFailedGameListInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetFailedGameListOutput : ISmartContractOutput<GetFailedGameListOutput>
 {
-    public GetFailedGameListOutputGameInfo[] Games { get; init; }
+    public GetFailedGameListGameInfo[] Games { get; init; }
 
     public static GetFailedGameListOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var games = new GetFailedGameListOutputGameInfo[32];
+        var games = new GetFailedGameListGameInfo[32];
         for (int i = 0; i < 32; i++)
         {
-            games[i] = GetFailedGameListOutputGameInfo.ReadFrom(data.Slice(0 + i * GetFailedGameListOutputGameInfo.Size, GetFailedGameListOutputGameInfo.Size));
+            games[i] = GetFailedGameListGameInfo.ReadFrom(data.Slice(0 + i * GetFailedGameListGameInfo.Size, GetFailedGameListGameInfo.Size));
         }
         return new GetFailedGameListOutput
         {
@@ -204,8 +204,8 @@ public readonly struct GetSCInfoOutput : ISmartContractOutput<GetSCInfoOutput>
 
 // ═══ Function: getActiveGameList (inputType=4) ═══
 
-/// <summary>Nested type from GetActiveGameListOutput.</summary>
-public readonly struct GetActiveGameListOutputGameInfo
+/// <summary>Nested type from GetActiveGameList.</summary>
+public readonly struct GetActiveGameListGameInfo
 {
     public const int Size = 112;
 
@@ -215,14 +215,14 @@ public readonly struct GetActiveGameListOutputGameInfo
     public uint NoVotes { get; init; }
     public uint ProposedEpoch { get; init; }
 
-    public static GetActiveGameListOutputGameInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetActiveGameListGameInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var uRI = new byte[64];
         for (int i = 0; i < 64; i++)
         {
             uRI[i] = data.Slice(0 + i * 1, 1)[0];
         }
-        return new GetActiveGameListOutputGameInfo
+        return new GetActiveGameListGameInfo
         {
             URI = uRI,
             Proposer = data[64..].Slice(0, 32).ToArray(),
@@ -265,15 +265,15 @@ public readonly struct GetActiveGameListInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetActiveGameListOutput : ISmartContractOutput<GetActiveGameListOutput>
 {
-    public GetActiveGameListOutputGameInfo[] Games { get; init; }
+    public GetActiveGameListGameInfo[] Games { get; init; }
     public ulong[] GameIndexes { get; init; }
 
     public static GetActiveGameListOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var games = new GetActiveGameListOutputGameInfo[32];
+        var games = new GetActiveGameListGameInfo[32];
         for (int i = 0; i < 32; i++)
         {
-            games[i] = GetActiveGameListOutputGameInfo.ReadFrom(data.Slice(0 + i * GetActiveGameListOutputGameInfo.Size, GetActiveGameListOutputGameInfo.Size));
+            games[i] = GetActiveGameListGameInfo.ReadFrom(data.Slice(0 + i * GetActiveGameListGameInfo.Size, GetActiveGameListGameInfo.Size));
         }
         var gameIndexes = new ulong[32];
         for (int i = 0; i < 32; i++)

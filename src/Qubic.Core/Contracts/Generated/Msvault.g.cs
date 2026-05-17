@@ -384,8 +384,8 @@ public readonly struct IsShareHolderOutput : ISmartContractOutput<IsShareHolderO
 
 // ═══ Function: getFeeVotes (inputType=14) ═══
 
-/// <summary>Nested type from GetFeeVotesOutput.</summary>
-public readonly struct GetFeeVotesOutputMsVaultFeeVote
+/// <summary>Nested type from GetFeeVotes.</summary>
+public readonly struct GetFeeVotesMsVaultFeeVote
 {
     public const int Size = 48;
 
@@ -396,9 +396,9 @@ public readonly struct GetFeeVotesOutputMsVaultFeeVote
     public ulong DepositFee { get; init; }
     public ulong BurnFee { get; init; }
 
-    public static GetFeeVotesOutputMsVaultFeeVote ReadFrom(ReadOnlySpan<byte> data)
+    public static GetFeeVotesMsVaultFeeVote ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetFeeVotesOutputMsVaultFeeVote
+        return new GetFeeVotesMsVaultFeeVote
         {
             RegisteringFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             ReleaseFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
@@ -432,14 +432,14 @@ public readonly struct GetFeeVotesOutput : ISmartContractOutput<GetFeeVotesOutpu
 {
     public ulong Status { get; init; }
     public ulong NumberOfFeeVotes { get; init; }
-    public GetFeeVotesOutputMsVaultFeeVote[] FeeVotes { get; init; }
+    public GetFeeVotesMsVaultFeeVote[] FeeVotes { get; init; }
 
     public static GetFeeVotesOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var feeVotes = new GetFeeVotesOutputMsVaultFeeVote[64];
+        var feeVotes = new GetFeeVotesMsVaultFeeVote[64];
         for (int i = 0; i < 64; i++)
         {
-            feeVotes[i] = GetFeeVotesOutputMsVaultFeeVote.ReadFrom(data.Slice(16 + i * GetFeeVotesOutputMsVaultFeeVote.Size, GetFeeVotesOutputMsVaultFeeVote.Size));
+            feeVotes[i] = GetFeeVotesMsVaultFeeVote.ReadFrom(data.Slice(16 + i * GetFeeVotesMsVaultFeeVote.Size, GetFeeVotesMsVaultFeeVote.Size));
         }
         return new GetFeeVotesOutput
         {
@@ -516,8 +516,8 @@ public readonly struct GetFeeVotesScoreOutput : ISmartContractOutput<GetFeeVotes
 
 // ═══ Function: getUniqueFeeVotes (inputType=17) ═══
 
-/// <summary>Nested type from GetUniqueFeeVotesOutput.</summary>
-public readonly struct GetUniqueFeeVotesOutputMsVaultFeeVote
+/// <summary>Nested type from GetUniqueFeeVotes.</summary>
+public readonly struct GetUniqueFeeVotesMsVaultFeeVote
 {
     public const int Size = 48;
 
@@ -528,9 +528,9 @@ public readonly struct GetUniqueFeeVotesOutputMsVaultFeeVote
     public ulong DepositFee { get; init; }
     public ulong BurnFee { get; init; }
 
-    public static GetUniqueFeeVotesOutputMsVaultFeeVote ReadFrom(ReadOnlySpan<byte> data)
+    public static GetUniqueFeeVotesMsVaultFeeVote ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetUniqueFeeVotesOutputMsVaultFeeVote
+        return new GetUniqueFeeVotesMsVaultFeeVote
         {
             RegisteringFee = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             ReleaseFee = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
@@ -564,14 +564,14 @@ public readonly struct GetUniqueFeeVotesOutput : ISmartContractOutput<GetUniqueF
 {
     public ulong Status { get; init; }
     public ulong NumberOfUniqueFeeVotes { get; init; }
-    public GetUniqueFeeVotesOutputMsVaultFeeVote[] UniqueFeeVotes { get; init; }
+    public GetUniqueFeeVotesMsVaultFeeVote[] UniqueFeeVotes { get; init; }
 
     public static GetUniqueFeeVotesOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var uniqueFeeVotes = new GetUniqueFeeVotesOutputMsVaultFeeVote[64];
+        var uniqueFeeVotes = new GetUniqueFeeVotesMsVaultFeeVote[64];
         for (int i = 0; i < 64; i++)
         {
-            uniqueFeeVotes[i] = GetUniqueFeeVotesOutputMsVaultFeeVote.ReadFrom(data.Slice(16 + i * GetUniqueFeeVotesOutputMsVaultFeeVote.Size, GetUniqueFeeVotesOutputMsVaultFeeVote.Size));
+            uniqueFeeVotes[i] = GetUniqueFeeVotesMsVaultFeeVote.ReadFrom(data.Slice(16 + i * GetUniqueFeeVotesMsVaultFeeVote.Size, GetUniqueFeeVotesMsVaultFeeVote.Size));
         }
         return new GetUniqueFeeVotesOutput
         {
@@ -616,17 +616,17 @@ public readonly struct GetUniqueFeeVotesRankingOutput : ISmartContractOutput<Get
 
 // ═══ Function: getVaultAssetBalances (inputType=22) ═══
 
-/// <summary>Nested type from GetVaultAssetBalancesOutput.</summary>
-public readonly struct GetVaultAssetBalancesOutputAssetBalance
+/// <summary>Nested type from GetVaultAssetBalances.</summary>
+public readonly struct GetVaultAssetBalancesAssetBalance
 {
     public const int Size = 48;
 
     public required QubicAsset Asset { get; init; }
     public ulong Balance { get; init; }
 
-    public static GetVaultAssetBalancesOutputAssetBalance ReadFrom(ReadOnlySpan<byte> data)
+    public static GetVaultAssetBalancesAssetBalance ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetVaultAssetBalancesOutputAssetBalance
+        return new GetVaultAssetBalancesAssetBalance
         {
             Asset = QubicAsset.ReadFrom(data[0..]),
             Balance = BinaryPrimitives.ReadUInt64LittleEndian(data[40..])
@@ -662,14 +662,14 @@ public readonly struct GetVaultAssetBalancesOutput : ISmartContractOutput<GetVau
 {
     public ulong Status { get; init; }
     public ulong NumberOfAssetTypes { get; init; }
-    public GetVaultAssetBalancesOutputAssetBalance[] AssetBalances { get; init; }
+    public GetVaultAssetBalancesAssetBalance[] AssetBalances { get; init; }
 
     public static GetVaultAssetBalancesOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var assetBalances = new GetVaultAssetBalancesOutputAssetBalance[8];
+        var assetBalances = new GetVaultAssetBalancesAssetBalance[8];
         for (int i = 0; i < 8; i++)
         {
-            assetBalances[i] = GetVaultAssetBalancesOutputAssetBalance.ReadFrom(data.Slice(16 + i * GetVaultAssetBalancesOutputAssetBalance.Size, GetVaultAssetBalancesOutputAssetBalance.Size));
+            assetBalances[i] = GetVaultAssetBalancesAssetBalance.ReadFrom(data.Slice(16 + i * GetVaultAssetBalancesAssetBalance.Size, GetVaultAssetBalancesAssetBalance.Size));
         }
         return new GetVaultAssetBalancesOutput
         {

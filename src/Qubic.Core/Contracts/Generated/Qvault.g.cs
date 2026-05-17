@@ -217,8 +217,8 @@ public readonly struct GetStakedAmountAndVotingPowerOutput : ISmartContractOutpu
 
 // ═══ Function: getGP (inputType=3) ═══
 
-/// <summary>Nested type from GetGPOutput.</summary>
-public readonly struct GetGPOutputGPInfo
+/// <summary>Nested type from GetGP.</summary>
+public readonly struct GetGPGPInfo
 {
     public const int Size = 312;
 
@@ -231,14 +231,14 @@ public readonly struct GetGPOutputGPInfo
     public byte[] Url { get; init; }
     public byte Result { get; init; }
 
-    public static GetGPOutputGPInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetGPGPInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(52 + i * 1, 1)[0];
         }
-        return new GetGPOutputGPInfo
+        return new GetGPGPInfo
         {
             Proposer = data[0..].Slice(0, 32).ToArray(),
             CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
@@ -288,22 +288,22 @@ public readonly struct GetGPInput : ISmartContractInput
 public readonly struct GetGPOutput : ISmartContractOutput<GetGPOutput>
 {
     public int ReturnCode { get; init; }
-    public GetGPOutputGPInfo Proposal { get; init; }
+    public GetGPGPInfo Proposal { get; init; }
 
     public static GetGPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetGPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = GetGPOutputGPInfo.ReadFrom(data.Slice(8, 312))
+            Proposal = GetGPGPInfo.ReadFrom(data.Slice(8, 312))
         };
     }
 }
 
 // ═══ Function: getQCP (inputType=4) ═══
 
-/// <summary>Nested type from GetQCPOutput.</summary>
-public readonly struct GetQCPOutputQCPInfo
+/// <summary>Nested type from GetQCP.</summary>
+public readonly struct GetQCPQCPInfo
 {
     public const int Size = 320;
 
@@ -317,14 +317,14 @@ public readonly struct GetQCPOutputQCPInfo
     public byte[] Url { get; init; }
     public byte Result { get; init; }
 
-    public static GetQCPOutputQCPInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetQCPQCPInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(56 + i * 1, 1)[0];
         }
-        return new GetQCPOutputQCPInfo
+        return new GetQCPQCPInfo
         {
             Proposer = data[0..].Slice(0, 32).ToArray(),
             CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
@@ -376,22 +376,22 @@ public readonly struct GetQCPInput : ISmartContractInput
 public readonly struct GetQCPOutput : ISmartContractOutput<GetQCPOutput>
 {
     public int ReturnCode { get; init; }
-    public GetQCPOutputQCPInfo Proposal { get; init; }
+    public GetQCPQCPInfo Proposal { get; init; }
 
     public static GetQCPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetQCPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = GetQCPOutputQCPInfo.ReadFrom(data.Slice(8, 320))
+            Proposal = GetQCPQCPInfo.ReadFrom(data.Slice(8, 320))
         };
     }
 }
 
 // ═══ Function: getIPOP (inputType=5) ═══
 
-/// <summary>Nested type from GetIPOPOutput.</summary>
-public readonly struct GetIPOPOutputIPOPInfo
+/// <summary>Nested type from GetIPOP.</summary>
+public readonly struct GetIPOPIPOPInfo
 {
     public const int Size = 336;
 
@@ -407,14 +407,14 @@ public readonly struct GetIPOPOutputIPOPInfo
     public byte[] Url { get; init; }
     public byte Result { get; init; }
 
-    public static GetIPOPOutputIPOPInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetIPOPIPOPInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(72 + i * 1, 1)[0];
         }
-        return new GetIPOPOutputIPOPInfo
+        return new GetIPOPIPOPInfo
         {
             Proposer = data[0..].Slice(0, 32).ToArray(),
             TotalWeight = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -470,22 +470,22 @@ public readonly struct GetIPOPInput : ISmartContractInput
 public readonly struct GetIPOPOutput : ISmartContractOutput<GetIPOPOutput>
 {
     public int ReturnCode { get; init; }
-    public GetIPOPOutputIPOPInfo Proposal { get; init; }
+    public GetIPOPIPOPInfo Proposal { get; init; }
 
     public static GetIPOPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetIPOPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = GetIPOPOutputIPOPInfo.ReadFrom(data.Slice(8, 336))
+            Proposal = GetIPOPIPOPInfo.ReadFrom(data.Slice(8, 336))
         };
     }
 }
 
 // ═══ Function: getQEarnP (inputType=6) ═══
 
-/// <summary>Nested type from GetQEarnPOutput.</summary>
-public readonly struct GetQEarnPOutputQEarnPInfo
+/// <summary>Nested type from GetQEarnP.</summary>
+public readonly struct GetQEarnPQEarnPInfo
 {
     public const int Size = 328;
 
@@ -501,14 +501,14 @@ public readonly struct GetQEarnPOutputQEarnPInfo
     public byte NumberOfEpoch { get; init; }
     public byte Result { get; init; }
 
-    public static GetQEarnPOutputQEarnPInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetQEarnPQEarnPInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(68 + i * 1, 1)[0];
         }
-        return new GetQEarnPOutputQEarnPInfo
+        return new GetQEarnPQEarnPInfo
         {
             Proposer = data[0..].Slice(0, 32).ToArray(),
             AmountOfInvestPerEpoch = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -564,22 +564,22 @@ public readonly struct GetQEarnPInput : ISmartContractInput
 public readonly struct GetQEarnPOutput : ISmartContractOutput<GetQEarnPOutput>
 {
     public int ReturnCode { get; init; }
-    public GetQEarnPOutputQEarnPInfo Proposal { get; init; }
+    public GetQEarnPQEarnPInfo Proposal { get; init; }
 
     public static GetQEarnPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetQEarnPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = GetQEarnPOutputQEarnPInfo.ReadFrom(data.Slice(8, 328))
+            Proposal = GetQEarnPQEarnPInfo.ReadFrom(data.Slice(8, 328))
         };
     }
 }
 
 // ═══ Function: getFundP (inputType=7) ═══
 
-/// <summary>Nested type from GetFundPOutput.</summary>
-public readonly struct GetFundPOutputFundPInfo
+/// <summary>Nested type from GetFundP.</summary>
+public readonly struct GetFundPFundPInfo
 {
     public const int Size = 328;
 
@@ -595,14 +595,14 @@ public readonly struct GetFundPOutputFundPInfo
     public byte[] Url { get; init; }
     public byte Result { get; init; }
 
-    public static GetFundPOutputFundPInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetFundPFundPInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(68 + i * 1, 1)[0];
         }
-        return new GetFundPOutputFundPInfo
+        return new GetFundPFundPInfo
         {
             Proposer = data[0..].Slice(0, 32).ToArray(),
             PricePerOneQcap = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -658,22 +658,22 @@ public readonly struct GetFundPInput : ISmartContractInput
 public readonly struct GetFundPOutput : ISmartContractOutput<GetFundPOutput>
 {
     public int ReturnCode { get; init; }
-    public GetFundPOutputFundPInfo Proposal { get; init; }
+    public GetFundPFundPInfo Proposal { get; init; }
 
     public static GetFundPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetFundPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = GetFundPOutputFundPInfo.ReadFrom(data.Slice(8, 328))
+            Proposal = GetFundPFundPInfo.ReadFrom(data.Slice(8, 328))
         };
     }
 }
 
 // ═══ Function: getMKTP (inputType=8) ═══
 
-/// <summary>Nested type from GetMKTPOutput.</summary>
-public readonly struct GetMKTPOutputMKTPInfo
+/// <summary>Nested type from GetMKTP.</summary>
+public readonly struct GetMKTPMKTPInfo
 {
     public const int Size = 344;
 
@@ -691,14 +691,14 @@ public readonly struct GetMKTPOutputMKTPInfo
     public byte[] Url { get; init; }
     public byte Result { get; init; }
 
-    public static GetMKTPOutputMKTPInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetMKTPMKTPInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(80 + i * 1, 1)[0];
         }
-        return new GetMKTPOutputMKTPInfo
+        return new GetMKTPMKTPInfo
         {
             Proposer = data[0..].Slice(0, 32).ToArray(),
             AmountOfQubic = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -758,22 +758,22 @@ public readonly struct GetMKTPInput : ISmartContractInput
 public readonly struct GetMKTPOutput : ISmartContractOutput<GetMKTPOutput>
 {
     public int ReturnCode { get; init; }
-    public GetMKTPOutputMKTPInfo Proposal { get; init; }
+    public GetMKTPMKTPInfo Proposal { get; init; }
 
     public static GetMKTPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetMKTPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = GetMKTPOutputMKTPInfo.ReadFrom(data.Slice(8, 344))
+            Proposal = GetMKTPMKTPInfo.ReadFrom(data.Slice(8, 344))
         };
     }
 }
 
 // ═══ Function: getAlloP (inputType=9) ═══
 
-/// <summary>Nested type from GetAlloPOutput.</summary>
-public readonly struct GetAlloPOutputAlloPInfo
+/// <summary>Nested type from GetAlloP.</summary>
+public readonly struct GetAlloPAlloPInfo
 {
     public const int Size = 328;
 
@@ -789,14 +789,14 @@ public readonly struct GetAlloPOutputAlloPInfo
     public byte[] Url { get; init; }
     public byte Result { get; init; }
 
-    public static GetAlloPOutputAlloPInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetAlloPAlloPInfo ReadFrom(ReadOnlySpan<byte> data)
     {
         var url = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             url[i] = data.Slice(64 + i * 1, 1)[0];
         }
-        return new GetAlloPOutputAlloPInfo
+        return new GetAlloPAlloPInfo
         {
             Proposer = data[0..].Slice(0, 32).ToArray(),
             CurrentTotalVotingPower = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
@@ -852,14 +852,14 @@ public readonly struct GetAlloPInput : ISmartContractInput
 public readonly struct GetAlloPOutput : ISmartContractOutput<GetAlloPOutput>
 {
     public int ReturnCode { get; init; }
-    public GetAlloPOutputAlloPInfo Proposal { get; init; }
+    public GetAlloPAlloPInfo Proposal { get; init; }
 
     public static GetAlloPOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetAlloPOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..]),
-            Proposal = GetAlloPOutputAlloPInfo.ReadFrom(data.Slice(8, 328))
+            Proposal = GetAlloPAlloPInfo.ReadFrom(data.Slice(8, 328))
         };
     }
 }

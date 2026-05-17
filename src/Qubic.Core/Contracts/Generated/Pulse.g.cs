@@ -312,8 +312,8 @@ public readonly struct GetBalanceOutput : ISmartContractOutput<GetBalanceOutput>
 
 // ═══ Function: GetWinners (inputType=9) ═══
 
-/// <summary>Nested type from GetWinnersOutput.</summary>
-public readonly struct GetWinnersOutputWinnerInfo
+/// <summary>Nested type from GetWinners.</summary>
+public readonly struct GetWinnersWinnerInfo
 {
     public const int Size = 48;
 
@@ -321,9 +321,9 @@ public readonly struct GetWinnersOutputWinnerInfo
     public ulong Revenue { get; init; }
     public ushort Epoch { get; init; }
 
-    public static GetWinnersOutputWinnerInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetWinnersWinnerInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetWinnersOutputWinnerInfo
+        return new GetWinnersWinnerInfo
         {
             WinnerAddress = data[0..].Slice(0, 32).ToArray(),
             Revenue = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -349,16 +349,16 @@ public readonly struct GetWinnersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetWinnersOutput : ISmartContractOutput<GetWinnersOutput>
 {
-    public GetWinnersOutputWinnerInfo[] Winners { get; init; }
+    public GetWinnersWinnerInfo[] Winners { get; init; }
     public ulong WinnersCounter { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetWinnersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var winners = new GetWinnersOutputWinnerInfo[1024];
+        var winners = new GetWinnersWinnerInfo[1024];
         for (int i = 0; i < 1024; i++)
         {
-            winners[i] = GetWinnersOutputWinnerInfo.ReadFrom(data.Slice(0 + i * GetWinnersOutputWinnerInfo.Size, GetWinnersOutputWinnerInfo.Size));
+            winners[i] = GetWinnersWinnerInfo.ReadFrom(data.Slice(0 + i * GetWinnersWinnerInfo.Size, GetWinnersWinnerInfo.Size));
         }
         return new GetWinnersOutput
         {
@@ -408,8 +408,8 @@ public readonly struct GetAutoParticipationOutput : ISmartContractOutput<GetAuto
 
 // ═══ Function: GetAutoStats (inputType=11) ═══
 
-/// <summary>Nested type from GetAutoStatsOutput.</summary>
-public readonly struct GetAutoStatsOutputAutoParticipant
+/// <summary>Nested type from GetAutoStats.</summary>
+public readonly struct GetAutoStatsAutoParticipant
 {
     public const int Size = 48;
 
@@ -417,9 +417,9 @@ public readonly struct GetAutoStatsOutputAutoParticipant
     public long Deposit { get; init; }
     public ushort DesiredTickets { get; init; }
 
-    public static GetAutoStatsOutputAutoParticipant ReadFrom(ReadOnlySpan<byte> data)
+    public static GetAutoStatsAutoParticipant ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetAutoStatsOutputAutoParticipant
+        return new GetAutoStatsAutoParticipant
         {
             Player = data[0..].Slice(0, 32).ToArray(),
             Deposit = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
@@ -445,7 +445,7 @@ public readonly struct GetAutoStatsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetAutoStatsOutput : ISmartContractOutput<GetAutoStatsOutput>
 {
-    public GetAutoStatsOutputAutoParticipant[] Participants { get; init; }
+    public GetAutoStatsAutoParticipant[] Participants { get; init; }
     public ushort MaxAutoParticipants { get; init; }
     public ushort MaxAutoTicketsPerUser { get; init; }
     public ushort RoundSlotsLeft { get; init; }
@@ -453,10 +453,10 @@ public readonly struct GetAutoStatsOutput : ISmartContractOutput<GetAutoStatsOut
 
     public static GetAutoStatsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var participants = new GetAutoStatsOutputAutoParticipant[0];
+        var participants = new GetAutoStatsAutoParticipant[0];
         for (int i = 0; i < 0; i++)
         {
-            participants[i] = GetAutoStatsOutputAutoParticipant.ReadFrom(data.Slice(0 + i * GetAutoStatsOutputAutoParticipant.Size, GetAutoStatsOutputAutoParticipant.Size));
+            participants[i] = GetAutoStatsAutoParticipant.ReadFrom(data.Slice(0 + i * GetAutoStatsAutoParticipant.Size, GetAutoStatsAutoParticipant.Size));
         }
         return new GetAutoStatsOutput
         {
@@ -507,22 +507,22 @@ public readonly struct ValidateDigitsOutput : ISmartContractOutput<ValidateDigit
 
 // ═══ Function: GetPlayers (inputType=13) ═══
 
-/// <summary>Nested type from GetPlayersOutput.</summary>
-public readonly struct GetPlayersOutputTicket
+/// <summary>Nested type from GetPlayers.</summary>
+public readonly struct GetPlayersTicket
 {
     public const int Size = 40;
 
     public required byte[] Player { get; init; }
     public byte[] Digits { get; init; }
 
-    public static GetPlayersOutputTicket ReadFrom(ReadOnlySpan<byte> data)
+    public static GetPlayersTicket ReadFrom(ReadOnlySpan<byte> data)
     {
         var digits = new byte[8];
         for (int i = 0; i < 8; i++)
         {
             digits[i] = data.Slice(32 + i * 1, 1)[0];
         }
-        return new GetPlayersOutputTicket
+        return new GetPlayersTicket
         {
             Player = data[0..].Slice(0, 32).ToArray(),
             Digits = digits
@@ -549,15 +549,15 @@ public readonly struct GetPlayersInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
 {
-    public GetPlayersOutputTicket[] Players { get; init; }
+    public GetPlayersTicket[] Players { get; init; }
     public byte ReturnCode { get; init; }
 
     public static GetPlayersOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var players = new GetPlayersOutputTicket[1024];
+        var players = new GetPlayersTicket[1024];
         for (int i = 0; i < 1024; i++)
         {
-            players[i] = GetPlayersOutputTicket.ReadFrom(data.Slice(0 + i * GetPlayersOutputTicket.Size, GetPlayersOutputTicket.Size));
+            players[i] = GetPlayersTicket.ReadFrom(data.Slice(0 + i * GetPlayersTicket.Size, GetPlayersTicket.Size));
         }
         return new GetPlayersOutput
         {

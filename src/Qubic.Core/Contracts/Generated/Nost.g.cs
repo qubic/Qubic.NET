@@ -239,8 +239,8 @@ public readonly struct GetNumberOfInvestedProjectsOutput : ISmartContractOutput<
 
 // ═══ Function: getProjectByIndex (inputType=6) ═══
 
-/// <summary>Nested type from GetProjectByIndexOutput.</summary>
-public readonly struct GetProjectByIndexOutputProjectInfo
+/// <summary>Nested type from GetProjectByIndex.</summary>
+public readonly struct GetProjectByIndexProjectInfo
 {
     public const int Size = 72;
 
@@ -253,9 +253,9 @@ public readonly struct GetProjectByIndexOutputProjectInfo
     public uint NumberOfNo { get; init; }
     public bool IsCreatedFundarasing { get; init; }
 
-    public static GetProjectByIndexOutputProjectInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetProjectByIndexProjectInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetProjectByIndexOutputProjectInfo
+        return new GetProjectByIndexProjectInfo
         {
             Creator = data[0..].Slice(0, 32).ToArray(),
             TokenName = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -301,21 +301,21 @@ public readonly struct GetProjectByIndexInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetProjectByIndexOutput : ISmartContractOutput<GetProjectByIndexOutput>
 {
-    public GetProjectByIndexOutputProjectInfo Project { get; init; }
+    public GetProjectByIndexProjectInfo Project { get; init; }
 
     public static GetProjectByIndexOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetProjectByIndexOutput
         {
-            Project = GetProjectByIndexOutputProjectInfo.ReadFrom(data.Slice(0, 72))
+            Project = GetProjectByIndexProjectInfo.ReadFrom(data.Slice(0, 72))
         };
     }
 }
 
 // ═══ Function: getFundarasingByIndex (inputType=7) ═══
 
-/// <summary>Nested type from GetFundarasingByIndexOutput.</summary>
-public readonly struct GetFundarasingByIndexOutputFundaraisingInfo
+/// <summary>Nested type from GetFundarasingByIndex.</summary>
+public readonly struct GetFundarasingByIndexFundaraisingInfo
 {
     public const int Size = 80;
 
@@ -338,9 +338,9 @@ public readonly struct GetFundarasingByIndexOutputFundaraisingInfo
     public byte StepOfVesting { get; init; }
     public bool IsCreatedToken { get; init; }
 
-    public static GetFundarasingByIndexOutputFundaraisingInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetFundarasingByIndexFundaraisingInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetFundarasingByIndexOutputFundaraisingInfo
+        return new GetFundarasingByIndexFundaraisingInfo
         {
             TokenPrice = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             SoldAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
@@ -406,13 +406,13 @@ public readonly struct GetFundarasingByIndexInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetFundarasingByIndexOutput : ISmartContractOutput<GetFundarasingByIndexOutput>
 {
-    public GetFundarasingByIndexOutputFundaraisingInfo Fundarasing { get; init; }
+    public GetFundarasingByIndexFundaraisingInfo Fundarasing { get; init; }
 
     public static GetFundarasingByIndexOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetFundarasingByIndexOutput
         {
-            Fundarasing = GetFundarasingByIndexOutputFundaraisingInfo.ReadFrom(data.Slice(0, 80))
+            Fundarasing = GetFundarasingByIndexFundaraisingInfo.ReadFrom(data.Slice(0, 80))
         };
     }
 }
@@ -457,8 +457,8 @@ public readonly struct GetProjectIndexListByCreatorOutput : ISmartContractOutput
 
 // ═══ Function: getInfoUserInvested (inputType=9) ═══
 
-/// <summary>Nested type from GetInfoUserInvestedOutput.</summary>
-public readonly struct GetInfoUserInvestedOutputInvestInfo
+/// <summary>Nested type from GetInfoUserInvested.</summary>
+public readonly struct GetInfoUserInvestedInvestInfo
 {
     public const int Size = 24;
 
@@ -466,9 +466,9 @@ public readonly struct GetInfoUserInvestedOutputInvestInfo
     public ulong ClaimedAmount { get; init; }
     public uint IndexOfFundraising { get; init; }
 
-    public static GetInfoUserInvestedOutputInvestInfo ReadFrom(ReadOnlySpan<byte> data)
+    public static GetInfoUserInvestedInvestInfo ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetInfoUserInvestedOutputInvestInfo
+        return new GetInfoUserInvestedInvestInfo
         {
             InvestedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             ClaimedAmount = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
@@ -504,14 +504,14 @@ public readonly struct GetInfoUserInvestedInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetInfoUserInvestedOutput : ISmartContractOutput<GetInfoUserInvestedOutput>
 {
-    public GetInfoUserInvestedOutputInvestInfo[] ListUserInvested { get; init; }
+    public GetInfoUserInvestedInvestInfo[] ListUserInvested { get; init; }
 
     public static GetInfoUserInvestedOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var listUserInvested = new GetInfoUserInvestedOutputInvestInfo[128];
+        var listUserInvested = new GetInfoUserInvestedInvestInfo[128];
         for (int i = 0; i < 128; i++)
         {
-            listUserInvested[i] = GetInfoUserInvestedOutputInvestInfo.ReadFrom(data.Slice(0 + i * GetInfoUserInvestedOutputInvestInfo.Size, GetInfoUserInvestedOutputInvestInfo.Size));
+            listUserInvested[i] = GetInfoUserInvestedInvestInfo.ReadFrom(data.Slice(0 + i * GetInfoUserInvestedInvestInfo.Size, GetInfoUserInvestedInvestInfo.Size));
         }
         return new GetInfoUserInvestedOutput
         {

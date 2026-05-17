@@ -45,8 +45,8 @@ public static class EscrowContract
 
 // ═══ Function: GetDeals (inputType=1) ═══
 
-/// <summary>Nested type from GetDealsOutputDeal.</summary>
-public readonly struct GetDealsOutputDealAssetWithAmount
+/// <summary>Nested type from GetDealsDeal.</summary>
+public readonly struct GetDealsDealAssetWithAmount
 {
     public const int Size = 48;
 
@@ -54,9 +54,9 @@ public readonly struct GetDealsOutputDealAssetWithAmount
     public ulong Name { get; init; }
     public ulong Amount { get; init; }
 
-    public static GetDealsOutputDealAssetWithAmount ReadFrom(ReadOnlySpan<byte> data)
+    public static GetDealsDealAssetWithAmount ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetDealsOutputDealAssetWithAmount
+        return new GetDealsDealAssetWithAmount
         {
             Issuer = data[0..].Slice(0, 32).ToArray(),
             Name = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -72,8 +72,8 @@ public readonly struct GetDealsOutputDealAssetWithAmount
     }
 }
 
-/// <summary>Nested type from GetDealsOutput.</summary>
-public readonly struct GetDealsOutputDeal
+/// <summary>Nested type from GetDeals.</summary>
+public readonly struct GetDealsDeal
 {
     public const int Size = 464;
 
@@ -81,25 +81,25 @@ public readonly struct GetDealsOutputDeal
     public required byte[] AcceptorId { get; init; }
     public ulong OfferedQU { get; init; }
     public ulong OfferedAssetsNumber { get; init; }
-    public GetDealsOutputDealAssetWithAmount[] OfferedAssets { get; init; }
+    public GetDealsDealAssetWithAmount[] OfferedAssets { get; init; }
     public ulong RequestedQU { get; init; }
     public ulong RequestedAssetsNumber { get; init; }
-    public GetDealsOutputDealAssetWithAmount[] RequestedAssets { get; init; }
+    public GetDealsDealAssetWithAmount[] RequestedAssets { get; init; }
     public ushort CreationEpoch { get; init; }
 
-    public static GetDealsOutputDeal ReadFrom(ReadOnlySpan<byte> data)
+    public static GetDealsDeal ReadFrom(ReadOnlySpan<byte> data)
     {
-        var offeredAssets = new GetDealsOutputDealAssetWithAmount[4];
+        var offeredAssets = new GetDealsDealAssetWithAmount[4];
         for (int i = 0; i < 4; i++)
         {
-            offeredAssets[i] = GetDealsOutputDealAssetWithAmount.ReadFrom(data.Slice(56 + i * 48, 48));
+            offeredAssets[i] = GetDealsDealAssetWithAmount.ReadFrom(data.Slice(56 + i * 48, 48));
         }
-        var requestedAssets = new GetDealsOutputDealAssetWithAmount[4];
+        var requestedAssets = new GetDealsDealAssetWithAmount[4];
         for (int i = 0; i < 4; i++)
         {
-            requestedAssets[i] = GetDealsOutputDealAssetWithAmount.ReadFrom(data.Slice(264 + i * 48, 48));
+            requestedAssets[i] = GetDealsDealAssetWithAmount.ReadFrom(data.Slice(264 + i * 48, 48));
         }
-        return new GetDealsOutputDeal
+        return new GetDealsDeal
         {
             Index = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
             AcceptorId = data[8..].Slice(0, 32).ToArray(),
@@ -160,26 +160,26 @@ public readonly struct GetDealsOutput : ISmartContractOutput<GetDealsOutput>
     public ulong OwnedDealsAmount { get; init; }
     public ulong ProposedDealsAmount { get; init; }
     public ulong PublicDealsAmount { get; init; }
-    public GetDealsOutputDeal[] OwnedDeals { get; init; }
-    public GetDealsOutputDeal[] ProposedDeals { get; init; }
-    public GetDealsOutputDeal[] PublicDeals { get; init; }
+    public GetDealsDeal[] OwnedDeals { get; init; }
+    public GetDealsDeal[] ProposedDeals { get; init; }
+    public GetDealsDeal[] PublicDeals { get; init; }
 
     public static GetDealsOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var ownedDeals = new GetDealsOutputDeal[8];
+        var ownedDeals = new GetDealsDeal[8];
         for (int i = 0; i < 8; i++)
         {
-            ownedDeals[i] = GetDealsOutputDeal.ReadFrom(data.Slice(24 + i * GetDealsOutputDeal.Size, GetDealsOutputDeal.Size));
+            ownedDeals[i] = GetDealsDeal.ReadFrom(data.Slice(24 + i * GetDealsDeal.Size, GetDealsDeal.Size));
         }
-        var proposedDeals = new GetDealsOutputDeal[32];
+        var proposedDeals = new GetDealsDeal[32];
         for (int i = 0; i < 32; i++)
         {
-            proposedDeals[i] = GetDealsOutputDeal.ReadFrom(data.Slice(3736 + i * GetDealsOutputDeal.Size, GetDealsOutputDeal.Size));
+            proposedDeals[i] = GetDealsDeal.ReadFrom(data.Slice(3736 + i * GetDealsDeal.Size, GetDealsDeal.Size));
         }
-        var publicDeals = new GetDealsOutputDeal[64];
+        var publicDeals = new GetDealsDeal[64];
         for (int i = 0; i < 64; i++)
         {
-            publicDeals[i] = GetDealsOutputDeal.ReadFrom(data.Slice(18584 + i * GetDealsOutputDeal.Size, GetDealsOutputDeal.Size));
+            publicDeals[i] = GetDealsDeal.ReadFrom(data.Slice(18584 + i * GetDealsDeal.Size, GetDealsDeal.Size));
         }
         return new GetDealsOutput
         {

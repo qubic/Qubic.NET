@@ -71,8 +71,8 @@ public static class QrwaContract
 
 // ═══ Function: GetGovParams (inputType=1) ═══
 
-/// <summary>Nested type from GetGovParamsOutput.</summary>
-public readonly struct GetGovParamsOutputQRWAGovParams
+/// <summary>Nested type from GetGovParams.</summary>
+public readonly struct GetGovParamsQRWAGovParams
 {
     public const int Size = 184;
 
@@ -85,9 +85,9 @@ public readonly struct GetGovParamsOutputQRWAGovParams
     public ulong MaintenancePercent { get; init; }
     public ulong ReinvestmentPercent { get; init; }
 
-    public static GetGovParamsOutputQRWAGovParams ReadFrom(ReadOnlySpan<byte> data)
+    public static GetGovParamsQRWAGovParams ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetGovParamsOutputQRWAGovParams
+        return new GetGovParamsQRWAGovParams
         {
             MAdminAddress = data[0..].Slice(0, 32).ToArray(),
             ElectricityAddress = data[32..].Slice(0, 32).ToArray(),
@@ -123,21 +123,21 @@ public readonly struct GetGovParamsInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetGovParamsOutput : ISmartContractOutput<GetGovParamsOutput>
 {
-    public GetGovParamsOutputQRWAGovParams Params { get; init; }
+    public GetGovParamsQRWAGovParams Params { get; init; }
 
     public static GetGovParamsOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetGovParamsOutput
         {
-            Params = GetGovParamsOutputQRWAGovParams.ReadFrom(data.Slice(0, 184))
+            Params = GetGovParamsQRWAGovParams.ReadFrom(data.Slice(0, 184))
         };
     }
 }
 
 // ═══ Function: GetGovPoll (inputType=2) ═══
 
-/// <summary>Nested type from GetGovPollOutputQRWAGovProposal.</summary>
-public readonly struct GetGovPollOutputQRWAGovProposalQRWAGovParams
+/// <summary>Nested type from GetGovPollQRWAGovProposal.</summary>
+public readonly struct GetGovPollQRWAGovProposalQRWAGovParams
 {
     public const int Size = 184;
 
@@ -150,9 +150,9 @@ public readonly struct GetGovPollOutputQRWAGovProposalQRWAGovParams
     public ulong MaintenancePercent { get; init; }
     public ulong ReinvestmentPercent { get; init; }
 
-    public static GetGovPollOutputQRWAGovProposalQRWAGovParams ReadFrom(ReadOnlySpan<byte> data)
+    public static GetGovPollQRWAGovProposalQRWAGovParams ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetGovPollOutputQRWAGovProposalQRWAGovParams
+        return new GetGovPollQRWAGovProposalQRWAGovParams
         {
             MAdminAddress = data[0..].Slice(0, 32).ToArray(),
             ElectricityAddress = data[32..].Slice(0, 32).ToArray(),
@@ -178,24 +178,24 @@ public readonly struct GetGovPollOutputQRWAGovProposalQRWAGovParams
     }
 }
 
-/// <summary>Nested type from GetGovPollOutput.</summary>
-public readonly struct GetGovPollOutputQRWAGovProposal
+/// <summary>Nested type from GetGovPoll.</summary>
+public readonly struct GetGovPollQRWAGovProposal
 {
     public const int Size = 208;
 
     public ulong ProposalId { get; init; }
     public ulong Status { get; init; }
     public ulong Score { get; init; }
-    public GetGovPollOutputQRWAGovProposalQRWAGovParams Params { get; init; }
+    public GetGovPollQRWAGovProposalQRWAGovParams Params { get; init; }
 
-    public static GetGovPollOutputQRWAGovProposal ReadFrom(ReadOnlySpan<byte> data)
+    public static GetGovPollQRWAGovProposal ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetGovPollOutputQRWAGovProposal
+        return new GetGovPollQRWAGovProposal
         {
             ProposalId = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
             Score = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
-            Params = GetGovPollOutputQRWAGovProposalQRWAGovParams.ReadFrom(data.Slice(24, 184))
+            Params = GetGovPollQRWAGovProposalQRWAGovParams.ReadFrom(data.Slice(24, 184))
         };
     }
 
@@ -228,14 +228,14 @@ public readonly struct GetGovPollInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetGovPollOutput : ISmartContractOutput<GetGovPollOutput>
 {
-    public GetGovPollOutputQRWAGovProposal Proposal { get; init; }
+    public GetGovPollQRWAGovProposal Proposal { get; init; }
     public ulong Status { get; init; }
 
     public static GetGovPollOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetGovPollOutput
         {
-            Proposal = GetGovPollOutputQRWAGovProposal.ReadFrom(data.Slice(0, 208)),
+            Proposal = GetGovPollQRWAGovProposal.ReadFrom(data.Slice(0, 208)),
             Status = BinaryPrimitives.ReadUInt64LittleEndian(data[208..])
         };
     }
@@ -444,8 +444,8 @@ public readonly struct GetGeneralAssetsOutput : ISmartContractOutput<GetGeneralA
 
 // ═══ Function: GetPayoutsQmine (inputType=11) ═══
 
-/// <summary>Nested type from GetPayoutsQmineOutput.</summary>
-public readonly struct GetPayoutsQmineOutputQRWAPayoutEntry
+/// <summary>Nested type from GetPayoutsQmine.</summary>
+public readonly struct GetPayoutsQmineQRWAPayoutEntry
 {
     public const int Size = 64;
 
@@ -457,9 +457,9 @@ public readonly struct GetPayoutsQmineOutputQRWAPayoutEntry
     public ushort Epoch { get; init; }
     public byte PayoutType { get; init; }
 
-    public static GetPayoutsQmineOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetPayoutsQmineQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetPayoutsQmineOutputQRWAPayoutEntry
+        return new GetPayoutsQmineQRWAPayoutEntry
         {
             Recipient = data[0..].Slice(0, 32).ToArray(),
             Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -503,7 +503,7 @@ public readonly struct GetPayoutsQmineInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsQmineOutput : ISmartContractOutput<GetPayoutsQmineOutput>
 {
-    public GetPayoutsQmineOutputQRWAPayoutEntry[] Payouts { get; init; }
+    public GetPayoutsQmineQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -511,10 +511,10 @@ public readonly struct GetPayoutsQmineOutput : ISmartContractOutput<GetPayoutsQm
 
     public static GetPayoutsQmineOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var payouts = new GetPayoutsQmineOutputQRWAPayoutEntry[512];
+        var payouts = new GetPayoutsQmineQRWAPayoutEntry[512];
         for (int i = 0; i < 512; i++)
         {
-            payouts[i] = GetPayoutsQmineOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsQmineOutputQRWAPayoutEntry.Size, GetPayoutsQmineOutputQRWAPayoutEntry.Size));
+            payouts[i] = GetPayoutsQmineQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsQmineQRWAPayoutEntry.Size, GetPayoutsQmineQRWAPayoutEntry.Size));
         }
         return new GetPayoutsQmineOutput
         {
@@ -560,8 +560,8 @@ public readonly struct GetContractAddressesOutput : ISmartContractOutput<GetCont
 
 // ═══ Function: GetPayoutsQrwa (inputType=13) ═══
 
-/// <summary>Nested type from GetPayoutsQrwaOutput.</summary>
-public readonly struct GetPayoutsQrwaOutputQRWAPayoutEntry
+/// <summary>Nested type from GetPayoutsQrwa.</summary>
+public readonly struct GetPayoutsQrwaQRWAPayoutEntry
 {
     public const int Size = 64;
 
@@ -573,9 +573,9 @@ public readonly struct GetPayoutsQrwaOutputQRWAPayoutEntry
     public ushort Epoch { get; init; }
     public byte PayoutType { get; init; }
 
-    public static GetPayoutsQrwaOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetPayoutsQrwaQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetPayoutsQrwaOutputQRWAPayoutEntry
+        return new GetPayoutsQrwaQRWAPayoutEntry
         {
             Recipient = data[0..].Slice(0, 32).ToArray(),
             Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -619,7 +619,7 @@ public readonly struct GetPayoutsQrwaInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsQrwaOutput : ISmartContractOutput<GetPayoutsQrwaOutput>
 {
-    public GetPayoutsQrwaOutputQRWAPayoutEntry[] Payouts { get; init; }
+    public GetPayoutsQrwaQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -627,10 +627,10 @@ public readonly struct GetPayoutsQrwaOutput : ISmartContractOutput<GetPayoutsQrw
 
     public static GetPayoutsQrwaOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var payouts = new GetPayoutsQrwaOutputQRWAPayoutEntry[512];
+        var payouts = new GetPayoutsQrwaQRWAPayoutEntry[512];
         for (int i = 0; i < 512; i++)
         {
-            payouts[i] = GetPayoutsQrwaOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsQrwaOutputQRWAPayoutEntry.Size, GetPayoutsQrwaOutputQRWAPayoutEntry.Size));
+            payouts[i] = GetPayoutsQrwaQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsQrwaQRWAPayoutEntry.Size, GetPayoutsQrwaQRWAPayoutEntry.Size));
         }
         return new GetPayoutsQrwaOutput
         {
@@ -645,8 +645,8 @@ public readonly struct GetPayoutsQrwaOutput : ISmartContractOutput<GetPayoutsQrw
 
 // ═══ Function: GetPayoutsDedicated (inputType=14) ═══
 
-/// <summary>Nested type from GetPayoutsDedicatedOutput.</summary>
-public readonly struct GetPayoutsDedicatedOutputQRWAPayoutEntry
+/// <summary>Nested type from GetPayoutsDedicated.</summary>
+public readonly struct GetPayoutsDedicatedQRWAPayoutEntry
 {
     public const int Size = 64;
 
@@ -658,9 +658,9 @@ public readonly struct GetPayoutsDedicatedOutputQRWAPayoutEntry
     public ushort Epoch { get; init; }
     public byte PayoutType { get; init; }
 
-    public static GetPayoutsDedicatedOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetPayoutsDedicatedQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetPayoutsDedicatedOutputQRWAPayoutEntry
+        return new GetPayoutsDedicatedQRWAPayoutEntry
         {
             Recipient = data[0..].Slice(0, 32).ToArray(),
             Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -704,7 +704,7 @@ public readonly struct GetPayoutsDedicatedInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsDedicatedOutput : ISmartContractOutput<GetPayoutsDedicatedOutput>
 {
-    public GetPayoutsDedicatedOutputQRWAPayoutEntry[] Payouts { get; init; }
+    public GetPayoutsDedicatedQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -712,10 +712,10 @@ public readonly struct GetPayoutsDedicatedOutput : ISmartContractOutput<GetPayou
 
     public static GetPayoutsDedicatedOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var payouts = new GetPayoutsDedicatedOutputQRWAPayoutEntry[512];
+        var payouts = new GetPayoutsDedicatedQRWAPayoutEntry[512];
         for (int i = 0; i < 512; i++)
         {
-            payouts[i] = GetPayoutsDedicatedOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsDedicatedOutputQRWAPayoutEntry.Size, GetPayoutsDedicatedOutputQRWAPayoutEntry.Size));
+            payouts[i] = GetPayoutsDedicatedQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsDedicatedQRWAPayoutEntry.Size, GetPayoutsDedicatedQRWAPayoutEntry.Size));
         }
         return new GetPayoutsDedicatedOutput
         {
@@ -767,8 +767,8 @@ public readonly struct GetScDividendTrackingOutput : ISmartContractOutput<GetScD
 
 // ═══ Function: GetPayoutsPoolD (inputType=16) ═══
 
-/// <summary>Nested type from GetPayoutsPoolDOutput.</summary>
-public readonly struct GetPayoutsPoolDOutputQRWAPayoutEntry
+/// <summary>Nested type from GetPayoutsPoolD.</summary>
+public readonly struct GetPayoutsPoolDQRWAPayoutEntry
 {
     public const int Size = 64;
 
@@ -780,9 +780,9 @@ public readonly struct GetPayoutsPoolDOutputQRWAPayoutEntry
     public ushort Epoch { get; init; }
     public byte PayoutType { get; init; }
 
-    public static GetPayoutsPoolDOutputQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetPayoutsPoolDQRWAPayoutEntry ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetPayoutsPoolDOutputQRWAPayoutEntry
+        return new GetPayoutsPoolDQRWAPayoutEntry
         {
             Recipient = data[0..].Slice(0, 32).ToArray(),
             Amount = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
@@ -826,7 +826,7 @@ public readonly struct GetPayoutsPoolDInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetPayoutsPoolDOutput : ISmartContractOutput<GetPayoutsPoolDOutput>
 {
-    public GetPayoutsPoolDOutputQRWAPayoutEntry[] Payouts { get; init; }
+    public GetPayoutsPoolDQRWAPayoutEntry[] Payouts { get; init; }
     public ushort NextIdx { get; init; }
     public ushort ReturnedCount { get; init; }
     public ushort Page { get; init; }
@@ -834,10 +834,10 @@ public readonly struct GetPayoutsPoolDOutput : ISmartContractOutput<GetPayoutsPo
 
     public static GetPayoutsPoolDOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var payouts = new GetPayoutsPoolDOutputQRWAPayoutEntry[512];
+        var payouts = new GetPayoutsPoolDQRWAPayoutEntry[512];
         for (int i = 0; i < 512; i++)
         {
-            payouts[i] = GetPayoutsPoolDOutputQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsPoolDOutputQRWAPayoutEntry.Size, GetPayoutsPoolDOutputQRWAPayoutEntry.Size));
+            payouts[i] = GetPayoutsPoolDQRWAPayoutEntry.ReadFrom(data.Slice(0 + i * GetPayoutsPoolDQRWAPayoutEntry.Size, GetPayoutsPoolDQRWAPayoutEntry.Size));
         }
         return new GetPayoutsPoolDOutput
         {

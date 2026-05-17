@@ -145,8 +145,8 @@ public readonly struct GetProposalOutput : ISmartContractOutput<GetProposalOutpu
 
 // ═══ Function: GetVote (inputType=3) ═══
 
-/// <summary>Nested type from GetVoteOutput.</summary>
-public readonly struct GetVoteOutputProposalSingleVoteDataV1
+/// <summary>Nested type from GetVote.</summary>
+public readonly struct GetVoteProposalSingleVoteDataV1
 {
     public const int Size = 16;
 
@@ -155,9 +155,9 @@ public readonly struct GetVoteOutputProposalSingleVoteDataV1
     public uint ProposalTick { get; init; }
     public long VoteValue { get; init; }
 
-    public static GetVoteOutputProposalSingleVoteDataV1 ReadFrom(ReadOnlySpan<byte> data)
+    public static GetVoteProposalSingleVoteDataV1 ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetVoteOutputProposalSingleVoteDataV1
+        return new GetVoteProposalSingleVoteDataV1
         {
             ProposalIndex = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
             ProposalType = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
@@ -198,14 +198,14 @@ public readonly struct GetVoteInput : ISmartContractInput
 public readonly struct GetVoteOutput : ISmartContractOutput<GetVoteOutput>
 {
     public bool Okay { get; init; }
-    public GetVoteOutputProposalSingleVoteDataV1 Vote { get; init; }
+    public GetVoteProposalSingleVoteDataV1 Vote { get; init; }
 
     public static GetVoteOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetVoteOutput
         {
             Okay = (data.Slice(0, 1)[0] != 0),
-            Vote = GetVoteOutputProposalSingleVoteDataV1.ReadFrom(data.Slice(8, 16))
+            Vote = GetVoteProposalSingleVoteDataV1.ReadFrom(data.Slice(8, 16))
         };
     }
 }
@@ -247,8 +247,8 @@ public readonly struct GetVotingResultsOutput : ISmartContractOutput<GetVotingRe
 
 // ═══ Function: GetRevenueDonation (inputType=5) ═══
 
-/// <summary>Nested type from GetRevenueDonationOutput.</summary>
-public readonly struct GetRevenueDonationOutputRevenueDonationEntry
+/// <summary>Nested type from GetRevenueDonation.</summary>
+public readonly struct GetRevenueDonationRevenueDonationEntry
 {
     public const int Size = 48;
 
@@ -256,9 +256,9 @@ public readonly struct GetRevenueDonationOutputRevenueDonationEntry
     public long MillionthAmount { get; init; }
     public ushort FirstEpoch { get; init; }
 
-    public static GetRevenueDonationOutputRevenueDonationEntry ReadFrom(ReadOnlySpan<byte> data)
+    public static GetRevenueDonationRevenueDonationEntry ReadFrom(ReadOnlySpan<byte> data)
     {
-        return new GetRevenueDonationOutputRevenueDonationEntry
+        return new GetRevenueDonationRevenueDonationEntry
         {
             DestinationPublicKey = data[0..].Slice(0, 32).ToArray(),
             MillionthAmount = BinaryPrimitives.ReadInt64LittleEndian(data[32..]),
@@ -284,14 +284,14 @@ public readonly struct GetRevenueDonationInput : ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct GetRevenueDonationOutput : ISmartContractOutput<GetRevenueDonationOutput>
 {
-    public GetRevenueDonationOutputRevenueDonationEntry[] Entries { get; init; }
+    public GetRevenueDonationRevenueDonationEntry[] Entries { get; init; }
 
     public static GetRevenueDonationOutput FromBytes(ReadOnlySpan<byte> data)
     {
-        var entries = new GetRevenueDonationOutputRevenueDonationEntry[128];
+        var entries = new GetRevenueDonationRevenueDonationEntry[128];
         for (int i = 0; i < 128; i++)
         {
-            entries[i] = GetRevenueDonationOutputRevenueDonationEntry.ReadFrom(data.Slice(0 + i * GetRevenueDonationOutputRevenueDonationEntry.Size, GetRevenueDonationOutputRevenueDonationEntry.Size));
+            entries[i] = GetRevenueDonationRevenueDonationEntry.ReadFrom(data.Slice(0 + i * GetRevenueDonationRevenueDonationEntry.Size, GetRevenueDonationRevenueDonationEntry.Size));
         }
         return new GetRevenueDonationOutput
         {

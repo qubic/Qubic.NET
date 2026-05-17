@@ -63,8 +63,8 @@ public static class VottunContract
 
 // ═══ Function: getOrder (inputType=1) ═══
 
-/// <summary>Nested type from GetOrderOutput.</summary>
-public readonly struct GetOrderOutputOrderResponse
+/// <summary>Nested type from GetOrder.</summary>
+public readonly struct GetOrderOrderResponse
 {
     public const int Size = 224;
 
@@ -77,7 +77,7 @@ public readonly struct GetOrderOutputOrderResponse
     public required byte[] QubicDestination { get; init; }
     public byte Status { get; init; }
 
-    public static GetOrderOutputOrderResponse ReadFrom(ReadOnlySpan<byte> data)
+    public static GetOrderOrderResponse ReadFrom(ReadOnlySpan<byte> data)
     {
         var destinationAccount = new byte[64];
         for (int i = 0; i < 64; i++)
@@ -89,7 +89,7 @@ public readonly struct GetOrderOutputOrderResponse
         {
             memo[i] = data.Slice(112 + i * 1, 1)[0];
         }
-        return new GetOrderOutputOrderResponse
+        return new GetOrderOrderResponse
         {
             OriginAccount = data[0..].Slice(0, 32).ToArray(),
             DestinationAccount = destinationAccount,
@@ -142,7 +142,7 @@ public readonly struct GetOrderInput : ISmartContractInput
 public readonly struct GetOrderOutput : ISmartContractOutput<GetOrderOutput>
 {
     public byte Status { get; init; }
-    public GetOrderOutputOrderResponse Order { get; init; }
+    public GetOrderOrderResponse Order { get; init; }
     public byte[] Message { get; init; }
 
     public static GetOrderOutput FromBytes(ReadOnlySpan<byte> data)
@@ -155,7 +155,7 @@ public readonly struct GetOrderOutput : ISmartContractOutput<GetOrderOutput>
         return new GetOrderOutput
         {
             Status = data.Slice(0, 1)[0],
-            Order = GetOrderOutputOrderResponse.ReadFrom(data.Slice(8, 224)),
+            Order = GetOrderOrderResponse.ReadFrom(data.Slice(8, 224)),
             Message = message
         };
     }
@@ -286,8 +286,8 @@ public readonly struct GetOrderByDetailsOutput : ISmartContractOutput<GetOrderBy
 
 // ═══ Function: getContractInfo (inputType=6) ═══
 
-/// <summary>Nested type from GetContractInfoOutput.</summary>
-public readonly struct GetContractInfoOutputBridgeOrder
+/// <summary>Nested type from GetContractInfo.</summary>
+public readonly struct GetContractInfoBridgeOrder
 {
     public const int Size = 152;
 
@@ -302,14 +302,14 @@ public readonly struct GetContractInfoOutputBridgeOrder
     public bool TokensReceived { get; init; }
     public bool TokensLocked { get; init; }
 
-    public static GetContractInfoOutputBridgeOrder ReadFrom(ReadOnlySpan<byte> data)
+    public static GetContractInfoBridgeOrder ReadFrom(ReadOnlySpan<byte> data)
     {
         var ethAddress = new byte[64];
         for (int i = 0; i < 64; i++)
         {
             ethAddress[i] = data.Slice(64 + i * 1, 1)[0];
         }
-        return new GetContractInfoOutputBridgeOrder
+        return new GetContractInfoBridgeOrder
         {
             QubicSender = data[0..].Slice(0, 32).ToArray(),
             QubicDestination = data[32..].Slice(0, 32).ToArray(),
@@ -359,7 +359,7 @@ public readonly struct GetContractInfoOutput : ISmartContractOutput<GetContractI
     public ulong EarnedFees { get; init; }
     public uint TradeFeeBillionths { get; init; }
     public uint SourceChain { get; init; }
-    public GetContractInfoOutputBridgeOrder[] FirstOrders { get; init; }
+    public GetContractInfoBridgeOrder[] FirstOrders { get; init; }
     public ulong TotalOrdersFound { get; init; }
     public ulong EmptySlots { get; init; }
     public byte[][] MultisigAdmins { get; init; }
@@ -374,10 +374,10 @@ public readonly struct GetContractInfoOutput : ISmartContractOutput<GetContractI
         {
             managers[i] = data[(0 + i * 32)..].Slice(0, 32).ToArray();
         }
-        var firstOrders = new GetContractInfoOutputBridgeOrder[16];
+        var firstOrders = new GetContractInfoBridgeOrder[16];
         for (int i = 0; i < 16; i++)
         {
-            firstOrders[i] = GetContractInfoOutputBridgeOrder.ReadFrom(data.Slice(552 + i * GetContractInfoOutputBridgeOrder.Size, GetContractInfoOutputBridgeOrder.Size));
+            firstOrders[i] = GetContractInfoBridgeOrder.ReadFrom(data.Slice(552 + i * GetContractInfoBridgeOrder.Size, GetContractInfoBridgeOrder.Size));
         }
         var multisigAdmins = new byte[16][];
         for (int i = 0; i < 16; i++)
@@ -433,8 +433,8 @@ public readonly struct GetAvailableFeesOutput : ISmartContractOutput<GetAvailabl
 
 // ═══ Function: getProposal (inputType=8) ═══
 
-/// <summary>Nested type from GetProposalOutput.</summary>
-public readonly struct GetProposalOutputAdminProposal
+/// <summary>Nested type from GetProposal.</summary>
+public readonly struct GetProposalAdminProposal
 {
     public const int Size = 608;
 
@@ -448,14 +448,14 @@ public readonly struct GetProposalOutputAdminProposal
     public bool Executed { get; init; }
     public bool Active { get; init; }
 
-    public static GetProposalOutputAdminProposal ReadFrom(ReadOnlySpan<byte> data)
+    public static GetProposalAdminProposal ReadFrom(ReadOnlySpan<byte> data)
     {
         var approvals = new byte[16][];
         for (int i = 0; i < 16; i++)
         {
             approvals[i] = data[(88 + i * 32)..].Slice(0, 32).ToArray();
         }
-        return new GetProposalOutputAdminProposal
+        return new GetProposalAdminProposal
         {
             ProposalId = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
             ProposalType = data.Slice(8, 1)[0],
@@ -507,14 +507,14 @@ public readonly struct GetProposalInput : ISmartContractInput
 public readonly struct GetProposalOutput : ISmartContractOutput<GetProposalOutput>
 {
     public byte Status { get; init; }
-    public GetProposalOutputAdminProposal Proposal { get; init; }
+    public GetProposalAdminProposal Proposal { get; init; }
 
     public static GetProposalOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetProposalOutput
         {
             Status = data.Slice(0, 1)[0],
-            Proposal = GetProposalOutputAdminProposal.ReadFrom(data.Slice(8, 608))
+            Proposal = GetProposalAdminProposal.ReadFrom(data.Slice(8, 608))
         };
     }
 }

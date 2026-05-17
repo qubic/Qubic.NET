@@ -108,15 +108,17 @@ public class CSharpEmitter
         Line();
         EmitSeparator($"Function: {func.Name} (inputType={func.InputType})");
 
-        // Emit nested structs referenced by input and output
+        // Emit nested structs referenced by input and output.
+        // Output nested types stay at `{Fn}{Type}` (legacy convention, e.g. AssetAskOrdersOrder);
+        // input nested types get the disambiguating `Input` suffix so they don't collide.
         EmitNestedStructs(func.Input, $"{name}Input");
-        EmitNestedStructs(func.Output, $"{name}Output");
+        EmitNestedStructs(func.Output, name);
 
         // Emit input struct
         EmitInputStruct($"{name}Input", func.Input, isPayload: false, inputType: 0);
 
-        // Emit output struct
-        EmitOutputStruct($"{name}Output", func.Output, $"{name}Output");
+        // Emit output struct — parentName matches the nested-struct prefix above.
+        EmitOutputStruct($"{name}Output", func.Output, name);
     }
 
     private void EmitProcedureTypes(ContractDefinition contract, ProcedureDef proc)
@@ -126,15 +128,17 @@ public class CSharpEmitter
         Line();
         EmitSeparator($"Procedure: {proc.Name} (inputType={proc.InputType})");
 
-        // Emit nested structs referenced by input and output
+        // Emit nested structs referenced by input and output.
+        // Output nested types stay at `{Fn}{Type}` (legacy convention);
+        // payload nested types use `{Fn}Payload{Type}` to disambiguate.
         EmitNestedStructs(proc.Input, $"{name}Payload");
-        EmitNestedStructs(proc.Output, $"{name}Output");
+        EmitNestedStructs(proc.Output, name);
 
         // Emit input as ITransactionPayload
         EmitInputStruct($"{name}Payload", proc.Input, isPayload: true, inputType: proc.InputType);
 
-        // Emit output struct
-        EmitOutputStruct($"{name}Output", proc.Output, $"{name}Output");
+        // Emit output struct — parentName matches the nested-struct prefix above.
+        EmitOutputStruct($"{name}Output", proc.Output, name);
     }
 
     private void EmitNestedStructs(StructDef structDef, string parentName)
