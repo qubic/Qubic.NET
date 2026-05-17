@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0;net10.0-android</TargetFrameworks>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.Core</PackageId>
-    <Version>1.279.0.4</Version>
+    <Version>1.291.0.0</Version>
     <Authors>Qubic.NET Contributors</Authors>
     <Description>Core domain models and abstractions for the Qubic network</Description>
     <PackageTags>qubic;blockchain;cryptocurrency</PackageTags>
