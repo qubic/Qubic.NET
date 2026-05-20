@@ -47,14 +47,12 @@ public static class NetworkMessageTypes
     public const byte RespondPruningLog = 57;
     public const byte RequestLogStateDigest = 58;
     public const byte RespondLogStateDigest = 59;
-    public const byte RequestCustomMiningData = 60;
-    public const byte RespondCustomMiningData = 61;
-    public const byte RequestCustomMiningSolutionVerification = 62;
-    public const byte RespondCustomMiningSolutionVerification = 63;
     public const byte RequestActiveIpos = 64;
     public const byte RespondActiveIpo = 65;
     public const byte RequestOracleData = 66;
     public const byte RespondOracleData = 67;
+    public const byte BroadcastCustomMiningTask = 68;
+    public const byte BroadcastCustomMiningSolution = 69;
     public const byte OracleMachineQuery = 190;
     public const byte OracleMachineReply = 191;
     public const byte RequestTxStatus = 201;

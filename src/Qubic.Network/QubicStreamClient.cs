@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Sockets;
+using Qubic.Core;
 using Qubic.Core.Entities;
 using Qubic.Serialization;
 using Qubic.Serialization.Readers;
@@ -430,12 +431,22 @@ public sealed class QubicStreamClient : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Requests all transactions for a given tick.
+    /// Requests all transactions for a given tick using the V2 request format
+    /// (epoch ≥ <see cref="QubicConstants.TransactionsPerTickV2Epoch"/>).
+    /// For archive queries against pre-fork ticks, use the overload that takes an explicit epoch.
     /// </summary>
-    public async Task<List<byte[]>> GetTickTransactionsAsync(uint tick, CancellationToken cancellationToken = default)
+    public Task<List<byte[]>> GetTickTransactionsAsync(uint tick, CancellationToken cancellationToken = default) =>
+        GetTickTransactionsAsync(tick, QubicConstants.TransactionsPerTickV2Epoch, cancellationToken);
+
+    /// <summary>
+    /// Requests all transactions for a given tick, sizing the request flag-array to match
+    /// the protocol era of the queried tick (128 bytes pre-fork, 512 bytes from epoch
+    /// <see cref="QubicConstants.TransactionsPerTickV2Epoch"/>).
+    /// </summary>
+    public async Task<List<byte[]>> GetTickTransactionsAsync(uint tick, ushort epoch, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
-        var packet = _writer.WriteRequestTickTransactions(tick);
+        var packet = _writer.WriteRequestTickTransactions(tick, epoch);
         return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.BroadcastTransaction, QubicPacketTypes.EndResponse, cancellationToken);
     }
 

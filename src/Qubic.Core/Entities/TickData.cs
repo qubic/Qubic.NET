@@ -31,12 +31,14 @@ public sealed class TickData
     public required byte[] Timelock { get; init; }
 
     /// <summary>
-    /// Transaction digests for all transactions in this tick (up to 1024).
+    /// Transaction digests for all transactions in this tick.
+    /// Length is up to 1024 for epoch &lt; <c>TransactionsPerTickV2Epoch</c> (214),
+    /// up to 4096 from epoch 214 onward (qubic/core PR #879).
     /// </summary>
     public required byte[][] TransactionDigests { get; init; }
 
     /// <summary>
-    /// Contract fees for this tick (up to 1024 contracts).
+    /// Contract fees for this tick (up to 1024 contracts, unchanged by the epoch-214 fork).
     /// </summary>
     public required long[] ContractFees { get; init; }
 

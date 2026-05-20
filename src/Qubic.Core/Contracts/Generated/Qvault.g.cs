@@ -61,6 +61,8 @@ public static class QvaultContract
         public const uint GetAmountForQearnInUpcomingEpoch = 20;
         /// <summary>getVoteInProposal (inputType=21).</summary>
         public const uint GetVoteInProposal = 21;
+        /// <summary>getStakeEpochFlag (inputType=22).</summary>
+        public const uint GetStakeEpochFlag = 22;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -1233,7 +1235,7 @@ public readonly struct GetVoteInProposalInput : ISmartContractInput
 public readonly struct GetVoteInProposalOutput : ISmartContractOutput<GetVoteInProposalOutput>
 {
     public long ReturnCode { get; init; }
-    public long IsVoted { get; init; }
+    public long VoteStatus { get; init; }
     public long VotingDecision { get; init; }
 
     public static GetVoteInProposalOutput FromBytes(ReadOnlySpan<byte> data)
@@ -1241,8 +1243,41 @@ public readonly struct GetVoteInProposalOutput : ISmartContractOutput<GetVoteInP
         return new GetVoteInProposalOutput
         {
             ReturnCode = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
-            IsVoted = BinaryPrimitives.ReadInt64LittleEndian(data[8..]),
+            VoteStatus = BinaryPrimitives.ReadInt64LittleEndian(data[8..]),
             VotingDecision = BinaryPrimitives.ReadInt64LittleEndian(data[16..])
+        };
+    }
+}
+
+// ═══ Function: getStakeEpochFlag (inputType=22) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetStakeEpochFlagInput : ISmartContractInput
+{
+    public const int Size = 32;
+
+    public int SerializedSize => Size;
+
+    public required byte[] UserID { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        UserID.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetStakeEpochFlagOutput : ISmartContractOutput<GetStakeEpochFlagOutput>
+{
+    public byte Flag { get; init; }
+
+    public static GetStakeEpochFlagOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetStakeEpochFlagOutput
+        {
+            Flag = data.Slice(0, 1)[0]
         };
     }
 }

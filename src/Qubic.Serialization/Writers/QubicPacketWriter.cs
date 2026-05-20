@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Qubic.Core;
 using Qubic.Core.Entities;
 
 namespace Qubic.Serialization.Writers;
@@ -141,12 +142,19 @@ public sealed class QubicPacketWriter
     /// <summary>
     /// Writes a RequestTickTransactions packet.
     /// Requests all transactions in a tick (flags all zero = request everything).
+    /// Flag-array size depends on epoch: 128 bytes for legacy (1024 tx/tick),
+    /// 512 bytes from epoch <see cref="QubicConstants.TransactionsPerTickV2Epoch"/> (4096 tx/tick).
     /// </summary>
-    public byte[] WriteRequestTickTransactions(uint tick)
+    /// <param name="tick">The tick number to fetch transactions for.</param>
+    /// <param name="epoch">Epoch the tick belongs to. Defaults to the V2 epoch so callers
+    /// targeting current/future ticks need not pass it; archive callers must pass the
+    /// historical epoch to match the node's expected request size.</param>
+    public byte[] WriteRequestTickTransactions(
+        uint tick,
+        ushort epoch = QubicConstants.TransactionsPerTickV2Epoch)
     {
         Reset();
-        // Payload: 4 bytes tick + 128 bytes flags (1024 transactions / 8 bits)
-        const int flagsSize = 1024 / 8; // 128
+        int flagsSize = QubicConstants.GetMaxTransactionsPerTick(epoch) / 8; // 128 or 512
         WriteHeader(QubicPacketTypes.RequestTickTransactions, 4 + flagsSize);
         _writer.Write(tick);
         _writer.Write(new byte[flagsSize]); // all zeros = request all transactions

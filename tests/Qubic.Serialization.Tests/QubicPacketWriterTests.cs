@@ -1,3 +1,4 @@
+using Qubic.Core;
 using Qubic.Core.Entities;
 using Qubic.Serialization;
 using Qubic.Serialization.Writers;
@@ -186,5 +187,53 @@ public class QubicPacketWriterTests
 
         // Very unlikely to be the same (1 in 2^32)
         Assert.NotEqual(dejavu1, dejavu2);
+    }
+
+    [Fact]
+    public void WriteRequestTickTransactions_LegacyEpoch_Uses128ByteFlags()
+    {
+        var packet = _writer.WriteRequestTickTransactions(12345u, epoch: 213);
+
+        // Header (8) + tick (4) + 128 flag bytes (1024/8)
+        Assert.Equal(QubicPacketHeader.Size + 4 + 128, packet.Length);
+        Assert.Equal(QubicPacketTypes.RequestTickTransactions, packet[3]);
+
+        // All flag bytes must be zero (request all transactions)
+        for (int i = QubicPacketHeader.Size + 4; i < packet.Length; i++)
+        {
+            Assert.Equal(0, packet[i]);
+        }
+    }
+
+    [Fact]
+    public void WriteRequestTickTransactions_V2Epoch_Uses512ByteFlags()
+    {
+        var packet = _writer.WriteRequestTickTransactions(12345u, epoch: 214);
+
+        // Header (8) + tick (4) + 512 flag bytes (4096/8)
+        Assert.Equal(QubicPacketHeader.Size + 4 + 512, packet.Length);
+        Assert.Equal(QubicPacketTypes.RequestTickTransactions, packet[3]);
+    }
+
+    [Fact]
+    public void WriteRequestTickTransactions_DefaultEpoch_UsesV2Size()
+    {
+        var packet = _writer.WriteRequestTickTransactions(12345u);
+
+        // Default = TransactionsPerTickV2Epoch → V2 flag size
+        Assert.Equal(QubicPacketHeader.Size + 4 + 512, packet.Length);
+    }
+
+    [Fact]
+    public void WriteRequestTickTransactions_EncodesTickInLittleEndian()
+    {
+        const uint tick = 0x01020304u;
+        var packet = _writer.WriteRequestTickTransactions(tick, epoch: 214);
+
+        // Tick starts right after the 8-byte header
+        Assert.Equal(0x04, packet[QubicPacketHeader.Size]);
+        Assert.Equal(0x03, packet[QubicPacketHeader.Size + 1]);
+        Assert.Equal(0x02, packet[QubicPacketHeader.Size + 2]);
+        Assert.Equal(0x01, packet[QubicPacketHeader.Size + 3]);
     }
 }
