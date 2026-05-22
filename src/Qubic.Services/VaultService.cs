@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Konscious.Security.Cryptography;
 using Qubic.Core.Entities;
 
 namespace Qubic.Services;
@@ -52,8 +53,10 @@ public sealed class SendManyRecipient
 }
 
 /// <summary>
-/// Manages an encrypted vault file containing multiple seed entries.
-/// Uses PBKDF2 (600k iterations, SHA-256) for key derivation and AES-256-GCM for authenticated encryption.
+/// Manages an encrypted vault file containing seeds, contacts, watchlist and templates.
+/// Current default: Argon2id (m=64 MiB, t=3, p=1) for key derivation + AES-256-GCM for authenticated encryption.
+/// Legacy vaults using PBKDF2-HMAC-SHA256 (600k iterations) are read transparently and migrate to
+/// Argon2id on the next save.
 /// </summary>
 public sealed class VaultService
 {
@@ -61,8 +64,29 @@ public sealed class VaultService
     private const int NonceSize = 12;
     private const int TagSize = 16;
     private const int KeySize = 32;
-    private const int Iterations = 600_000;
     private const string VaultPathKey = "vault_path";
+
+    // KDF identifiers used in the envelope.
+    private const string KdfPbkdf2 = "pbkdf2-sha256";
+    private const string KdfArgon2id = "argon2id";
+
+    // Legacy PBKDF2 parameters (still read; no longer written for new vaults).
+    private const int LegacyPbkdf2Iterations = 600_000;
+
+    // Current Argon2id parameters. These are written into every new envelope so changing the
+    // defaults later only affects new saves; existing files keep opening with their stored params.
+    private const int Argon2MemoryKiB = 64 * 1024; // 64 MiB
+    private const int Argon2TimeCost = 3;
+    private const int Argon2Parallelism = 1;
+
+    // Current envelope format version. v1 = legacy (no Version/Kdf fields, implicit PBKDF2).
+    private const int CurrentEnvelopeVersion = 2;
+
+    private static readonly JsonSerializerOptions EnvelopeJsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     private readonly QubicSettingsService _settings;
     private List<VaultEntry>? _entries;
@@ -109,25 +133,71 @@ public sealed class VaultService
 
     // ── Password validation ──
 
+    /// <summary>Minimum password length enforced by <see cref="ValidatePassword(string?)"/>.</summary>
+    public const int MinPasswordLength = 12;
+
+    /// <summary>Minimum zxcvbn score (0..4) required by <see cref="ValidatePassword(string?)"/>.</summary>
+    public const int MinPasswordScore = 3;
+
     /// <summary>
-    /// Validates a password against requirements: min 12 chars, uppercase, lowercase, digit, special.
-    /// Returns an error message or null if valid.
+    /// Estimated strength of a password using the zxcvbn algorithm.
+    /// </summary>
+    /// <param name="Score">0 (very weak) to 4 (very strong).</param>
+    /// <param name="Guesses">Estimated number of guesses required to crack.</param>
+    /// <param name="CrackTimeDisplay">Human-readable crack time (offline slow hashing, 1e4/sec).</param>
+    /// <param name="Warning">Optional zxcvbn warning, e.g. "This is a very common password".</param>
+    /// <param name="Suggestions">Zxcvbn improvement suggestions.</param>
+    public sealed record PasswordStrength(
+        int Score,
+        double Guesses,
+        string? CrackTimeDisplay,
+        string? Warning,
+        IReadOnlyList<string> Suggestions)
+    {
+        /// <summary>True if the password clears the minimum length + zxcvbn score floor.</summary>
+        public bool IsAcceptable => Score >= MinPasswordScore;
+    }
+
+    /// <summary>
+    /// Estimates a password's strength via zxcvbn. Returns Score 0 and a hint for empty input.
+    /// </summary>
+    public static PasswordStrength Estimate(string? password)
+    {
+        if (string.IsNullOrEmpty(password))
+            return new PasswordStrength(0, 0, null, "Password is required.", Array.Empty<string>());
+
+        var result = Zxcvbn.Core.EvaluatePassword(password);
+        var suggestions = result.Feedback?.Suggestions is { } s
+            ? (IReadOnlyList<string>)s.ToList()
+            : Array.Empty<string>();
+        return new PasswordStrength(
+            Score: result.Score,
+            Guesses: result.Guesses,
+            CrackTimeDisplay: result.CrackTimeDisplay?.OfflineSlowHashing1e4PerSecond,
+            Warning: string.IsNullOrEmpty(result.Feedback?.Warning) ? null : result.Feedback.Warning,
+            Suggestions: suggestions);
+    }
+
+    /// <summary>
+    /// Validates a password: must be at least <see cref="MinPasswordLength"/> characters and
+    /// achieve zxcvbn score ≥ <see cref="MinPasswordScore"/>. Returns null on success, or an
+    /// error message suitable for direct display to the user.
     /// </summary>
     public static string? ValidatePassword(string? password)
     {
         if (string.IsNullOrEmpty(password))
             return "Password is required.";
-        if (password.Length < 12)
-            return "Password must be at least 12 characters.";
-        if (!password.Any(char.IsUpper))
-            return "Password must contain at least one uppercase letter.";
-        if (!password.Any(char.IsLower))
-            return "Password must contain at least one lowercase letter.";
-        if (!password.Any(char.IsDigit))
-            return "Password must contain at least one digit.";
-        if (password.All(c => char.IsLetterOrDigit(c)))
-            return "Password must contain at least one special character.";
-        return null;
+        if (password.Length < MinPasswordLength)
+            return $"Password must be at least {MinPasswordLength} characters.";
+
+        var strength = Estimate(password);
+        if (strength.IsAcceptable)
+            return null;
+
+        var msg = strength.Warning ?? "Password is too easy to guess.";
+        if (strength.Suggestions.Count > 0)
+            msg += " " + string.Join(" ", strength.Suggestions);
+        return msg;
     }
 
     // ── Lifecycle ──
@@ -509,16 +579,44 @@ public sealed class VaultService
 
     // ── Encryption ──
 
-    private static byte[] DeriveKey(string password, byte[] salt)
+    private static byte[] DeriveKey(string password, byte[] salt, string kdf, KdfParams? kdfParams)
     {
-        return Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA256, KeySize);
+        switch (kdf)
+        {
+            case KdfPbkdf2:
+                // Legacy read path. New vaults are never written with this KDF.
+                var iterations = kdfParams?.Iterations ?? LegacyPbkdf2Iterations;
+                return Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, KeySize);
+
+            case KdfArgon2id:
+                using (var argon = new Argon2id(Encoding.UTF8.GetBytes(password)))
+                {
+                    argon.Salt = salt;
+                    argon.DegreeOfParallelism = kdfParams?.Parallelism ?? Argon2Parallelism;
+                    argon.MemorySize = kdfParams?.MemoryKiB ?? Argon2MemoryKiB;
+                    argon.Iterations = kdfParams?.TimeCost ?? Argon2TimeCost;
+                    return argon.GetBytes(KeySize);
+                }
+
+            default:
+                throw new CryptographicException($"Unsupported KDF: '{kdf}'.");
+        }
     }
 
+    /// <summary>
+    /// Encrypts the JSON payload with the current default KDF (Argon2id) and AES-256-GCM.
+    /// </summary>
     private static VaultFileEnvelope Encrypt(string json, string password)
     {
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
         var nonce = RandomNumberGenerator.GetBytes(NonceSize);
-        var key = DeriveKey(password, salt);
+        var kdfParams = new KdfParams
+        {
+            MemoryKiB = Argon2MemoryKiB,
+            TimeCost = Argon2TimeCost,
+            Parallelism = Argon2Parallelism
+        };
+        var key = DeriveKey(password, salt, KdfArgon2id, kdfParams);
 
         var plaintextBytes = Encoding.UTF8.GetBytes(json);
         var ciphertext = new byte[plaintextBytes.Length];
@@ -529,6 +627,9 @@ public sealed class VaultService
 
         return new VaultFileEnvelope
         {
+            Version = CurrentEnvelopeVersion,
+            Kdf = KdfArgon2id,
+            KdfParams = kdfParams,
             Salt = Convert.ToBase64String(salt),
             Nonce = Convert.ToBase64String(nonce),
             Tag = Convert.ToBase64String(tag),
@@ -536,13 +637,24 @@ public sealed class VaultService
         };
     }
 
+    /// <summary>
+    /// Decrypts an envelope. Handles both v2 envelopes (with explicit Kdf+KdfParams) and
+    /// legacy v1 envelopes that omit those fields and implicitly used PBKDF2-SHA256 / 600k.
+    /// </summary>
     private static string Decrypt(VaultFileEnvelope envelope, string password)
     {
         var salt = Convert.FromBase64String(envelope.Salt);
         var nonce = Convert.FromBase64String(envelope.Nonce);
         var tag = Convert.FromBase64String(envelope.Tag);
         var ciphertext = Convert.FromBase64String(envelope.Data);
-        var key = DeriveKey(password, salt);
+
+        // Legacy v1 envelopes have no Kdf field — fall back to PBKDF2 with the historical iteration count.
+        var kdf = string.IsNullOrEmpty(envelope.Kdf) ? KdfPbkdf2 : envelope.Kdf;
+        var kdfParams = envelope.KdfParams;
+        if (kdf == KdfPbkdf2 && kdfParams?.Iterations == null)
+            kdfParams = new KdfParams { Iterations = LegacyPbkdf2Iterations };
+
+        var key = DeriveKey(password, salt, kdf, kdfParams);
 
         var plaintext = new byte[ciphertext.Length];
         using var aes = new AesGcm(key, TagSize);
@@ -572,7 +684,7 @@ public sealed class VaultService
         var payload = new VaultPayload { Seeds = _entries, Contacts = _contacts ?? [], Watchlist = _watchlist ?? [], Templates = _templates ?? [] };
         var json = JsonSerializer.Serialize(payload);
         var envelope = Encrypt(json, _password);
-        var fileJson = JsonSerializer.Serialize(envelope, new JsonSerializerOptions { WriteIndented = true });
+        var fileJson = JsonSerializer.Serialize(envelope, EnvelopeJsonOptions);
         File.WriteAllText(path, fileJson);
     }
 
@@ -597,12 +709,41 @@ public sealed class VaultService
                 $"Round-trip mismatch: wrote {_entries.Count} entries, read back {payload.Seeds.Count}.");
     }
 
+    /// <summary>
+    /// Outer JSON wrapper persisted to disk.
+    /// V1 (legacy): only Salt/Nonce/Tag/Data — implicit PBKDF2-SHA256/600k.
+    /// V2: adds Version/Kdf/KdfParams so the format can evolve without breaking existing files.
+    /// </summary>
     private sealed class VaultFileEnvelope
     {
+        // Optional in v1 files; defaults to 1 when absent.
+        public int Version { get; set; } = 1;
+
+        // Optional in v1 files; "" means legacy PBKDF2-SHA256.
+        public string Kdf { get; set; } = "";
+
+        // Optional in v1 files.
+        public KdfParams? KdfParams { get; set; }
+
         public string Salt { get; set; } = "";
         public string Nonce { get; set; } = "";
         public string Tag { get; set; } = "";
         public string Data { get; set; } = "";
+    }
+
+    /// <summary>
+    /// KDF parameters carried in the envelope. Only the fields relevant to the chosen KDF are set;
+    /// e.g. PBKDF2 uses Iterations only, Argon2id uses MemoryKiB/TimeCost/Parallelism.
+    /// </summary>
+    private sealed class KdfParams
+    {
+        // PBKDF2.
+        public int? Iterations { get; set; }
+
+        // Argon2id.
+        public int? MemoryKiB { get; set; }
+        public int? TimeCost { get; set; }
+        public int? Parallelism { get; set; }
     }
 
     /// <summary>Vault payload: seeds + contacts + watchlist + SendToMany templates.</summary>
