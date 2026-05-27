@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Numerics;
 
 namespace Qubic.Crypto.FourQ;
@@ -112,24 +113,42 @@ public static class FourQCodec
         return true;
     }
 
+    // Curve order N (little-endian limbs), kept in sync with EccMul.CURVE_ORDER_*.
+    // N = 0x0029CBC14E5E0A72_F05397829CBC14E5_DFBD004DFE0F7999_2FB2540EC7768CE7
+    private const ulong CURVE_ORDER_0 = 0x2FB2540EC7768CE7;
+    private const ulong CURVE_ORDER_1 = 0xDFBD004DFE0F7999;
+    private const ulong CURVE_ORDER_2 = 0xF05397829CBC14E5;
+    private const ulong CURVE_ORDER_3 = 0x0029CBC14E5E0A72;
+
     /// <summary>
     /// Validates that a 64-byte signature has valid encoding.
+    /// Enforces the canonical scalar form S &lt; N (curve order) on the last 32 bytes — the
+    /// previous "S &lt; 2^246" mask is insufficient because the range [N, 2^246) admits a
+    /// malleable twin S' = S + N that verifies for the same message but yields a different
+    /// transaction hash, bypassing replay/dedup protection. See qubic/core 05f7348
+    /// ("Security patch of four_q.h").
     /// </summary>
     public static bool IsValidSignatureEncoding(ReadOnlySpan<byte> signature)
     {
         if (signature.Length != 64)
             return false;
 
-        // First 32 bytes: R (point encoding)
-        // Check that R's y₀ is in range
+        // First 32 bytes: R (point encoding). Check that R's y₀ has bit 127 clear.
         if ((signature[15] & 0x80) != 0)
             return false;
 
-        // Last 32 bytes: s (scalar)
-        // Check that s is in valid range (bit 252 onwards should be 0 for valid scalars)
-        // Bits 62-63 of byte 31 + 32 = byte 63 should follow pattern
-        // For Qubic, the scalar must be < curve order
+        // Last 32 bytes: S (scalar). Reject non-canonical S, i.e. require S < N.
+        // S is stored little-endian, so compare most-significant limb first; strict "<"
+        // also rejects S == N.
+        var sBytes = signature.Slice(32, 32);
+        ulong s0 = BinaryPrimitives.ReadUInt64LittleEndian(sBytes.Slice(0, 8));
+        ulong s1 = BinaryPrimitives.ReadUInt64LittleEndian(sBytes.Slice(8, 8));
+        ulong s2 = BinaryPrimitives.ReadUInt64LittleEndian(sBytes.Slice(16, 8));
+        ulong s3 = BinaryPrimitives.ReadUInt64LittleEndian(sBytes.Slice(24, 8));
 
-        return true;
+        if (s3 != CURVE_ORDER_3) return s3 < CURVE_ORDER_3;
+        if (s2 != CURVE_ORDER_2) return s2 < CURVE_ORDER_2;
+        if (s1 != CURVE_ORDER_1) return s1 < CURVE_ORDER_1;
+        return s0 < CURVE_ORDER_0;
     }
 }

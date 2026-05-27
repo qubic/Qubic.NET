@@ -530,4 +530,150 @@ public class SchnorrQTests
             Assert.True(isValid, $"Verification failed for iteration {i}");
         }
     }
+
+    // ── FourQ signature-malleability regression tests ──
+    //
+    // Ports the three negative tests added in qubic/core commit 05f7348
+    // ("Security patch of four_q.h"). The vulnerability: the verify path used to
+    // accept any scalar S < 2^246, but the curve order N < 2^246. That left the
+    // gap [N, 2^246) admitting a twin S' = S + N which verifies for the same
+    // (R, publicKey, message) but produces a different tx hash, bypassing dedup.
+
+    // Curve order limbs N (little-endian) — must match Codec.CURVE_ORDER_*.
+    private const ulong CurveOrder0 = 0x2FB2540EC7768CE7UL;
+    private const ulong CurveOrder1 = 0xDFBD004DFE0F7999UL;
+    private const ulong CurveOrder2 = 0xF05397829CBC14E5UL;
+    private const ulong CurveOrder3 = 0x0029CBC14E5E0A72UL;
+
+    // The same four vectors used in the C++ regression tests, so a divergence
+    // on either side is easy to spot.
+    private static readonly string[] s_verifySubSeeds =
+    {
+        "4ac19e2bf0d3776519aabe31924f7dc2589b3d0e7411a65f84c9b16df72c038e",
+        "e8217c5b40aa91df662803ce4dbf18722e35f1097ac68fb5da10643a825799e3",
+        "6d02f48bcb53ac397fc71a9028e4165df9b87044c53e116a0192d7fa83254bb0",
+        "3cfa1097be482f6e5ce132c2aa657d0fb9d84121048de6f05b90a2cc136bf73a",
+    };
+
+    private static readonly string[] s_verifyDigests =
+    {
+        "94e120a4d3f58c217a53eb9046d9f2c5b11288a9fe340d6ce5a771cf04b82e63",
+        "77f493b58ea40162dc33f9a718e2543b05f629884d7ca0e31598c45f021ae7c0",
+        "5cc82fa973101da5bfb3e2448196f0a7d7d3324c86fbbe42907613d5c8c2f1a4",
+        "c01ae5f2879d11439b30ddae5f4c7b22689f023e17b4955c3b2f05e8d9089af6",
+    };
+
+    /// <summary>Produces a valid (publicKey, digest, signature) tuple for vector i.</summary>
+    private static (byte[] PublicKey, byte[] Digest, byte[] Signature) MakeValidSignature(int i)
+    {
+        var subSeed = HexToBytes(s_verifySubSeeds[i]);
+        var digest = HexToBytes(s_verifyDigests[i]);
+        var publicKey = SchnorrQ.GeneratePublicKey(subSeed);
+        var signature = SchnorrQ.Sign(subSeed, publicKey, digest);
+        return (publicKey, digest, signature);
+    }
+
+    /// <summary>Returns S + N as a 32-byte little-endian scalar (ignores carry-out).</summary>
+    private static byte[] AddCurveOrder(ReadOnlySpan<byte> s)
+    {
+        var si = new ulong[4];
+        for (int k = 0; k < 4; k++)
+            si[k] = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(s.Slice(k * 8, 8));
+
+        var ri = new[] { CurveOrder0, CurveOrder1, CurveOrder2, CurveOrder3 };
+
+        var o = new ulong[4];
+        ulong carry = 0;
+        for (int k = 0; k < 4; k++)
+        {
+            ulong sum = si[k] + ri[k];
+            ulong c1 = sum < si[k] ? 1UL : 0UL;
+            sum += carry;
+            ulong c2 = sum < carry ? 1UL : 0UL;
+            o[k] = sum;
+            carry = c1 + c2;
+        }
+
+        var outBytes = new byte[32];
+        for (int k = 0; k < 4; k++)
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(outBytes.AsSpan(k * 8, 8), o[k]);
+        return outBytes;
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Verify_RejectsTamperedSignature(int i)
+    {
+        var (publicKey, digest, signature) = MakeValidSignature(i);
+
+        // Sanity: the untouched signature must verify.
+        Assert.True(SchnorrQ.Verify(publicKey, digest, signature), $"valid signature rejected at [{i}]");
+
+        // Tamper R (first byte).
+        var bad = (byte[])signature.Clone();
+        bad[0] ^= 0x01;
+        Assert.False(SchnorrQ.Verify(publicKey, digest, bad), $"tampered R accepted at [{i}]");
+
+        // Tamper a low bit of S.
+        bad = (byte[])signature.Clone();
+        bad[32] ^= 0x01;
+        Assert.False(SchnorrQ.Verify(publicKey, digest, bad), $"tampered S accepted at [{i}]");
+
+        // Wrong digest.
+        var badDigest = (byte[])digest.Clone();
+        badDigest[0] ^= 0x01;
+        Assert.False(SchnorrQ.Verify(publicKey, badDigest, signature), $"wrong digest accepted at [{i}]");
+
+        // Wrong public key.
+        var badPub = (byte[])publicKey.Clone();
+        badPub[0] ^= 0x01;
+        Assert.False(SchnorrQ.Verify(badPub, digest, signature), $"wrong public key accepted at [{i}]");
+    }
+
+    [Fact]
+    public void Verify_RejectsMalleableSignature_S_Plus_CurveOrder()
+    {
+        int testedTwins = 0;
+        for (int i = 0; i < s_verifySubSeeds.Length; i++)
+        {
+            var (publicKey, digest, signature) = MakeValidSignature(i);
+            Assert.True(SchnorrQ.Verify(publicKey, digest, signature), $"valid signature rejected at [{i}]");
+
+            // Build the twin: same R, S' = S + N (bytes 32..63).
+            var twin = new byte[64];
+            Array.Copy(signature, 0, twin, 0, 32);
+            var twinScalar = AddCurveOrder(signature.AsSpan(32, 32));
+            Array.Copy(twinScalar, 0, twin, 32, 32);
+
+            // Only twins that still pass the OLD "S < 2^246" mask are the dangerous ones
+            // this canonical check must catch. S' >= 2^246 was already rejected before.
+            bool twinFitsOldCheck = (twin[62] & 0xC0) == 0 && twin[63] == 0;
+            if (twinFitsOldCheck)
+            {
+                testedTwins++;
+                Assert.False(SchnorrQ.Verify(publicKey, digest, twin),
+                    $"malleable twin S+N accepted at [{i}] (signature malleability not blocked)");
+            }
+        }
+        Assert.True(testedTwins > 0, "no test vector produced a twin in the malleable range");
+    }
+
+    [Fact]
+    public void Verify_RejectsScalarEqualToCurveOrder()
+    {
+        var (publicKey, digest, signature) = MakeValidSignature(0);
+
+        // S = N exactly — non-canonical and must be rejected by the strict "<" check.
+        var atOrder = new byte[64];
+        Array.Copy(signature, 0, atOrder, 0, 32);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(atOrder.AsSpan(32, 8), CurveOrder0);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(atOrder.AsSpan(40, 8), CurveOrder1);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(atOrder.AsSpan(48, 8), CurveOrder2);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(atOrder.AsSpan(56, 8), CurveOrder3);
+
+        Assert.False(SchnorrQ.Verify(publicKey, digest, atOrder), "scalar S == curve_order accepted");
+    }
 }
