@@ -126,6 +126,8 @@ var transfers = await bob.GetTransfersAsync(identity, startTick: 1000, endTick: 
 |------|-------------|
 | **[Qubic.ContractGen](tools/Qubic.ContractGen/)** | Parses C++ smart contract headers from `qubic-core` and generates C# bindings with correct struct layouts, type mappings, and MSVC `/Zp8` alignment. |
 | **[Qubic.ScTester](tools/Qubic.ScTester/)** | Blazor Server web UI for browsing and testing all generated smart contract functions against live Qubic nodes via RPC, Bob, or direct TCP. |
+| **[Qubic.ChainAnalytics.Cli](tools/Qubic.ChainAnalytics.Cli/)** | Direct-mainnet tick analytics CLI — fetches tick data and transactions from a node over TCP, parses them, and verifies locally-computed K12 digests against the digests embedded in the tick. |
+| **[Qubic.SpectrumDiff](tools/Qubic.SpectrumDiff/)** | Streams two 1 GB `spectrum.NNN` dumps in lockstep and reports per-account differences in incoming, outgoing, transfer counts, and balance. |
 
 ```bash
 # Generate C# contract bindings
@@ -133,6 +135,12 @@ dotnet run --project tools/Qubic.ContractGen
 
 # Launch the SC Tester web UI
 dotnet run --project tools/Qubic.ScTester
+
+# Analyze a tick (or "latest") directly from a node
+dotnet run --project tools/Qubic.ChainAnalytics.Cli -- 185.84.224.10 latest
+
+# Diff two spectrum files
+dotnet run --project tools/Qubic.SpectrumDiff -- spectrum.215-a spectrum.215-b
 ```
 
 ## Building

@@ -173,6 +173,70 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
         return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.BroadcastTransaction, QubicPacketTypes.EndResponse, cancellationToken);
     }
 
+    /// <summary>
+    /// Requests the tick data for a given tick. Returns <c>null</c> if the node has no
+    /// data for that tick (empty slot / not yet broadcast / already evicted).
+    /// </summary>
+    /// <remarks>
+    /// Unlike multi-record responses (tick transactions, oracle data), the node replies
+    /// with <em>either</em> a single <c>BroadcastFutureTickData</c> when data is present
+    /// <em>or</em> a single <c>EndResponse</c> when not — there is no trailing terminator
+    /// after the data packet. So we wait for the first packet matching either type.
+    /// </remarks>
+    public async Task<TickData?> GetTickDataAsync(uint tick, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestTickData(tick);
+
+        var payload = await SendAndReceiveOneOfAsync(
+            packet, QubicPacketTypes.BroadcastFutureTickData, QubicPacketTypes.EndResponse, cancellationToken);
+
+        // EndResponse → no data for this tick.
+        return payload is null ? null : _reader.ReadTickData(payload);
+    }
+
+    /// <summary>
+    /// Sends a packet and returns the payload of the first received packet whose type
+    /// matches <paramref name="dataType"/>, or <c>null</c> on a <paramref name="nullType"/>
+    /// terminator. Other packet types (broadcasts, peer exchange) are skipped.
+    /// </summary>
+    private async Task<byte[]?> SendAndReceiveOneOfAsync(
+        byte[] packet, byte dataType, byte nullType, CancellationToken cancellationToken)
+    {
+        await _sendLock.WaitAsync(cancellationToken);
+        try
+        {
+            await SendAsync(packet, cancellationToken);
+
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(_timeoutMs * 3);
+
+            while (true)
+            {
+                var headerBuffer = new byte[QubicPacketHeader.Size];
+                await ReadExactAsync(headerBuffer, cts.Token);
+                var header = _reader.ReadHeader(headerBuffer);
+
+                if (header.PacketSize > MaxPacketSize)
+                    throw new InvalidOperationException($"Packet too large: {header.PacketSize} bytes.");
+
+                var payloadBuffer = header.PayloadSize > 0 ? new byte[header.PayloadSize] : [];
+                if (header.PayloadSize > 0)
+                    await ReadExactAsync(payloadBuffer, cts.Token);
+
+                if (header.Type == dataType)
+                    return payloadBuffer;
+                if (header.Type == nullType)
+                    return null;
+                // Unknown type — broadcast / peer exchange — skip and keep reading.
+            }
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
+    }
+
     // ── Oracle Data ──
 
     /// <summary>

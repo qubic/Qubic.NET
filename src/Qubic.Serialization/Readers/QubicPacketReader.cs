@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Qubic.Core;
 using Qubic.Core.Entities;
 
 namespace Qubic.Serialization.Readers;
@@ -128,6 +129,94 @@ public sealed class QubicPacketReader
             PublicKeys = publicKeys,
             Prices = prices
         };
+    }
+
+    /// <summary>
+    /// Reads a <c>BroadcastFutureTickData</c> payload into a <see cref="TickData"/>.
+    /// Slot count is inferred from payload size — 4096 transaction digests for V2-era
+    /// payloads, 1024 for legacy. Throws if the size matches neither layout.
+    /// </summary>
+    public TickData ReadTickData(ReadOnlySpan<byte> payload)
+    {
+        // Wire layout: 8 (computor/epoch/tick) + 8 (timestamp) + 32 (timelock) + N*32 (digests)
+        //              + 1024*8 (contractFees) + 64 (signature). N is 4096 (V2) or 1024 (legacy).
+        const int ContractFeesSize = 1024 * 8;
+        const int FixedSize = 8 + 8 + 32 + ContractFeesSize + QubicConstants.SignatureSize;
+        const int V2Slots = 4096;
+        const int LegacySlots = 1024;
+
+        var perSlotSection = payload.Length - FixedSize;
+        int slots;
+        if (perSlotSection == V2Slots * 32)
+            slots = V2Slots;
+        else if (perSlotSection == LegacySlots * 32)
+            slots = LegacySlots;
+        else
+            throw new ArgumentException(
+                $"Unrecognised TickData payload size {payload.Length} — expected " +
+                $"{FixedSize + V2Slots * 32} (V2) or {FixedSize + LegacySlots * 32} (legacy).");
+
+        var offset = 0;
+        var computorIndex = BinaryPrimitives.ReadUInt16LittleEndian(payload[offset..]); offset += 2;
+        var epoch = BinaryPrimitives.ReadUInt16LittleEndian(payload[offset..]); offset += 2;
+        var tickNumber = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]); offset += 4;
+
+        var millisecond = BinaryPrimitives.ReadUInt16LittleEndian(payload[offset..]); offset += 2;
+        var second = payload[offset++];
+        var minute = payload[offset++];
+        var hour = payload[offset++];
+        var day = payload[offset++];
+        var month = payload[offset++];
+        var year = payload[offset++];
+
+        var timelock = payload.Slice(offset, 32).ToArray();
+        offset += 32;
+
+        var digests = new byte[slots][];
+        for (var i = 0; i < slots; i++)
+        {
+            digests[i] = payload.Slice(offset, 32).ToArray();
+            offset += 32;
+        }
+
+        var fees = new long[1024];
+        for (var i = 0; i < 1024; i++)
+        {
+            fees[i] = BinaryPrimitives.ReadInt64LittleEndian(payload[offset..]);
+            offset += 8;
+        }
+
+        var signature = payload.Slice(offset, QubicConstants.SignatureSize).ToArray();
+
+        var timestamp = TryBuildTimestamp(year, month, day, hour, minute, second, millisecond);
+
+        return new TickData
+        {
+            ComputorIndex = computorIndex,
+            Epoch = epoch,
+            TickNumber = tickNumber,
+            Timestamp = timestamp,
+            Timelock = timelock,
+            TransactionDigests = digests,
+            ContractFees = fees,
+            Signature = signature,
+        };
+    }
+
+    private static DateTime TryBuildTimestamp(byte year, byte month, byte day, byte hour, byte minute, byte second, ushort millisecond)
+    {
+        // Empty TickData slots zero the timestamp; fall back to MinValue rather than throw.
+        if (year == 0 && month == 0 && day == 0)
+            return DateTime.MinValue;
+
+        try
+        {
+            return new DateTime(2000 + year, month, day, hour, minute, second, millisecond, DateTimeKind.Utc);
+        }
+        catch
+        {
+            return DateTime.MinValue;
+        }
     }
 
     /// <summary>
