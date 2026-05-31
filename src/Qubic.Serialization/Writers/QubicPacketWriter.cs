@@ -78,6 +78,18 @@ public sealed class QubicPacketWriter
         return GetPacketBytes();
     }
 
+
+    /// <summary>
+    /// Writes a RequestSystemInfo packet (no payload — just the header).
+    /// Node replies with a single RespondSystemInfo (128-byte payload, packed).
+    /// </summary>
+    public byte[] WriteRequestSystemInfo()
+    {
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestSystemInfo, 0);
+        return GetPacketBytes();
+    }
+
     /// <summary>
     /// Writes a request for tick data.
     /// </summary>
@@ -86,6 +98,38 @@ public sealed class QubicPacketWriter
         Reset();
         WriteHeader(QubicPacketTypes.RequestTickData, 4);
         _writer.Write(tick);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Writes a RequestQuorumTick packet.
+    /// Payload: 4-byte tick + (<see cref="QubicConstants.NumberOfComputors"/>+7)/8 = 85
+    /// bytes of vote-flags + 3 bytes trailing alignment padding (the C++ struct's
+    /// natural MSVC alignment rounds 89 to 92). Set bit at index <c>i</c> = "I already
+    /// have computor <c>i</c>'s vote, skip it." All-zero flags = "send me every vote."
+    /// </summary>
+    /// <remarks>
+    /// The 3-byte trailing pad is required: qubic-core silently drops the packet if
+    /// the declared size doesn't match its expected <c>sizeof(RequestQuorumTick)</c>.
+    /// </remarks>
+    public byte[] WriteRequestQuorumTick(uint tick, ReadOnlySpan<byte> voteFlags = default)
+    {
+        Reset();
+        const int flagsSize = (QubicConstants.NumberOfComputors + 7) / 8; // 85
+        const int payloadSize = 4 + flagsSize + 3;                        // 92 (MSVC-aligned)
+        WriteHeader(QubicPacketTypes.RequestQuorumTick, payloadSize);
+        _writer.Write(tick);
+        if (voteFlags.IsEmpty)
+        {
+            _writer.Write(new byte[flagsSize]);
+        }
+        else
+        {
+            if (voteFlags.Length != flagsSize)
+                throw new ArgumentException($"voteFlags must be {flagsSize} bytes.", nameof(voteFlags));
+            _writer.Write(voteFlags);
+        }
+        _writer.Write(new byte[3]); // trailing alignment padding
         return GetPacketBytes();
     }
 
@@ -162,6 +206,52 @@ public sealed class QubicPacketWriter
     }
 
     /// <summary>
+    /// Writes a RequestTickTransactions packet with an explicit transaction-flag
+    /// bitmap, for replaying a previously-observed request verbatim. <paramref
+    /// name="transactionFlags"/> must be 128 bytes (legacy 1024 tx/tick) or 512 bytes
+    /// (V2 4096 tx/tick); the length picks the era. The dejavu is randomised — use the
+    /// <paramref name="dejavu"/>-taking overload to pin it.
+    /// </summary>
+    public byte[] WriteRequestTickTransactions(uint tick, ReadOnlySpan<byte> transactionFlags)
+    {
+        ValidateFlagsSize(transactionFlags);
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestTickTransactions, 4 + transactionFlags.Length);
+        _writer.Write(tick);
+        _writer.Write(transactionFlags);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Same as the other replay-overload but with an explicit <paramref name="dejavu"/>
+    /// in the header. Use this when matching a captured request bit-for-bit, or when you
+    /// want the response packets to echo back a chosen dejavu for correlation. Note: the
+    /// node's dejavu filter silently drops packets whose <c>(salt, dejavu, payload)</c>
+    /// hash collides with a recent one — pick a fresh value if you intend the node to
+    /// actually process the request.
+    /// </summary>
+    public byte[] WriteRequestTickTransactions(uint tick, ReadOnlySpan<byte> transactionFlags, uint dejavu)
+    {
+        ValidateFlagsSize(transactionFlags);
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestTickTransactions, 4 + transactionFlags.Length, dejavu);
+        _writer.Write(tick);
+        _writer.Write(transactionFlags);
+        return GetPacketBytes();
+    }
+
+    private static void ValidateFlagsSize(ReadOnlySpan<byte> transactionFlags)
+    {
+        const int LegacyFlagsSize = 128;
+        const int V2FlagsSize = 512;
+        if (transactionFlags.Length != LegacyFlagsSize && transactionFlags.Length != V2FlagsSize)
+            throw new ArgumentException(
+                $"transactionFlags must be {LegacyFlagsSize} (legacy) or {V2FlagsSize} (V2) bytes, " +
+                $"got {transactionFlags.Length}.",
+                nameof(transactionFlags));
+    }
+
+    /// <summary>
     /// Writes a RequestOracleData packet.
     /// </summary>
     public byte[] WriteRequestOracleData(uint reqType, long reqTickOrId)
@@ -201,6 +291,20 @@ public sealed class QubicPacketWriter
         _writer.Write(sizeAndType);
         _writer.Write(header.Dejavu);
     }
+
+    /// <summary>
+    /// Writes a header with an explicit dejavu — used when replaying a captured packet
+    /// verbatim or when correlating request/response by a chosen dejavu value.
+    /// </summary>
+    private void WriteHeader(byte type, int payloadSize, uint dejavu)
+    {
+        var header = QubicPacketHeader.Create(type, payloadSize, dejavu);
+
+        uint sizeAndType = (uint)header.PacketSize | ((uint)type << 24);
+        _writer.Write(sizeAndType);
+        _writer.Write(header.Dejavu);
+    }
+
 
     private byte[] GetPacketBytes()
     {

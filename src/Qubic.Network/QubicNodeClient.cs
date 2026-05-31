@@ -174,6 +174,70 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Replays a RequestTickTransactions with an explicit transaction-flag bitmap,
+    /// typically reconstructed from an observed wire request. <paramref name="transactionFlags"/>
+    /// must be 128 bytes (legacy) or 512 bytes (V2). Bit = 0 asks the node for that slot,
+    /// bit = 1 signals "I already have it, skip."
+    /// </summary>
+    public async Task<List<byte[]>> ReplayTickTransactionsAsync(
+        uint tick, byte[] transactionFlags, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transactionFlags);
+        EnsureConnected();
+        var packet = _writer.WriteRequestTickTransactions(tick, transactionFlags);
+        return await SendAndReceiveMultiAsync(
+            packet, QubicPacketTypes.BroadcastTransaction, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Same as the no-dejavu overload but pins the header's dejavu to <paramref name="dejavu"/>
+    /// for verbatim replay of an observed packet. Note the node's dejavu filter may drop
+    /// the packet if the same <c>(dejavu, payload)</c> was processed recently.
+    /// </summary>
+    public async Task<List<byte[]>> ReplayTickTransactionsAsync(
+        uint tick, byte[] transactionFlags, uint dejavu, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transactionFlags);
+        EnsureConnected();
+        var packet = _writer.WriteRequestTickTransactions(tick, transactionFlags, dejavu);
+        return await SendAndReceiveMultiAsync(
+            packet, QubicPacketTypes.BroadcastTransaction, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Requests the node's system info. Returns the raw 128-byte RespondSystemInfo
+    /// payload (packed struct). Callers parse fields by offset — see
+    /// <c>qubic-core/src/network_messages/system_info.h</c>.
+    /// </summary>
+    public async Task<byte[]> GetSystemInfoRawAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestSystemInfo();
+        var response = await SendAndReceiveAsync(packet, QubicPacketTypes.RespondSystemInfo, cancellationToken);
+        var header = _reader.ReadHeader(response);
+        return response.AsSpan(QubicPacketHeader.Size, header.PayloadSize).ToArray();
+    }
+
+    /// <summary>
+    /// Requests every quorum-vote (computor-signed <see cref="Tick"/>) the node has
+    /// stored for the given tick. The order returned is randomised by the node
+    /// (Fisher–Yates shuffle on the server side). Returns an empty list if the node
+    /// has no votes for that tick (out-of-window or empty).
+    /// </summary>
+    public async Task<IReadOnlyList<Tick>> GetQuorumVotesAsync(uint tick, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestQuorumTick(tick);
+        var raws = await SendAndReceiveMultiAsync(
+            packet, QubicPacketTypes.BroadcastTick, QubicPacketTypes.EndResponse, cancellationToken);
+
+        var ticks = new List<Tick>(raws.Count);
+        foreach (var raw in raws)
+            ticks.Add(_reader.ReadTick(raw));
+        return ticks;
+    }
+
+    /// <summary>
     /// Requests the tick data for a given tick. Returns <c>null</c> if the node has no
     /// data for that tick (empty slot / not yet broadcast / already evicted).
     /// </summary>

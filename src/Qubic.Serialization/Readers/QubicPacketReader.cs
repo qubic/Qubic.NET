@@ -220,6 +220,99 @@ public sealed class QubicPacketReader
     }
 
     /// <summary>
+    /// Reads a <c>BroadcastTick</c> payload (a single computor's vote for a tick) into
+    /// a <see cref="Tick"/>. Payload is exactly 344 bytes per the protocol's
+    /// static_assert on <c>sizeof(Tick)</c>.
+    /// </summary>
+    public Tick ReadTick(ReadOnlySpan<byte> payload)
+    {
+        const int TickSize = 8 + 8 + 2 * 4 + 2 * 4 + 6 * 32 + 2 * 32 + QubicConstants.SignatureSize; // 344
+        if (payload.Length != TickSize)
+            throw new ArgumentException($"Tick payload must be {TickSize} bytes, got {payload.Length}.");
+
+        var offset = 0;
+        var computorIndex = BinaryPrimitives.ReadUInt16LittleEndian(payload[offset..]); offset += 2;
+        var epoch = BinaryPrimitives.ReadUInt16LittleEndian(payload[offset..]); offset += 2;
+        var tickNumber = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]); offset += 4;
+
+        var millisecond = BinaryPrimitives.ReadUInt16LittleEndian(payload[offset..]); offset += 2;
+        var second = payload[offset++];
+        var minute = payload[offset++];
+        var hour = payload[offset++];
+        var day = payload[offset++];
+        var month = payload[offset++];
+        var year = payload[offset++];
+
+        var prevResourceTestingDigest = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]); offset += 4;
+        var saltedResourceTestingDigest = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]); offset += 4;
+        var prevTransactionBodyDigest = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]); offset += 4;
+        var saltedTransactionBodyDigest = BinaryPrimitives.ReadUInt32LittleEndian(payload[offset..]); offset += 4;
+
+        var prevSpectrumDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+        var prevUniverseDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+        var prevComputerDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+        var saltedSpectrumDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+        var saltedUniverseDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+        var saltedComputerDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+
+        var transactionDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+        var expectedNextTickTransactionDigest = payload.Slice(offset, 32).ToArray(); offset += 32;
+
+        var signature = payload.Slice(offset, QubicConstants.SignatureSize).ToArray();
+
+        return new Tick
+        {
+            ComputorIndex = computorIndex,
+            Epoch = epoch,
+            TickNumber = tickNumber,
+            Millisecond = millisecond,
+            Second = second,
+            Minute = minute,
+            Hour = hour,
+            Day = day,
+            Month = month,
+            Year = year,
+            PrevResourceTestingDigest = prevResourceTestingDigest,
+            SaltedResourceTestingDigest = saltedResourceTestingDigest,
+            PrevTransactionBodyDigest = prevTransactionBodyDigest,
+            SaltedTransactionBodyDigest = saltedTransactionBodyDigest,
+            PrevSpectrumDigest = prevSpectrumDigest,
+            PrevUniverseDigest = prevUniverseDigest,
+            PrevComputerDigest = prevComputerDigest,
+            SaltedSpectrumDigest = saltedSpectrumDigest,
+            SaltedUniverseDigest = saltedUniverseDigest,
+            SaltedComputerDigest = saltedComputerDigest,
+            TransactionDigest = transactionDigest,
+            ExpectedNextTickTransactionDigest = expectedNextTickTransactionDigest,
+            Signature = signature,
+        };
+    }
+
+    /// <summary>
+    /// Reads a <c>RequestTickTransactions</c> incoming-request payload. Layout:
+    /// 4-byte tick + N bytes of transaction flags where N is 128 (legacy, 1024 tx/tick)
+    /// or 512 (V2+, 4096 tx/tick). The flag-array size is inferred from the payload length.
+    /// </summary>
+    public RequestTickTransactionsRequest ReadRequestTickTransactions(ReadOnlySpan<byte> payload)
+    {
+        const int LegacyFlagsSize = 1024 / 8;  // 128
+        const int V2FlagsSize = 4096 / 8;      // 512
+        var flagsLen = payload.Length - 4;
+        if (flagsLen != LegacyFlagsSize && flagsLen != V2FlagsSize)
+            throw new ArgumentException(
+                $"RequestTickTransactions payload size {payload.Length} unexpected — " +
+                $"expected {4 + LegacyFlagsSize} (legacy) or {4 + V2FlagsSize} (V2).");
+
+        var tick = BinaryPrimitives.ReadUInt32LittleEndian(payload);
+        var flags = payload.Slice(4, flagsLen).ToArray();
+        return new RequestTickTransactionsRequest
+        {
+            Tick = tick,
+            TransactionFlags = flags,
+        };
+    }
+
+    /// <summary>
     /// Reads a full entity response with Merkle siblings.
     /// </summary>
     public EntityResponse ReadFullEntityResponse(ReadOnlySpan<byte> payload)

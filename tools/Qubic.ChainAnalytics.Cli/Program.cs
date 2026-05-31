@@ -11,6 +11,8 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
         usage:
           qubic-analytics <host[:port]> <tick|"latest"> [--epoch N] [--range N]
                                                        [--port P] [--tx-range SPEC]
+                                                       [--votes]
+                                                       [--replay-tick-tx FLAGS]
 
         --tx-range filters which transactions to print (the tick summary is always shown):
           0-10     indices 0..10 inclusive
@@ -18,12 +20,29 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
           0-       index 0 to the end
           none     hide all transactions
 
+        --votes prints the vote-distribution analytic instead of the tick / tx summary.
+        It fetches tick data for X, quorum votes for X, quorum votes for X+1, and
+        shows how computor votes are distributed and whether they align.
+
+        --replay-tick-tx FLAGS replays a captured RequestTickTransactions verbatim.
+        FLAGS is the transaction-flag bitmap, 128 bytes (legacy) or 512 bytes (V2),
+        provided as:
+          hex-string   1024 hex chars (V2) or 256 (legacy); 0x prefix and whitespace OK
+          @path        read raw bytes from the file (or hex if the file is a hex dump)
+          all-zero     shortcut for "all bits 0" (request every slot)
+        Pair with --dejavu HEX to pin the packet header's dejavu (e.g. 0xcdc636e4) for
+        a true bit-for-bit replay; default is random.
+        Output: every transaction the node returns, parsed and listed.
+
         examples:
           qubic-analytics 185.84.224.10 21500000
           qubic-analytics 185.84.224.10 latest
           qubic-analytics 185.84.224.10 latest --range 5
           qubic-analytics 185.84.224.10 52810012 --tx-range 0-10
           qubic-analytics 185.84.224.10 52810012 --tx-range none
+          qubic-analytics 185.84.224.10 52810012 --votes
+          qubic-analytics 185.84.224.10 54658297 --replay-tick-tx @flags.hex
+          qubic-analytics 185.84.224.10 54658297 --replay-tick-tx @flags.hex --dejavu 0xcdc636e4
         """);
     return args.Length < 2 ? 1 : 0;
 }
@@ -33,6 +52,9 @@ ushort epoch = QubicConstants.TransactionsPerTickV2Epoch;
 int port = hostPort ?? 21841;
 uint range = 1;
 TxRange txRange = TxRange.All;
+bool votesMode = false;
+byte[]? replayFlags = null;
+uint? replayDejavu = null;
 
 for (var i = 2; i < args.Length; i++)
 {
@@ -49,6 +71,15 @@ for (var i = 2; i < args.Length; i++)
             break;
         case "--tx-range" when i + 1 < args.Length:
             txRange = TxRange.Parse(args[++i]);
+            break;
+        case "--votes":
+            votesMode = true;
+            break;
+        case "--replay-tick-tx" when i + 1 < args.Length:
+            replayFlags = ParseReplayFlags(args[++i]);
+            break;
+        case "--dejavu" when i + 1 < args.Length:
+            replayDejavu = ParseHexUInt32(args[++i]);
             break;
         default:
             Console.Error.WriteLine($"unknown arg: {args[i]}");
@@ -74,15 +105,139 @@ else
     startTick = uint.Parse(args[1]);
 }
 
-var analyzer = new TickAnalyzer(node);
 var endTick = startTick + range - 1;
 
-await foreach (var summary in analyzer.ScanAsync(startTick, endTick, epoch))
+if (replayFlags is not null)
 {
-    PrintSummary(summary, txRange);
+    await PrintReplay(node, startTick, replayFlags, replayDejavu, txRange);
+}
+else if (replayDejavu is not null)
+{
+    Console.Error.WriteLine("--dejavu requires --replay-tick-tx");
+    return 1;
+}
+else if (votesMode)
+{
+    var voteAnalyzer = new VoteDistributionAnalyzer(node);
+    for (var t = startTick; t <= endTick; t++)
+    {
+        var alignment = await voteAnalyzer.GetVoteAlignmentAsync(t);
+        PrintVoteAlignment(alignment);
+    }
+}
+else
+{
+    var analyzer = new TickAnalyzer(node);
+    await foreach (var summary in analyzer.ScanAsync(startTick, endTick, epoch))
+    {
+        PrintSummary(summary, txRange);
+    }
 }
 
 return 0;
+
+static async Task PrintReplay(QubicNodeClient node, uint tick, byte[] flags, uint? dejavu, TxRange txRange)
+{
+    Console.WriteLine();
+    Console.WriteLine($"── replay RequestTickTransactions tick {tick} ───────────────────────────────");
+
+    var requestedSlots = 0;
+    foreach (var b in flags)
+        requestedSlots += 8 - System.Numerics.BitOperations.PopCount(b);
+    Console.WriteLine($"  flag bitmap: {flags.Length} bytes ({(flags.Length == 512 ? "V2 4096 slots" : "legacy 1024 slots")})");
+    Console.WriteLine($"  requested:   {requestedSlots} slot(s)");
+    Console.WriteLine($"  dejavu:      {(dejavu is uint d ? $"0x{d:x8} (pinned)" : "random")}");
+
+    var started = DateTime.UtcNow;
+    var raw = dejavu is uint dj
+        ? await node.ReplayTickTransactionsAsync(tick, flags, dj)
+        : await node.ReplayTickTransactionsAsync(tick, flags);
+    var elapsed = DateTime.UtcNow - started;
+    Console.WriteLine($"  received:    {raw.Count} transaction(s) in {Fmt(elapsed)}");
+
+    if (raw.Count == 0) return;
+
+    var parser = new TickTransactionParser();
+    var parsed = raw.Select(r => parser.Parse(r)).ToList();
+    var (from, to) = txRange.Resolve(parsed.Count);
+    if (from > to)
+    {
+        Console.WriteLine($"  transactions: (hidden — {parsed.Count} total, --tx-range to show)");
+        return;
+    }
+
+    var label = (from == 0 && to == parsed.Count - 1)
+        ? $"all {parsed.Count}"
+        : $"{from}..{to} of {parsed.Count}";
+    Console.WriteLine($"  transactions: ({label})");
+
+    for (var i = from; i <= to; i++)
+    {
+        var tx = parsed[i];
+        var kind = tx.Kind switch
+        {
+            TickTransactionKind.SystemMessage => $"system, type#{tx.InputType}",
+            TickTransactionKind.ContractCall => $"contract#{tx.DestinationContractIndex}, proc#{tx.InputType}",
+            _ => $"transfer, type#{tx.InputType}",
+        };
+        var tickMatch = tx.Tick == tick ? "" : $"  (!! tick={tx.Tick})";
+        Console.WriteLine($"    [{i}] {tx.Hash}{tickMatch}");
+        Console.WriteLine($"        {tx.SourceIdentity} -> {tx.DestinationIdentity}");
+        Console.WriteLine($"        {tx.Amount,15:N0} QU  [{kind}, payload {tx.InputSize}B]");
+    }
+}
+
+static uint ParseHexUInt32(string spec)
+{
+    var s = spec.Trim();
+    if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) s = s[2..];
+    if (s.Length == 0 || s.Length > 8)
+        throw new ArgumentException($"--dejavu expects 1..8 hex digits, got '{spec}'");
+    return Convert.ToUInt32(s, 16);
+}
+
+static byte[] ParseReplayFlags(string spec)
+{
+    if (string.Equals(spec, "all-zero", StringComparison.OrdinalIgnoreCase))
+        return new byte[512];
+
+    string source;
+    if (spec.StartsWith('@'))
+    {
+        var path = spec[1..];
+        var raw = File.ReadAllBytes(path);
+        // If file size already matches a valid flag size, treat as raw bytes;
+        // otherwise treat the file content as a hex dump (text).
+        if (raw.Length is 128 or 512)
+            return raw;
+        source = File.ReadAllText(path);
+    }
+    else
+    {
+        source = spec;
+    }
+
+    // Strip 0x prefix and whitespace, then hex-decode.
+    var cleaned = new System.Text.StringBuilder(source.Length);
+    var skipPrefix = false;
+    foreach (var ch in source)
+    {
+        if (char.IsWhiteSpace(ch) || ch == ':' || ch == ',') continue;
+        if (!skipPrefix && (ch == '0') && cleaned.Length == 0) { skipPrefix = true; continue; }
+        if (skipPrefix && (ch == 'x' || ch == 'X')) { skipPrefix = false; continue; }
+        if (skipPrefix) { cleaned.Append('0'); skipPrefix = false; }
+        cleaned.Append(ch);
+    }
+    if (skipPrefix) cleaned.Append('0');
+
+    var hex = cleaned.ToString();
+    if (hex.Length % 2 != 0)
+        throw new ArgumentException($"--replay-tick-tx hex string has odd length: {hex.Length}");
+    var bytes = Convert.FromHexString(hex);
+    if (bytes.Length is not (128 or 512))
+        throw new ArgumentException($"--replay-tick-tx flags must decode to 128 or 512 bytes, got {bytes.Length}");
+    return bytes;
+}
 
 static (string host, int? port) ParseHost(string arg)
 {
@@ -133,7 +288,7 @@ static void PrintSummary(TickSummary s, TxRange txRange)
         var tx = s.Transactions[i];
         var kind = tx.Kind switch
         {
-            TickTransactionKind.SystemMessage => "system",
+            TickTransactionKind.SystemMessage => $"system, type#{tx.InputType}",
             TickTransactionKind.ContractCall => $"contract#{tx.DestinationContractIndex}, proc#{tx.InputType}",
             _ => $"transfer, type#{tx.InputType}",
         };
@@ -141,6 +296,60 @@ static void PrintSummary(TickSummary s, TxRange txRange)
         Console.WriteLine($"        {tx.SourceIdentity} -> {tx.DestinationIdentity}");
         Console.WriteLine($"        {tx.Amount,15:N0} QU  [{kind}, payload {tx.InputSize}B]");
     }
+}
+
+static void PrintVoteAlignment(VoteAlignment a)
+{
+    Console.WriteLine();
+    Console.WriteLine($"── vote alignment for tick {a.Tick} ───────────────────────────────");
+    Console.WriteLine($"  tick data:        {(a.TickDataAvailable ? $"present (computor #{a.TickData!.ComputorIndex}, epoch {a.TickData.Epoch})" : "NOT AVAILABLE")}");
+    Console.WriteLine($"  votes for X:      {a.VotesForTick.TotalVotes} votes ({a.VotesForTick.DistinctComputors} distinct computors)");
+    Console.WriteLine($"  votes for X+1:    {a.VotesForNextTick.TotalVotes} votes ({a.VotesForNextTick.DistinctComputors} distinct computors)");
+    Console.WriteLine($"  result persisted: {(a.ResultPersistedIntoNextTick ? "YES" : "no")}");
+    Console.WriteLine($"  fully aligned:    {(a.FullyAligned ? "YES" : "no")}");
+
+    PrintVoteTimings(a.Timings);
+
+    Console.WriteLine();
+    Console.WriteLine($"  ─── tick {a.VotesForTick.Tick} (X) ─────────────────────────────────");
+    PrintVoteSummary(a.VotesForTick);
+
+    Console.WriteLine();
+    Console.WriteLine($"  ─── tick {a.VotesForNextTick.Tick} (X+1) ───────────────────────────────");
+    PrintVoteSummary(a.VotesForNextTick);
+}
+
+static void PrintVoteSummary(QuorumVoteSummary s)
+{
+    PrintFieldDistribution("    transactionDigest", s.TransactionDigest);
+    PrintFieldDistribution("    prevSpectrumDigest", s.PrevSpectrumDigest);
+    PrintFieldDistribution("    prevUniverseDigest", s.PrevUniverseDigest);
+    PrintFieldDistribution("    prevComputerDigest", s.PrevComputerDigest);
+    PrintFieldDistribution("    expectedNextTickTx", s.ExpectedNextTickTransactionDigest);
+}
+
+static void PrintFieldDistribution(string label, VoteFieldDistribution d)
+{
+    var quorumMark = d.QuorumReached ? "✓" : "✗";
+    Console.WriteLine($"{label}: {d.Distribution.Count} distinct values, dominant {d.DominantCount}/{d.TotalVotes} {quorumMark} (quorum {Qubic.Core.QubicConstants.Quorum})");
+    var topN = Math.Min(d.Distribution.Count, 5);
+    for (var i = 0; i < topN; i++)
+    {
+        var (hex, count) = d.Distribution[i];
+        var pct = d.TotalVotes == 0 ? 0.0 : 100.0 * count / d.TotalVotes;
+        Console.WriteLine($"        {count,4} ({pct,5:0.0}%)  {hex}");
+    }
+    if (d.Distribution.Count > topN)
+        Console.WriteLine($"        … {d.Distribution.Count - topN} more value(s) below");
+}
+
+static void PrintVoteTimings(VoteAlignmentTimings t)
+{
+    Console.WriteLine($"  timings:          total {Fmt(t.TotalDuration)}  ({t.StartedAt:HH:mm:ss.fff} → {t.FinishedAt:HH:mm:ss.fff})");
+    Console.WriteLine($"                    tick data        {Fmt(t.TickDataFetch.Duration)}");
+    Console.WriteLine($"                    votes for X      {Fmt(t.VotesForTickFetch.Duration)}");
+    Console.WriteLine($"                    votes for X+1    {Fmt(t.VotesForNextTickFetch.Duration)}");
+    Console.WriteLine($"                    distribution     {Fmt(t.DistributionCompute.Duration)}");
 }
 
 static void PrintTimings(TickFetchTimings t)
