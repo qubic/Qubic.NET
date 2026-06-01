@@ -10,7 +10,10 @@ Developer tools for working with Qubic smart contracts and the Qubic network.
 |------|-------------|
 | [Qubic.ContractGen](Qubic.ContractGen/) | Parses C++ smart contract headers from `qubic-core` and generates C# bindings with correct struct layouts, type mappings, and alignment. |
 | [Qubic.ScTester](Qubic.ScTester/) | Blazor Server web UI for browsing and testing all generated smart contract functions against live Qubic nodes via RPC, Bob, or direct TCP. |
-| [Qubic.ChainAnalytics.Cli](Qubic.ChainAnalytics.Cli/) | Direct-mainnet tick analytics CLI — fetches tick data and transactions from a node over TCP, parses them, and verifies locally-computed K12 digests against the digests embedded in the tick. |
+| [Qubic.ChainAnalytics.Cli](Qubic.ChainAnalytics.Cli/) | Direct-mainnet tick analytics CLI — tick + tx summary with K12 chain verification, vote-distribution alignment for X/X+1, and verbatim replay of captured `RequestTickTransactions` packets. |
+| [Qubic.NodeTester](Qubic.NodeTester/) | Direct-TCP peer test suite — runs an 8-step health check (connect, handshake, broadcast listen, tick info, system info, tick data, tick tx, quorum tick) with auto-reconnect on mid-suite disconnects. |
+| [Qubic.NodeLogger](Qubic.NodeLogger/) | Pulls event logs from a node via `REQUEST_LOG` (44), `REQUEST_LOG_ID_RANGE_FROM_TX` (48), `REQUEST_ALL_LOG_ID_RANGES_FROM_TX` (50). Counts by type, JSON export. Requires the operator's log-reader passcode. |
+| [Qubic.TxRelay](Qubic.TxRelay/) | Pulls transactions from one peer and broadcasts them to another. Single tick / range / `latest --follow` modes, K12-dedup, throttling, dry-run. |
 | [Qubic.SpectrumDiff](Qubic.SpectrumDiff/) | Streams two 1 GB `spectrum.NNN` dumps in lockstep and reports per-account differences in incoming, outgoing, transfer counts, and balance. |
 
 ## Quick Start

@@ -289,6 +289,83 @@ public sealed class QubicPacketReader
     }
 
     /// <summary>
+    /// Parses a concatenated stream of log entries (as returned by REQUEST_LOG) into
+    /// a list of <see cref="LogEntry"/>. Stops cleanly at the buffer end.
+    /// </summary>
+    public List<LogEntry> ReadLogEntries(ReadOnlySpan<byte> payload)
+    {
+        const int HeaderSize = 26; // LOG_HEADER_SIZE
+        var entries = new List<LogEntry>();
+        var offset = 0;
+        while (offset + HeaderSize <= payload.Length)
+        {
+            var epoch = BinaryPrimitives.ReadUInt16LittleEndian(payload[offset..]);
+            var tick = BinaryPrimitives.ReadUInt32LittleEndian(payload[(offset + 2)..]);
+            var sizeAndType = BinaryPrimitives.ReadUInt32LittleEndian(payload[(offset + 6)..]);
+            var messageSize = sizeAndType & 0x00FFFFFF;
+            var messageType = (byte)(sizeAndType >> 24);
+            var logId = BinaryPrimitives.ReadUInt64LittleEndian(payload[(offset + 10)..]);
+            var logDigest = BinaryPrimitives.ReadUInt64LittleEndian(payload[(offset + 18)..]);
+
+            var bodyStart = offset + HeaderSize;
+            if (bodyStart + messageSize > payload.Length)
+                break; // truncated trailing entry — caller can request the next range
+
+            var body = payload.Slice(bodyStart, (int)messageSize).ToArray();
+            entries.Add(new LogEntry
+            {
+                Epoch = epoch,
+                Tick = tick,
+                MessageType = messageType,
+                MessageSize = messageSize,
+                LogId = logId,
+                LogDigest = logDigest,
+                MessageBody = body,
+            });
+            offset = bodyStart + (int)messageSize;
+        }
+        return entries;
+    }
+
+    /// <summary>
+    /// Reads a <c>RespondLogIdRangeFromTx</c> (16-byte packed: <c>fromLogId</c>, <c>length</c>).
+    /// </summary>
+    public LogIdRange ReadLogIdRange(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length != 16)
+            throw new ArgumentException($"RespondLogIdRangeFromTx must be 16 bytes, got {payload.Length}.");
+        var from = BinaryPrimitives.ReadInt64LittleEndian(payload);
+        var len = BinaryPrimitives.ReadInt64LittleEndian(payload[8..]);
+        return new LogIdRange(from, len);
+    }
+
+    /// <summary>
+    /// Reads a <c>RespondAllLogIdRangesFromTick</c> (two long[] of LOG_TX_PER_TICK each
+    /// = 4102 entries). Returns one <see cref="LogIdRange"/> per tx slot.
+    /// </summary>
+    public TickLogIdRanges ReadAllLogIdRanges(uint tick, ReadOnlySpan<byte> payload)
+    {
+        // LOG_TX_PER_TICK = NUMBER_OF_TRANSACTIONS_PER_TICK + 6 = 4096 + 6 = 4102
+        const int LogTxPerTick = 4102;
+        const int Expected = LogTxPerTick * 16;
+        if (payload.Length != Expected)
+            throw new ArgumentException($"RespondAllLogIdRangesFromTick must be {Expected} bytes, got {payload.Length}.");
+
+        var ranges = new LogIdRange[LogTxPerTick];
+        var fromOffset = 0;
+        var lenOffset = LogTxPerTick * 8;
+        for (var i = 0; i < LogTxPerTick; i++)
+        {
+            var from = BinaryPrimitives.ReadInt64LittleEndian(payload[fromOffset..]);
+            var len = BinaryPrimitives.ReadInt64LittleEndian(payload[lenOffset..]);
+            ranges[i] = new LogIdRange(from, len);
+            fromOffset += 8;
+            lenOffset += 8;
+        }
+        return new TickLogIdRanges { Tick = tick, Ranges = ranges };
+    }
+
+    /// <summary>
     /// Reads a <c>RequestTickTransactions</c> incoming-request payload. Layout:
     /// 4-byte tick + N bytes of transaction flags where N is 128 (legacy, 1024 tx/tick)
     /// or 512 (V2+, 4096 tx/tick). The flag-array size is inferred from the payload length.

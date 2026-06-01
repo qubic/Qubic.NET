@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>qubic-tx-relay</AssemblyName>
+    <RootNamespace>Qubic.TxRelay</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Qubic.Core\Qubic.Core.csproj" />
+    <ProjectReference Include="..\..\src\Qubic.Network\Qubic.Network.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Qubic.Crypto" Version="1.5.1" />
+  </ItemGroup>
+
+</Project>

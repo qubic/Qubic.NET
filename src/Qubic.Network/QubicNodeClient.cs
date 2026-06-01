@@ -219,6 +219,56 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Requests a contiguous range of log entries from the node's log buffer.
+    /// Returns an empty list when the passcode is wrong or the range isn't available
+    /// (node sends a bare <c>EndResponse</c> in those cases). Otherwise the entries
+    /// are parsed from the single <c>RespondLog</c> packet the node returns.
+    /// </summary>
+    /// <param name="passcode32">32-byte log-reader passcode configured by the node operator.</param>
+    public async Task<IReadOnlyList<LogEntry>> GetLogsAsync(
+        byte[] passcode32, ulong fromId, ulong toId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(passcode32);
+        EnsureConnected();
+        var packet = _writer.WriteRequestLog(passcode32, fromId, toId);
+        var payload = await SendAndReceiveOneOfAsync(
+            packet, QubicPacketTypes.RespondLog, QubicPacketTypes.EndResponse, cancellationToken);
+        return payload is null ? [] : _reader.ReadLogEntries(payload);
+    }
+
+    /// <summary>
+    /// Asks for the log-id range produced by a single transaction in a tick.
+    /// Returns null when the passcode is wrong or the tick is outside the node's
+    /// log window.
+    /// </summary>
+    public async Task<LogIdRange?> GetLogIdRangeFromTxAsync(
+        byte[] passcode32, uint tick, uint txId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(passcode32);
+        EnsureConnected();
+        var packet = _writer.WriteRequestLogIdRangeFromTx(passcode32, tick, txId);
+        var payload = await SendAndReceiveOneOfAsync(
+            packet, QubicPacketTypes.RespondLogIdRangeFromTx, QubicPacketTypes.EndResponse, cancellationToken);
+        return payload is null ? null : _reader.ReadLogIdRange(payload);
+    }
+
+    /// <summary>
+    /// Asks for the log-id ranges of every tx slot in a tick (4096 user-tx slots + 6
+    /// special-event slots). Returns null when the passcode is wrong or the tick is
+    /// outside the node's log window.
+    /// </summary>
+    public async Task<TickLogIdRanges?> GetAllLogIdRangesFromTickAsync(
+        byte[] passcode32, uint tick, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(passcode32);
+        EnsureConnected();
+        var packet = _writer.WriteRequestAllLogIdRangesFromTick(passcode32, tick);
+        var payload = await SendAndReceiveOneOfAsync(
+            packet, QubicPacketTypes.RespondAllLogIdRangesFromTick, QubicPacketTypes.EndResponse, cancellationToken);
+        return payload is null ? null : _reader.ReadAllLogIdRanges(tick, payload);
+    }
+
+    /// <summary>
     /// Requests every quorum-vote (computor-signed <see cref="Tick"/>) the node has
     /// stored for the given tick. The order returned is randomised by the node
     /// (Fisher–Yates shuffle on the server side). Returns an empty list if the node
@@ -249,14 +299,33 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     /// </remarks>
     public async Task<TickData?> GetTickDataAsync(uint tick, CancellationToken cancellationToken = default)
     {
+        var (parsed, _) = await GetTickDataWithRawAsync(tick, cancellationToken).ConfigureAwait(false);
+        return parsed;
+    }
+
+    /// <summary>
+    /// Returns the raw <c>BroadcastFutureTickData</c> payload bytes for the tick, or
+    /// <c>null</c> when the node sends an <c>EndResponse</c> (no data). Useful for
+    /// archiving the canonical signed wire representation alongside any parsed view.
+    /// </summary>
+    public async Task<byte[]?> GetTickDataRawAsync(uint tick, CancellationToken cancellationToken = default)
+    {
         EnsureConnected();
         var packet = _writer.WriteRequestTickData(tick);
-
-        var payload = await SendAndReceiveOneOfAsync(
+        return await SendAndReceiveOneOfAsync(
             packet, QubicPacketTypes.BroadcastFutureTickData, QubicPacketTypes.EndResponse, cancellationToken);
+    }
 
-        // EndResponse → no data for this tick.
-        return payload is null ? null : _reader.ReadTickData(payload);
+    /// <summary>
+    /// One round-trip variant that returns both the parsed <see cref="TickData"/> and
+    /// the raw payload bytes, so callers can persist the canonical wire form without
+    /// fetching twice. Both are <c>null</c> when the node has no data for the tick.
+    /// </summary>
+    public async Task<(TickData? Parsed, byte[]? Raw)> GetTickDataWithRawAsync(
+        uint tick, CancellationToken cancellationToken = default)
+    {
+        var raw = await GetTickDataRawAsync(tick, cancellationToken).ConfigureAwait(false);
+        return raw is null ? (null, null) : (_reader.ReadTickData(raw), raw);
     }
 
     /// <summary>
@@ -346,6 +415,19 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
             throw new InvalidOperationException("Transaction must be signed before broadcasting.");
 
         var packet = _writer.WriteBroadcastTransaction(transaction);
+        await SendAsync(packet, cancellationToken);
+    }
+
+    /// <summary>
+    /// Broadcasts a raw, already-signed transaction (as returned by
+    /// <see cref="GetTickTransactionsAsync(uint, ushort, CancellationToken)"/>) to this
+    /// peer without parsing or re-signing. The node propagates it from there.
+    /// </summary>
+    public async Task BroadcastRawTransactionAsync(byte[] rawTx, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rawTx);
+        EnsureConnected();
+        var packet = _writer.WriteBroadcastTransaction((ReadOnlySpan<byte>)rawTx);
         await SendAsync(packet, cancellationToken);
     }
 

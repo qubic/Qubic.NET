@@ -29,8 +29,14 @@ public static class QubicPacketTypes
     public const byte RespondPossessedAssets = 41;
     public const byte RequestContractFunction = 42;
     public const byte RespondContractFunction = 43;
+    public const byte RequestLog = 44;
+    public const byte RespondLog = 45;
     public const byte RequestSystemInfo = 46;
     public const byte RespondSystemInfo = 47;
+    public const byte RequestLogIdRangeFromTx = 48;
+    public const byte RespondLogIdRangeFromTx = 49;
+    public const byte RequestAllLogIdRangesFromTick = 50;
+    public const byte RespondAllLogIdRangesFromTick = 51;
 
     // Oracle
     public const byte RequestOracleData = 66;

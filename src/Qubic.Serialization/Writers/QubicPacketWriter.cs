@@ -78,6 +78,24 @@ public sealed class QubicPacketWriter
         return GetPacketBytes();
     }
 
+    /// <summary>
+    /// Writes a transaction broadcast packet directly from raw wire bytes — useful
+    /// when relaying transactions you received from another peer (e.g. via
+    /// <c>RequestTickTransactions</c>) without round-tripping through
+    /// <see cref="QubicTransaction"/>. Uses dejavu=0 so the receiving node will
+    /// propagate to its own peers.
+    /// </summary>
+    public byte[] WriteBroadcastTransaction(ReadOnlySpan<byte> rawTx)
+    {
+        if (rawTx.Length < 144)
+            throw new ArgumentException($"Raw transaction too short: {rawTx.Length} < 144.", nameof(rawTx));
+
+        Reset();
+        WriteBroadcastHeader(QubicPacketTypes.BroadcastTransaction, rawTx.Length);
+        _writer.Write(rawTx);
+        return GetPacketBytes();
+    }
+
 
     /// <summary>
     /// Writes a RequestSystemInfo packet (no payload — just the header).
@@ -88,6 +106,62 @@ public sealed class QubicPacketWriter
         Reset();
         WriteHeader(QubicPacketTypes.RequestSystemInfo, 0);
         return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Writes a RequestLog packet (32-byte passcode + fromId + toId, inclusive range).
+    /// The node only replies if <paramref name="passcode32"/> matches its configured
+    /// <c>logReaderPasscodes</c>; otherwise it sends an EndResponse.
+    /// </summary>
+    public byte[] WriteRequestLog(ReadOnlySpan<byte> passcode32, ulong fromId, ulong toId)
+    {
+        ValidatePasscode(passcode32);
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestLog, 32 + 8 + 8);
+        _writer.Write(passcode32);
+        _writer.Write(fromId);
+        _writer.Write(toId);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Writes a RequestLogIdRangeFromTx (32-byte passcode + tick + txId).
+    /// Node replies with a single RespondLogIdRangeFromTx (fromLogId + length, 16 bytes).
+    /// </summary>
+    public byte[] WriteRequestLogIdRangeFromTx(ReadOnlySpan<byte> passcode32, uint tick, uint txId)
+    {
+        ValidatePasscode(passcode32);
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestLogIdRangeFromTx, 32 + 4 + 4);
+        _writer.Write(passcode32);
+        _writer.Write(tick);
+        _writer.Write(txId);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Writes a RequestAllLogIdRangesFromTick (32-byte passcode + tick + 4 trailing pad).
+    /// MSVC pads <c>RequestAllLogIdRangesFromTick</c> from 36 → 40 by 8-byte struct
+    /// alignment; the node silently drops mis-sized packets, so we emit the 40-byte
+    /// form. Response: RespondAllLogIdRangesFromTick (LOG_TX_PER_TICK * 16 bytes).
+    /// </summary>
+    public byte[] WriteRequestAllLogIdRangesFromTick(ReadOnlySpan<byte> passcode32, uint tick)
+    {
+        ValidatePasscode(passcode32);
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestAllLogIdRangesFromTick, 32 + 4 + 4); // 4 trailing pad
+        _writer.Write(passcode32);
+        _writer.Write(tick);
+        _writer.Write(0u); // trailing alignment padding
+        return GetPacketBytes();
+    }
+
+    private static void ValidatePasscode(ReadOnlySpan<byte> passcode32)
+    {
+        if (passcode32.Length != 32)
+            throw new ArgumentException(
+                $"Log passcode must be 32 bytes (4 × u64), got {passcode32.Length}.",
+                nameof(passcode32));
     }
 
     /// <summary>

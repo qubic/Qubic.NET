@@ -27,6 +27,13 @@ public sealed class TickSummary
     public TickData? TickData { get; init; }
 
     /// <summary>
+    /// Raw <c>BroadcastFutureTickData</c> wire-bytes payload, exactly as the node sent
+    /// it. Null when tick data is unavailable. Persist this to capture the canonical
+    /// signed form of the tick — independent of how the C# model evolves.
+    /// </summary>
+    public byte[]? TickDataRawBytes { get; init; }
+
+    /// <summary>
     /// Digest slots from the tick data, in tick-data order. Each entry is either a
     /// 32-byte non-zero K12 digest of an included tx, or 32 zero bytes for an empty slot.
     /// Empty list when <see cref="TickDataAvailable"/> is false.
@@ -42,6 +49,40 @@ public sealed class TickSummary
     /// count. False when tick data is unavailable or any mismatch is detected.
     /// </summary>
     public required bool DigestsVerified { get; init; }
+
+    /// <summary>
+    /// Number of non-empty digest slots in the signed tick data — the number of
+    /// transactions the issuing computor committed to. Compare against
+    /// <see cref="Transactions"/>.Count: if smaller, the queried peer is missing tx
+    /// bodies for some slots.
+    /// </summary>
+    public int UsedTickDataSlotCount =>
+        TickDataDigests.Count(d => d.Any(b => b != 0));
+
+    /// <summary>
+    /// Slot indices whose digest is present in tick data but absent from
+    /// <see cref="Transactions"/> — i.e. transactions the peer didn't return. Empty
+    /// when verified, populated when the peer's archive is incomplete for this tick.
+    /// </summary>
+    public IReadOnlyList<int> MissingSlotIndices
+    {
+        get
+        {
+            if (Transactions.Count == 0 && TickDataDigests.Count == 0) return [];
+            var receivedDigests = new HashSet<string>(
+                Transactions.Select(tx => Convert.ToHexString(tx.Digest)),
+                StringComparer.Ordinal);
+            var missing = new List<int>();
+            for (var slot = 0; slot < TickDataDigests.Count; slot++)
+            {
+                var d = TickDataDigests[slot];
+                if (!d.Any(b => b != 0)) continue; // empty slot
+                if (!receivedDigests.Contains(Convert.ToHexString(d)))
+                    missing.Add(slot);
+            }
+            return missing;
+        }
+    }
 
     /// <summary>Per-step wall-clock timings collected while building this summary.</summary>
     public required TickFetchTimings Timings { get; init; }

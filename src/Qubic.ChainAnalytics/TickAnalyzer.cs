@@ -39,7 +39,7 @@ public sealed class TickAnalyzer
         var startedAt = DateTime.UtcNow;
 
         var tickDataStart = DateTime.UtcNow;
-        var tickData = await _client.GetTickDataAsync(tick, cancellationToken).ConfigureAwait(false);
+        var (tickData, tickDataRaw) = await _client.GetTickDataWithRawAsync(tick, cancellationToken).ConfigureAwait(false);
         var tickDataStep = new TimingStep(tickDataStart, DateTime.UtcNow);
 
         if (tickData is null)
@@ -50,6 +50,7 @@ public sealed class TickAnalyzer
                 Epoch = epoch,
                 TickDataAvailable = false,
                 TickData = null,
+                TickDataRawBytes = null,
                 TickDataDigests = [],
                 Transactions = [],
                 DigestsVerified = false,
@@ -81,6 +82,7 @@ public sealed class TickAnalyzer
             Epoch = tickData.Epoch == 0 ? epoch : tickData.Epoch,
             TickDataAvailable = true,
             TickData = tickData,
+            TickDataRawBytes = tickDataRaw,
             TickDataDigests = tickData.TransactionDigests,
             Transactions = parsed,
             DigestsVerified = verified,

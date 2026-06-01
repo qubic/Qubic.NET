@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>qubic-node-logger</AssemblyName>
+    <RootNamespace>Qubic.NodeLogger</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Qubic.Core\Qubic.Core.csproj" />
+    <ProjectReference Include="..\..\src\Qubic.Network\Qubic.Network.csproj" />
+  </ItemGroup>
+
+</Project>

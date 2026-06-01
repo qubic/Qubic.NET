@@ -13,6 +13,7 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
                                                        [--port P] [--tx-range SPEC]
                                                        [--votes]
                                                        [--replay-tick-tx FLAGS]
+                                                       [--dump-dir PATH]
 
         --tx-range filters which transactions to print (the tick summary is always shown):
           0-10     indices 0..10 inclusive
@@ -23,6 +24,16 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
         --votes prints the vote-distribution analytic instead of the tick / tx summary.
         It fetches tick data for X, quorum votes for X, quorum votes for X+1, and
         shows how computor votes are distributed and whether they align.
+
+        --dump-dir PATH writes each processed tick to disk as:
+          tick-NNNNNNNNNN-tickdata.bin   raw BroadcastFutureTickData wire bytes
+                                         (the canonical signed form)
+          tick-NNNNNNNNNN-txs.bin        concatenated raw tx bytes, self-described
+                                         (u32 magic | u32 tick | u32 count | per tx: u32 len | bytes)
+          tick-NNNNNNNNNN.json           full parsed view: tick-data fields, digests,
+                                         all transactions with hashes/identities/payload
+        Works with the default tick-summary mode (incl. --range) — not with --votes
+        or --replay-tick-tx.
 
         --replay-tick-tx FLAGS replays a captured RequestTickTransactions verbatim.
         FLAGS is the transaction-flag bitmap, 128 bytes (legacy) or 512 bytes (V2),
@@ -55,6 +66,7 @@ TxRange txRange = TxRange.All;
 bool votesMode = false;
 byte[]? replayFlags = null;
 uint? replayDejavu = null;
+string? dumpDir = null;
 
 for (var i = 2; i < args.Length; i++)
 {
@@ -80,6 +92,9 @@ for (var i = 2; i < args.Length; i++)
             break;
         case "--dejavu" when i + 1 < args.Length:
             replayDejavu = ParseHexUInt32(args[++i]);
+            break;
+        case "--dump-dir" when i + 1 < args.Length:
+            dumpDir = args[++i];
             break;
         default:
             Console.Error.WriteLine($"unknown arg: {args[i]}");
@@ -131,6 +146,13 @@ else
     await foreach (var summary in analyzer.ScanAsync(startTick, endTick, epoch))
     {
         PrintSummary(summary, txRange);
+        if (dumpDir is not null)
+        {
+            var written = TickSummaryDump.Write(summary, dumpDir);
+            Console.WriteLine($"  dumped:      {written.Count} file(s) → {dumpDir}");
+            foreach (var p in written)
+                Console.WriteLine($"               {Path.GetFileName(p)}");
+        }
     }
 }
 
@@ -263,9 +285,21 @@ static void PrintSummary(TickSummary s, TxRange txRange)
     Console.WriteLine($"  computor:    #{td.ComputorIndex}");
     Console.WriteLine($"  timestamp:   {(td.Timestamp == DateTime.MinValue ? "—" : td.Timestamp.ToString("O"))}");
     Console.WriteLine($"  signature:   {Hex(td.Signature, max: 16)}…");
-    Console.WriteLine($"  txs:         {s.Transactions.Count}  (system: {s.SystemMessageCount}, contract: {s.ContractCallCount}, transfer: {s.UserTransferCount})");
+    var slotUsage = s.Transactions.Count == s.UsedTickDataSlotCount
+        ? $"{s.Transactions.Count}/{s.UsedTickDataSlotCount} slots"
+        : $"{s.Transactions.Count}/{s.UsedTickDataSlotCount} slots  ⚠ {s.UsedTickDataSlotCount - s.Transactions.Count} MISSING";
+    Console.WriteLine($"  txs:         {slotUsage}  (system: {s.SystemMessageCount}, contract: {s.ContractCallCount}, transfer: {s.UserTransferCount})");
     Console.WriteLine($"  total QU:    {s.TotalAmount:N0}");
     Console.WriteLine($"  verified:    {(s.DigestsVerified ? "YES" : "NO")}");
+
+    if (!s.DigestsVerified && s.MissingSlotIndices.Count > 0)
+    {
+        var missing = s.MissingSlotIndices;
+        var preview = missing.Count > 20
+            ? $"{string.Join(", ", missing.Take(20))}, … +{missing.Count - 20} more"
+            : string.Join(", ", missing);
+        Console.WriteLine($"  missing slots: [{preview}]");
+    }
     PrintTimings(s.Timings);
 
     if (s.Transactions.Count == 0) return;
