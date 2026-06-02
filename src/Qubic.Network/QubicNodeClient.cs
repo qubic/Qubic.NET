@@ -205,6 +205,40 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Requests the current epoch's computor list (676 public keys + epoch + signature).
+    /// Returns <c>null</c> when the node has no computor set yet (e.g. mid-epoch boot).
+    /// </summary>
+    public async Task<Computors?> GetComputorsAsync(CancellationToken cancellationToken = default)
+    {
+        var (parsed, _) = await GetComputorsWithRawAsync(cancellationToken).ConfigureAwait(false);
+        return parsed;
+    }
+
+    /// <summary>
+    /// Returns the raw <c>BroadcastComputors</c> payload bytes (21,698 B), or
+    /// <c>null</c> when the node has no computor set.
+    /// </summary>
+    public async Task<byte[]?> GetComputorsRawAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestComputors();
+        return await SendAndReceiveOneOfAsync(
+            packet, QubicPacketTypes.BroadcastComputors, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// One round-trip variant that returns both the parsed <see cref="Computors"/> and
+    /// the raw payload bytes — useful when archiving the signed wire form alongside
+    /// the parsed view. Both are <c>null</c> when the node has no computor set.
+    /// </summary>
+    public async Task<(Computors? Parsed, byte[]? Raw)> GetComputorsWithRawAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var raw = await GetComputorsRawAsync(cancellationToken).ConfigureAwait(false);
+        return raw is null ? (null, null) : (_reader.ReadComputors(raw), raw);
+    }
+
+    /// <summary>
     /// Requests the node's system info. Returns the raw 128-byte RespondSystemInfo
     /// payload (packed struct). Callers parse fields by offset — see
     /// <c>qubic-core/src/network_messages/system_info.h</c>.
@@ -228,12 +262,34 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     public async Task<IReadOnlyList<LogEntry>> GetLogsAsync(
         byte[] passcode32, ulong fromId, ulong toId, CancellationToken cancellationToken = default)
     {
+        var (parsed, _) = await GetLogsWithRawAsync(passcode32, fromId, toId, cancellationToken).ConfigureAwait(false);
+        return parsed;
+    }
+
+    /// <summary>
+    /// Raw <c>RespondLog</c> payload bytes (concatenated log entries) or <c>null</c>
+    /// on <c>EndResponse</c>.
+    /// </summary>
+    public async Task<byte[]?> GetLogsRawAsync(
+        byte[] passcode32, ulong fromId, ulong toId, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(passcode32);
         EnsureConnected();
         var packet = _writer.WriteRequestLog(passcode32, fromId, toId);
-        var payload = await SendAndReceiveOneOfAsync(
+        return await SendAndReceiveOneOfAsync(
             packet, QubicPacketTypes.RespondLog, QubicPacketTypes.EndResponse, cancellationToken);
-        return payload is null ? [] : _reader.ReadLogEntries(payload);
+    }
+
+    /// <summary>
+    /// One round-trip variant that returns both the parsed log entries and the raw
+    /// payload bytes — useful when archiving the canonical wire form alongside the
+    /// parsed view. Raw is <c>null</c> when the node sent <c>EndResponse</c>.
+    /// </summary>
+    public async Task<(IReadOnlyList<LogEntry> Parsed, byte[]? Raw)> GetLogsWithRawAsync(
+        byte[] passcode32, ulong fromId, ulong toId, CancellationToken cancellationToken = default)
+    {
+        var raw = await GetLogsRawAsync(passcode32, fromId, toId, cancellationToken).ConfigureAwait(false);
+        return raw is null ? ([], null) : (_reader.ReadLogEntries(raw), raw);
     }
 
     /// <summary>
@@ -244,12 +300,27 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     public async Task<LogIdRange?> GetLogIdRangeFromTxAsync(
         byte[] passcode32, uint tick, uint txId, CancellationToken cancellationToken = default)
     {
+        var (parsed, _) = await GetLogIdRangeFromTxWithRawAsync(passcode32, tick, txId, cancellationToken).ConfigureAwait(false);
+        return parsed;
+    }
+
+    /// <summary>Raw <c>RespondLogIdRangeFromTx</c> bytes (16) or <c>null</c> on <c>EndResponse</c>.</summary>
+    public async Task<byte[]?> GetLogIdRangeFromTxRawAsync(
+        byte[] passcode32, uint tick, uint txId, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(passcode32);
         EnsureConnected();
         var packet = _writer.WriteRequestLogIdRangeFromTx(passcode32, tick, txId);
-        var payload = await SendAndReceiveOneOfAsync(
+        return await SendAndReceiveOneOfAsync(
             packet, QubicPacketTypes.RespondLogIdRangeFromTx, QubicPacketTypes.EndResponse, cancellationToken);
-        return payload is null ? null : _reader.ReadLogIdRange(payload);
+    }
+
+    /// <summary>Parsed + raw form in one round-trip.</summary>
+    public async Task<(LogIdRange? Parsed, byte[]? Raw)> GetLogIdRangeFromTxWithRawAsync(
+        byte[] passcode32, uint tick, uint txId, CancellationToken cancellationToken = default)
+    {
+        var raw = await GetLogIdRangeFromTxRawAsync(passcode32, tick, txId, cancellationToken).ConfigureAwait(false);
+        return raw is null ? (null, null) : (_reader.ReadLogIdRange(raw), raw);
     }
 
     /// <summary>
@@ -260,12 +331,27 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     public async Task<TickLogIdRanges?> GetAllLogIdRangesFromTickAsync(
         byte[] passcode32, uint tick, CancellationToken cancellationToken = default)
     {
+        var (parsed, _) = await GetAllLogIdRangesFromTickWithRawAsync(passcode32, tick, cancellationToken).ConfigureAwait(false);
+        return parsed;
+    }
+
+    /// <summary>Raw <c>RespondAllLogIdRangesFromTick</c> bytes (65,632) or <c>null</c> on <c>EndResponse</c>.</summary>
+    public async Task<byte[]?> GetAllLogIdRangesFromTickRawAsync(
+        byte[] passcode32, uint tick, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(passcode32);
         EnsureConnected();
         var packet = _writer.WriteRequestAllLogIdRangesFromTick(passcode32, tick);
-        var payload = await SendAndReceiveOneOfAsync(
+        return await SendAndReceiveOneOfAsync(
             packet, QubicPacketTypes.RespondAllLogIdRangesFromTick, QubicPacketTypes.EndResponse, cancellationToken);
-        return payload is null ? null : _reader.ReadAllLogIdRanges(tick, payload);
+    }
+
+    /// <summary>Parsed + raw form in one round-trip.</summary>
+    public async Task<(TickLogIdRanges? Parsed, byte[]? Raw)> GetAllLogIdRangesFromTickWithRawAsync(
+        byte[] passcode32, uint tick, CancellationToken cancellationToken = default)
+    {
+        var raw = await GetAllLogIdRangesFromTickRawAsync(passcode32, tick, cancellationToken).ConfigureAwait(false);
+        return raw is null ? (null, null) : (_reader.ReadAllLogIdRanges(tick, raw), raw);
     }
 
     /// <summary>

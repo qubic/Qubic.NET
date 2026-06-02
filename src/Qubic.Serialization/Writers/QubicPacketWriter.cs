@@ -109,6 +109,18 @@ public sealed class QubicPacketWriter
     }
 
     /// <summary>
+    /// Writes a RequestComputors packet (no payload). Node replies with a single
+    /// BroadcastComputors (packed struct: <c>u16 epoch + 676*32 pubkeys + 64 signature</c>
+    /// = 21,698 bytes).
+    /// </summary>
+    public byte[] WriteRequestComputors()
+    {
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestComputors, 0);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
     /// Writes a RequestLog packet (32-byte passcode + fromId + toId, inclusive range).
     /// The node only replies if <paramref name="passcode32"/> matches its configured
     /// <c>logReaderPasscodes</c>; otherwise it sends an EndResponse.

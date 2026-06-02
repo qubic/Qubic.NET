@@ -21,6 +21,18 @@ Binary name: `qubic-node-logger`.
 
 `log` mode also accepts `--json PATH` to dump every parsed entry as JSON.
 
+All three modes accept `--raw PATH` to dump the raw response payload bytes to a
+file — useful for archiving the wire form, re-parsing later, or diffing across
+nodes. The file is only written when the node actually returns a response (i.e.
+not when it sends `EndResponse` because the passcode was wrong or the data
+isn't available).
+
+| Mode | Raw payload size |
+|------|------------------|
+| `ranges` | 65,632 bytes (4102 slots × 16 bytes) |
+| `range` | 16 bytes (`fromLogId` + `length`) |
+| `log` | variable — concatenated 26-byte-header log entries |
+
 ## Usage
 
 ```
@@ -53,6 +65,10 @@ dotnet run --project tools/Qubic.NodeLogger -- \
 # Fetch entries 1000..1100 and write to JSON.
 dotnet run --project tools/Qubic.NodeLogger -- \
   1.2.3.4 0xdeadbeef0123... log 1000 1100 --json logs.json
+
+# Archive both the parsed view AND the canonical raw payload.
+dotnet run --project tools/Qubic.NodeLogger -- \
+  1.2.3.4 0xdeadbeef0123... log 1000 1100 --json logs.json --raw logs.bin
 ```
 
 ## Sample output (`log` mode)

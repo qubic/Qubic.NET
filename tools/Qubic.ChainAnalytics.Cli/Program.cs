@@ -14,6 +14,7 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
                                                        [--votes]
                                                        [--replay-tick-tx FLAGS]
                                                        [--dump-dir PATH]
+                                                       [--computors]
 
         --tx-range filters which transactions to print (the tick summary is always shown):
           0-10     indices 0..10 inclusive
@@ -24,6 +25,11 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
         --votes prints the vote-distribution analytic instead of the tick / tx summary.
         It fetches tick data for X, quorum votes for X, quorum votes for X+1, and
         shows how computor votes are distributed and whether they align.
+
+        --computors fetches the node's current epoch computor list (676 identities) via
+        RequestComputors (type 11) → BroadcastComputors (type 2). The <tick> arg is
+        ignored in this mode (the node returns whatever epoch it currently believes
+        is active). Pair with --dump-dir to persist the raw signed bytes + JSON.
 
         --dump-dir PATH writes each processed tick to disk as:
           tick-NNNNNNNNNN-tickdata.bin   raw BroadcastFutureTickData wire bytes
@@ -67,6 +73,7 @@ bool votesMode = false;
 byte[]? replayFlags = null;
 uint? replayDejavu = null;
 string? dumpDir = null;
+bool computorsMode = false;
 
 for (var i = 2; i < args.Length; i++)
 {
@@ -96,6 +103,9 @@ for (var i = 2; i < args.Length; i++)
         case "--dump-dir" when i + 1 < args.Length:
             dumpDir = args[++i];
             break;
+        case "--computors":
+            computorsMode = true;
+            break;
         default:
             Console.Error.WriteLine($"unknown arg: {args[i]}");
             return 1;
@@ -122,7 +132,11 @@ else
 
 var endTick = startTick + range - 1;
 
-if (replayFlags is not null)
+if (computorsMode)
+{
+    await PrintComputors(node, dumpDir);
+}
+else if (replayFlags is not null)
 {
     await PrintReplay(node, startTick, replayFlags, replayDejavu, txRange);
 }
@@ -157,6 +171,62 @@ else
 }
 
 return 0;
+
+static async Task PrintComputors(QubicNodeClient node, string? dumpDir)
+{
+    var started = DateTime.UtcNow;
+    var (computors, raw) = await node.GetComputorsWithRawAsync();
+    var elapsed = DateTime.UtcNow - started;
+
+    Console.WriteLine();
+    Console.WriteLine($"── computor list ───────────────────────────────");
+    if (computors is null || raw is null)
+    {
+        Console.WriteLine("  node returned EndResponse — no computor set available");
+        return;
+    }
+
+    var sigPreview = Convert.ToHexString(computors.Signature.AsSpan(0, 16)).ToLowerInvariant();
+    Console.WriteLine($"  epoch:       {computors.Epoch}");
+    Console.WriteLine($"  count:       {computors.PublicKeys.Length}");
+    Console.WriteLine($"  signature:   {sigPreview}…");
+    Console.WriteLine($"  fetched in:  {Fmt(elapsed)} ({raw.Length:N0} B)");
+    Console.WriteLine($"  computors:");
+
+    var crypt = new Qubic.Crypto.QubicCrypt();
+    for (var i = 0; i < computors.PublicKeys.Length; i++)
+        Console.WriteLine($"    [{i,3}] {crypt.GetIdentityFromPublicKey(computors.PublicKeys[i])}");
+
+    if (dumpDir is not null)
+    {
+        Directory.CreateDirectory(dumpDir);
+        var stem = $"computors-epoch-{computors.Epoch}";
+        var binPath = Path.Combine(dumpDir, $"{stem}.bin");
+        var jsonPath = Path.Combine(dumpDir, $"{stem}.json");
+        File.WriteAllBytes(binPath, raw);
+
+        var dto = new
+        {
+            epoch = computors.Epoch,
+            count = computors.PublicKeys.Length,
+            signatureHex = Convert.ToHexString(computors.Signature).ToLowerInvariant(),
+            computors = computors.PublicKeys
+                .Select((pk, i) => new
+                {
+                    index = i,
+                    identity = crypt.GetIdentityFromPublicKey(pk),
+                    publicKeyHex = Convert.ToHexString(pk).ToLowerInvariant(),
+                })
+                .ToArray(),
+        };
+        File.WriteAllText(jsonPath, System.Text.Json.JsonSerializer.Serialize(
+            dto, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine();
+        Console.WriteLine($"  dumped:      2 file(s) → {dumpDir}");
+        Console.WriteLine($"               {Path.GetFileName(binPath)}");
+        Console.WriteLine($"               {Path.GetFileName(jsonPath)}");
+    }
+}
 
 static async Task PrintReplay(QubicNodeClient node, uint tick, byte[] flags, uint? dejavu, TxRange txRange)
 {

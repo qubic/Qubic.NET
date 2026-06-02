@@ -132,6 +132,29 @@ public sealed class QubicPacketReader
     }
 
     /// <summary>
+    /// Reads a <c>BroadcastComputors</c> payload (packed struct, 21,698 bytes) into a
+    /// <see cref="Computors"/>. Layout: <c>u16 epoch | 676 * 32 pubkeys | 64 signature</c>.
+    /// </summary>
+    public Computors ReadComputors(ReadOnlySpan<byte> payload)
+    {
+        const int Expected = 2 + 676 * 32 + 64; // 21,698
+        if (payload.Length != Expected)
+            throw new ArgumentException($"BroadcastComputors payload must be {Expected} bytes, got {payload.Length}.");
+
+        var epoch = BinaryPrimitives.ReadUInt16LittleEndian(payload);
+        var keys = new byte[676][];
+        var offset = 2;
+        for (var i = 0; i < 676; i++)
+        {
+            keys[i] = payload.Slice(offset, 32).ToArray();
+            offset += 32;
+        }
+        var signature = payload.Slice(offset, 64).ToArray();
+
+        return new Computors { Epoch = epoch, PublicKeys = keys, Signature = signature };
+    }
+
+    /// <summary>
     /// Reads a <c>BroadcastFutureTickData</c> payload into a <see cref="TickData"/>.
     /// Slot count is inferred from payload size — 4096 transaction digests for V2-era
     /// payloads, 1024 for legacy. Throws if the size matches neither layout.

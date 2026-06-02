@@ -8,7 +8,7 @@ if (args.Length < 3 || args.Contains("--help") || args.Contains("-h"))
         qubic-node-logger — receive event logs from a Qubic node
 
         usage:
-          qubic-node-logger <host[:port]> <passcode> <mode> [args]  [--json PATH]
+          qubic-node-logger <host[:port]> <passcode> <mode> [args]  [--json PATH] [--raw PATH]
 
         passcode is the node-operator's 32-byte logReaderPasscodes, accepted as:
           64 hex chars                 e.g. 0xdeadbeef… (whitespace / ':' / ',' OK)
@@ -32,11 +32,18 @@ if (args.Length < 3 || args.Contains("--help") || args.Contains("-h"))
                                      range, or too large for one packet).
 
         --json PATH writes the parsed entries to a JSON file (log mode only).
+        --raw PATH writes the raw response payload bytes to a file (all modes):
+                     ranges → 65,632 B RespondAllLogIdRangesFromTick
+                     range  → 16 B     RespondLogIdRangeFromTx
+                     log    → variable RespondLog (concatenated entries)
+                     File is not written when the node sends EndResponse (no data).
 
         examples:
           qubic-node-logger 1.2.3.4 0xdeadbeef... ranges 54658297
           qubic-node-logger 1.2.3.4 0-0-0-0 range 54658297 0
           qubic-node-logger 1.2.3.4 0x1234-0xabcd-0-0 log 1000 1100 --json out.json
+          qubic-node-logger 1.2.3.4 0xdeadbeef... ranges 54658297 --raw ranges.bin
+          qubic-node-logger 1.2.3.4 0xdeadbeef... log 1000 1100 --raw log.bin --json log.json
         """);
     return args.Length < 3 ? 1 : 0;
 }
@@ -47,9 +54,11 @@ var passcode = ParsePasscode(args[1]);
 var mode = args[2].ToLowerInvariant();
 
 string? jsonPath = null;
+string? rawPath = null;
 for (var i = 3; i < args.Length; i++)
 {
     if (args[i] == "--json" && i + 1 < args.Length) { jsonPath = args[++i]; }
+    else if (args[i] == "--raw" && i + 1 < args.Length) { rawPath = args[++i]; }
 }
 
 await using var node = new QubicNodeClient(host, port);
@@ -62,25 +71,28 @@ switch (mode)
     case "ranges":
     {
         var tick = uint.Parse(args[3]);
-        var result = await node.GetAllLogIdRangesFromTickAsync(passcode, tick);
+        var (result, raw) = await node.GetAllLogIdRangesFromTickWithRawAsync(passcode, tick);
         PrintAllRanges(tick, result);
+        if (rawPath is not null) WriteRaw(rawPath, raw);
         break;
     }
     case "range":
     {
         var tick = uint.Parse(args[3]);
         var txId = uint.Parse(args[4]);
-        var result = await node.GetLogIdRangeFromTxAsync(passcode, tick, txId);
+        var (result, raw) = await node.GetLogIdRangeFromTxWithRawAsync(passcode, tick, txId);
         PrintSingleRange(tick, txId, result);
+        if (rawPath is not null) WriteRaw(rawPath, raw);
         break;
     }
     case "log":
     {
         var fromId = ulong.Parse(args[3]);
         var toId = ulong.Parse(args[4]);
-        var entries = await node.GetLogsAsync(passcode, fromId, toId);
+        var (entries, raw) = await node.GetLogsWithRawAsync(passcode, fromId, toId);
         PrintLogs(fromId, toId, entries);
         if (jsonPath is not null) WriteJson(jsonPath, entries);
+        if (rawPath is not null) WriteRaw(rawPath, raw);
         break;
     }
     default:
@@ -226,6 +238,17 @@ static void PrintLogs(ulong fromId, ulong toId, IReadOnlyList<LogEntry> entries)
         Console.WriteLine($"    logId={e.LogId,10}  tick={e.Tick,10}  epoch={e.Epoch,3}  type#{e.MessageType,3}={e.MessageTypeName,-38} size={e.MessageSize,5}");
     if (entries.Count > 10)
         Console.WriteLine($"    … {entries.Count - 10} more");
+}
+
+static void WriteRaw(string path, byte[]? raw)
+{
+    if (raw is null)
+    {
+        Console.WriteLine($"  raw: not written ({path}) — node sent EndResponse, no payload");
+        return;
+    }
+    File.WriteAllBytes(path, raw);
+    Console.WriteLine($"  wrote raw payload ({raw.Length:N0} bytes) to {path}");
 }
 
 static void WriteJson(string path, IReadOnlyList<LogEntry> entries)
