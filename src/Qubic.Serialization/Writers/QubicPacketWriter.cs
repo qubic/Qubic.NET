@@ -96,6 +96,25 @@ public sealed class QubicPacketWriter
         return GetPacketBytes();
     }
 
+    /// <summary>
+    /// Writes a transaction broadcast packet with an explicit dejavu in the header.
+    /// dejavu = 0 is the propagation convention (recipient forwards to its peers);
+    /// any non-zero value treats the packet as a directed message and participates
+    /// in the recipient's dejavu-filter (K12 of <c>salt | dejavu | payload</c>).
+    /// Use a randomised non-zero value per call to bypass the recipient's dejavu
+    /// filter on identical payloads.
+    /// </summary>
+    public byte[] WriteBroadcastTransaction(ReadOnlySpan<byte> rawTx, uint dejavu)
+    {
+        if (rawTx.Length < 144)
+            throw new ArgumentException($"Raw transaction too short: {rawTx.Length} < 144.", nameof(rawTx));
+
+        Reset();
+        WriteHeader(QubicPacketTypes.BroadcastTransaction, rawTx.Length, dejavu);
+        _writer.Write(rawTx);
+        return GetPacketBytes();
+    }
+
 
     /// <summary>
     /// Writes a RequestSystemInfo packet (no payload — just the header).

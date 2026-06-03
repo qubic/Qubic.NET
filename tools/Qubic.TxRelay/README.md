@@ -43,6 +43,7 @@ qubic-tx-relay <src-host[:port]> <dst-host[:port]> <source> [options]
 | `--dry-run` | off | fetch from src and print, but do NOT broadcast to dst (dst is not even connected) |
 | `--port-src P` | 21841 | override src port |
 | `--port-dst P` | 21841 | override dst port |
+| `--randomize-dejavu` | off | pick a fresh random dejavu for each relayed tx instead of using 0 (the propagation default). Each tx's chosen dejavu is printed inline. |
 
 Dedup is **in-run only** — it remembers tx hashes seen during this process and
 doesn't broadcast the same hash twice. dst's own dejavu filter handles cross-run
@@ -63,6 +64,10 @@ dotnet run --project tools/Qubic.TxRelay -- 1.2.3.4 5.6.7.8 latest \
 
 # Inspect what would be relayed — broadcast nothing
 dotnet run --project tools/Qubic.TxRelay -- 1.2.3.4 unused-in-dry-run latest --dry-run
+
+# Force dst to process re-broadcasts even of payloads it has seen
+# (random dejavu per tx bypasses dst's dejavu filter)
+dotnet run --project tools/Qubic.TxRelay -- 1.2.3.4 5.6.7.8 55072000 --randomize-dejavu
 ```
 
 ## Sample output
@@ -89,8 +94,9 @@ summary: relayed=275 deduped=0 bytes=43,560
 ## Things to know
 
 - **dst's dejavu filter**: qubic-core silently ignores any tx with the same
-  payload (modulo a per-startup salt) it has already seen. Replaying old txs
-  to a node that already processed them is therefore a no-op, not an error.
+  `(salt, dejavu, payload)` hash it has already seen. Replaying old txs to a
+  node that already processed them is therefore a no-op, not an error. Pair
+  with `--randomize-dejavu` to force dst to re-evaluate each payload.
 - **Throttling**: nodes may rate-limit or drop floods. Use `--max-per-sec` if
   you're relaying a big range to a busy peer.
 - **No re-signing**: relayed txs keep their original source identity and

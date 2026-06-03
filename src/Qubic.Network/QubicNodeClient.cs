@@ -517,6 +517,20 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
         await SendAsync(packet, cancellationToken);
     }
 
+    /// <summary>
+    /// Same as the no-dejavu overload but pins the broadcast header's dejavu to
+    /// <paramref name="dejavu"/>. Use 0 for the propagation convention, or a random
+    /// non-zero value to bypass the recipient's dejavu filter when re-broadcasting
+    /// identical payloads.
+    /// </summary>
+    public async Task BroadcastRawTransactionAsync(byte[] rawTx, uint dejavu, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rawTx);
+        EnsureConnected();
+        var packet = _writer.WriteBroadcastTransaction((ReadOnlySpan<byte>)rawTx, dejavu);
+        await SendAsync(packet, cancellationToken);
+    }
+
     private async Task<List<byte[]>> SendAndReceiveMultiAsync(byte[] packet, byte expectedType, byte endType, CancellationToken cancellationToken)
     {
         await _sendLock.WaitAsync(cancellationToken);

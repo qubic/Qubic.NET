@@ -29,6 +29,10 @@ if (args.Length < 3 || args.Contains("--help") || args.Contains("-h"))
           --dry-run               fetch from src, print, but DO NOT broadcast
           --port-src P            override src port (default 21841)
           --port-dst P            override dst port (default 21841)
+          --randomize-dejavu      pick a fresh random dejavu for each relayed tx
+                                  (default 0 — the propagation convention).
+                                  Use this to bypass dst's dejavu filter when
+                                  re-broadcasting identical payloads.
 
         examples:
           # Replay one historical tick from A to B
@@ -42,6 +46,9 @@ if (args.Length < 3 || args.Contains("--help") || args.Contains("-h"))
 
           # Inspect what would be relayed, broadcast nothing
           qubic-tx-relay 1.2.3.4 5.6.7.8 latest --dry-run
+
+          # Force dst to process re-broadcasts (random dejavu per tx)
+          qubic-tx-relay 1.2.3.4 5.6.7.8 55072000 --randomize-dejavu
         """);
     return args.Length < 3 ? 1 : 0;
 }
@@ -58,6 +65,7 @@ int pollMs = 1000;
 int maxPerSec = 0; // 0 = unlimited
 bool dedup = true;
 bool dryRun = false;
+bool randomizeDejavu = false;
 
 for (var i = 3; i < args.Length; i++)
 {
@@ -86,6 +94,9 @@ for (var i = 3; i < args.Length; i++)
             break;
         case "--port-dst" when i + 1 < args.Length:
             dstPort = int.Parse(args[++i]);
+            break;
+        case "--randomize-dejavu":
+            randomizeDejavu = true;
             break;
         default:
             Console.Error.WriteLine($"unknown arg: {args[i]}");
@@ -211,16 +222,22 @@ async Task RelayTickAsync(QubicNodeClient src, QubicNodeClient? dst, uint tick, 
         var srcId = crypt.GetIdentityFromPublicKey(raw.AsSpan(0, 32).ToArray());
         var dstId = crypt.GetIdentityFromPublicKey(raw.AsSpan(32, 32).ToArray());
 
+        uint? dvUsed = randomizeDejavu ? (uint)Random.Shared.Next(1, int.MaxValue) : null;
+
         if (dst is not null)
         {
             if (throttle is not null) await throttle.WaitAsync(cancel.Token);
-            await dst.BroadcastRawTransactionAsync(raw, cancel.Token);
+            if (dvUsed is uint dv)
+                await dst.BroadcastRawTransactionAsync(raw, dv, cancel.Token);
+            else
+                await dst.BroadcastRawTransactionAsync(raw, cancel.Token);
         }
         sent++;
         totalRelayed++;
         totalBytes += raw.Length;
 
-        Console.WriteLine($"  {(dryRun ? "DRY" : "SND")} {hash}");
+        var dvNote = dvUsed is uint shown ? $"  dejavu=0x{shown:x8}(rnd)" : "";
+        Console.WriteLine($"  {(dryRun ? "DRY" : "SND")} {hash}{dvNote}");
         Console.WriteLine($"        {srcId} -> {dstId}");
         Console.WriteLine($"        {amount,15:N0} QU  [type#{inputType}, {raw.Length}B]");
     }
@@ -234,6 +251,7 @@ static (string host, int? port) ParseHost(string arg)
     if (colon < 0) return (arg, null);
     return (arg[..colon], int.Parse(arg[(colon + 1)..]));
 }
+
 
 sealed class RateLimiter
 {
