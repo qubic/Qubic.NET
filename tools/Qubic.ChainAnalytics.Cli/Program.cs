@@ -15,6 +15,7 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
                                                        [--replay-tick-tx FLAGS]
                                                        [--dump-dir PATH]
                                                        [--computors]
+                                                       [--verify-signature]
 
         --tx-range filters which transactions to print (the tick summary is always shown):
           0-10     indices 0..10 inclusive
@@ -25,6 +26,13 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
         --votes prints the vote-distribution analytic instead of the tick / tx summary.
         It fetches tick data for X, quorum votes for X, quorum votes for X+1, and
         shows how computor votes are distributed and whether they align.
+
+        --verify-signature fetches the node's current Computors once at startup and
+        SchnorrQ-verifies each scanned tick's signature: K12 of the tick-data bytes
+        (minus the trailing 64-byte signature) is checked against the public key at
+        computors[tickData.ComputorIndex]. Result is shown as a "sig-verified" line
+        and included in the JSON dump. Skipped (with a reason) if the epochs don't
+        match the fetched Computors. Default-mode only.
 
         --computors fetches the node's current epoch computor list (676 identities) via
         RequestComputors (type 11) → BroadcastComputors (type 2). The <tick> arg is
@@ -74,6 +82,7 @@ byte[]? replayFlags = null;
 uint? replayDejavu = null;
 string? dumpDir = null;
 bool computorsMode = false;
+bool verifySignature = false;
 
 for (var i = 2; i < args.Length; i++)
 {
@@ -105,6 +114,9 @@ for (var i = 2; i < args.Length; i++)
             break;
         case "--computors":
             computorsMode = true;
+            break;
+        case "--verify-signature":
+            verifySignature = true;
             break;
         default:
             Console.Error.WriteLine($"unknown arg: {args[i]}");
@@ -156,7 +168,18 @@ else if (votesMode)
 }
 else
 {
-    var analyzer = new TickAnalyzer(node);
+    Qubic.Core.Entities.Computors? computors = null;
+    if (verifySignature)
+    {
+        Console.Error.WriteLine("fetching computor list for signature verification…");
+        computors = await node.GetComputorsAsync();
+        if (computors is null)
+            Console.Error.WriteLine("warning: node returned no computor set — signatures will not be verified");
+        else
+            Console.Error.WriteLine($"computors: epoch {computors.Epoch}, {computors.PublicKeys.Length} keys");
+    }
+
+    var analyzer = new TickAnalyzer(node, computors: computors);
     await foreach (var summary in analyzer.ScanAsync(startTick, endTick, epoch))
     {
         PrintSummary(summary, txRange);
@@ -361,6 +384,13 @@ static void PrintSummary(TickSummary s, TxRange txRange)
     Console.WriteLine($"  txs:         {slotUsage}  (system: {s.SystemMessageCount}, contract: {s.ContractCallCount}, transfer: {s.UserTransferCount})");
     Console.WriteLine($"  total QU:    {s.TotalAmount:N0}");
     Console.WriteLine($"  verified:    {(s.DigestsVerified ? "YES" : "NO")}");
+    var sigLine = s.SignatureVerified switch
+    {
+        true => "YES",
+        false => $"NO  ({s.SignatureSkipReason ?? "SchnorrQ verify failed"})",
+        null => s.SignatureSkipReason is null ? "(not checked — use --verify-signature)" : $"(skipped — {s.SignatureSkipReason})",
+    };
+    Console.WriteLine($"  sig-verified: {sigLine}");
 
     if (!s.DigestsVerified && s.MissingSlotIndices.Count > 0)
     {

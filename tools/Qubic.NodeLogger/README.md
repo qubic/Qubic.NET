@@ -21,6 +21,20 @@ Binary name: `qubic-node-logger`.
 
 `log` mode also accepts `--json PATH` to dump every parsed entry as JSON.
 
+`log` mode accepts `--summary` to count events by type instead of listing them.
+The fetch is auto-chunked — a single `REQUEST_LOG` response is capped server-side
+(qubic-core bisects until it fits its `RequestResponseHeader::max_size` ceiling
+≈ 16 MB). When the highest `logId` in a response is below your requested `toId`,
+the next chunk starts at `lastLogId + 1` and continues until either the range is
+covered or a request comes back empty. Aggregates:
+
+- Total entries + payload bytes
+- `logId`, tick, epoch ranges actually returned
+- Per-type counts, byte totals, and percentage of total
+
+`--json` with `--summary` writes the aggregate stats (not per-entry).
+`--raw` is ignored with `--summary` (responses are chunked, not a single payload).
+
 All three modes accept `--raw PATH` to dump the raw response payload bytes to a
 file — useful for archiving the wire form, re-parsing later, or diffing across
 nodes. The file is only written when the node actually returns a response (i.e.
@@ -69,6 +83,10 @@ dotnet run --project tools/Qubic.NodeLogger -- \
 # Archive both the parsed view AND the canonical raw payload.
 dotnet run --project tools/Qubic.NodeLogger -- \
   1.2.3.4 0xdeadbeef0123... log 1000 1100 --json logs.json --raw logs.bin
+
+# Count events by type across a big range (auto-chunked) — no per-entry listing.
+dotnet run --project tools/Qubic.NodeLogger -- \
+  1.2.3.4 0xdeadbeef0123... log 72000000 73000000 --summary --json sum.json
 ```
 
 ## Sample output (`log` mode)

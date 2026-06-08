@@ -8,7 +8,7 @@ if (args.Length < 3 || args.Contains("--help") || args.Contains("-h"))
         qubic-node-logger — receive event logs from a Qubic node
 
         usage:
-          qubic-node-logger <host[:port]> <passcode> <mode> [args]  [--json PATH] [--raw PATH]
+          qubic-node-logger <host[:port]> <passcode> <mode> [args]  [--json PATH] [--raw PATH] [--summary]
 
         passcode is the node-operator's 32-byte logReaderPasscodes, accepted as:
           64 hex chars                 e.g. 0xdeadbeef… (whitespace / ':' / ',' OK)
@@ -37,6 +37,13 @@ if (args.Length < 3 || args.Contains("--help") || args.Contains("-h"))
                      range  → 16 B     RespondLogIdRangeFromTx
                      log    → variable RespondLog (concatenated entries)
                      File is not written when the node sends EndResponse (no data).
+        --summary (log mode only) suppresses the per-entry listing and aggregates
+                     counts by event type across the full range. Auto-chunks the
+                     fetch — a single RequestLog response is capped to ~1 MB, so
+                     for big ranges we issue multiple requests advancing from the
+                     highest logId we've seen, accumulating type counts until the
+                     range is covered. --json with --summary writes the aggregated
+                     stats (not per-entry); --raw is ignored.
 
         examples:
           qubic-node-logger 1.2.3.4 0xdeadbeef... ranges 54658297
@@ -44,6 +51,7 @@ if (args.Length < 3 || args.Contains("--help") || args.Contains("-h"))
           qubic-node-logger 1.2.3.4 0x1234-0xabcd-0-0 log 1000 1100 --json out.json
           qubic-node-logger 1.2.3.4 0xdeadbeef... ranges 54658297 --raw ranges.bin
           qubic-node-logger 1.2.3.4 0xdeadbeef... log 1000 1100 --raw log.bin --json log.json
+          qubic-node-logger 1.2.3.4 0xdeadbeef... log 0 100000000 --summary --json sum.json
         """);
     return args.Length < 3 ? 1 : 0;
 }
@@ -55,10 +63,12 @@ var mode = args[2].ToLowerInvariant();
 
 string? jsonPath = null;
 string? rawPath = null;
+bool summaryMode = false;
 for (var i = 3; i < args.Length; i++)
 {
     if (args[i] == "--json" && i + 1 < args.Length) { jsonPath = args[++i]; }
     else if (args[i] == "--raw" && i + 1 < args.Length) { rawPath = args[++i]; }
+    else if (args[i] == "--summary") { summaryMode = true; }
 }
 
 await using var node = new QubicNodeClient(host, port);
@@ -89,10 +99,19 @@ switch (mode)
     {
         var fromId = ulong.Parse(args[3]);
         var toId = ulong.Parse(args[4]);
-        var (entries, raw) = await node.GetLogsWithRawAsync(passcode, fromId, toId);
-        PrintLogs(fromId, toId, entries);
-        if (jsonPath is not null) WriteJson(jsonPath, entries);
-        if (rawPath is not null) WriteRaw(rawPath, raw);
+        if (summaryMode)
+        {
+            if (rawPath is not null)
+                Console.Error.WriteLine("warning: --raw ignored with --summary (multiple responses)");
+            await RunSummary(node, passcode, fromId, toId, jsonPath);
+        }
+        else
+        {
+            var (entries, raw) = await node.GetLogsWithRawAsync(passcode, fromId, toId);
+            PrintLogs(fromId, toId, entries);
+            if (jsonPath is not null) WriteJson(jsonPath, entries);
+            if (rawPath is not null) WriteRaw(rawPath, raw);
+        }
         break;
     }
     default:
@@ -238,6 +257,120 @@ static void PrintLogs(ulong fromId, ulong toId, IReadOnlyList<LogEntry> entries)
         Console.WriteLine($"    logId={e.LogId,10}  tick={e.Tick,10}  epoch={e.Epoch,3}  type#{e.MessageType,3}={e.MessageTypeName,-38} size={e.MessageSize,5}");
     if (entries.Count > 10)
         Console.WriteLine($"    … {entries.Count - 10} more");
+}
+
+static async Task RunSummary(QubicNodeClient node, byte[] passcode, ulong fromId, ulong toId, string? jsonPath)
+{
+    Console.WriteLine();
+    Console.WriteLine($"── log summary [{fromId}, {toId}] ───────────────────────────────");
+
+    // Per-type aggregates.
+    var counts = new Dictionary<byte, long>();
+    var bytes = new Dictionary<byte, long>();
+    string TypeName(byte t) => new LogEntry
+    {
+        Epoch = 0, Tick = 0, MessageType = t, MessageSize = 0,
+        LogId = 0, LogDigest = 0, MessageBody = []
+    }.MessageTypeName;
+
+    long total = 0;
+    long totalBytes = 0;
+    uint? minTick = null, maxTick = null;
+    ushort? minEpoch = null, maxEpoch = null;
+    ulong? firstLogId = null, lastLogId = null;
+    var chunks = 0;
+    var emptyChunks = 0;
+
+    var current = fromId;
+    var started = DateTime.UtcNow;
+    while (current <= toId)
+    {
+        chunks++;
+        var entries = await node.GetLogsAsync(passcode, current, toId);
+        if (entries.Count == 0)
+        {
+            emptyChunks++;
+            // Empty either means we've reached the end OR a single window failed
+            // (passcode wrong, ID out of buffer, response too big). Stop either way.
+            break;
+        }
+
+        ulong highest = 0;
+        foreach (var e in entries)
+        {
+            counts[e.MessageType] = counts.GetValueOrDefault(e.MessageType) + 1;
+            bytes[e.MessageType] = bytes.GetValueOrDefault(e.MessageType) + e.MessageSize;
+            total++;
+            totalBytes += e.MessageSize;
+
+            if (firstLogId is null) firstLogId = e.LogId;
+            lastLogId = e.LogId;
+            if (e.LogId > highest) highest = e.LogId;
+
+            if (minTick is null || e.Tick < minTick) minTick = e.Tick;
+            if (maxTick is null || e.Tick > maxTick) maxTick = e.Tick;
+            if (minEpoch is null || e.Epoch < minEpoch) minEpoch = e.Epoch;
+            if (maxEpoch is null || e.Epoch > maxEpoch) maxEpoch = e.Epoch;
+        }
+
+        // Inline progress so big sweeps don't look frozen.
+        Console.Error.Write($"\r  chunk {chunks}: +{entries.Count,6} entries, total={total,9}, logId={highest}        ");
+
+        if (highest == ulong.MaxValue) break; // overflow guard
+        current = highest + 1;
+    }
+    Console.Error.WriteLine();
+
+    var elapsed = DateTime.UtcNow - started;
+
+    if (total == 0)
+    {
+        Console.WriteLine("  0 entries — wrong passcode, range out of window, or first window too large");
+        return;
+    }
+
+    Console.WriteLine($"  total:          {total:N0} entries  ({totalBytes:N0} bytes of payload)");
+    Console.WriteLine($"  chunks:         {chunks} request(s), {elapsed.TotalSeconds:0.0}s");
+    Console.WriteLine($"  logId range:    {firstLogId} .. {lastLogId}");
+    Console.WriteLine($"  tick range:     {minTick} .. {maxTick}");
+    Console.WriteLine($"  epoch range:    {minEpoch} .. {maxEpoch}");
+    Console.WriteLine();
+    Console.WriteLine($"  by type:");
+    var rows = counts
+        .Select(kv => (Type: kv.Key, Count: kv.Value, Bytes: bytes[kv.Key], Name: TypeName(kv.Key)))
+        .OrderByDescending(r => r.Count)
+        .ToList();
+    foreach (var r in rows)
+    {
+        var pct = 100.0 * r.Count / total;
+        Console.WriteLine($"    {r.Count,9:N0} ({pct,5:0.0}%)  type#{r.Type,3} {r.Name,-44}  ({r.Bytes,12:N0} B)");
+    }
+
+    if (jsonPath is not null)
+    {
+        var dto = new
+        {
+            requestedRange = new { fromId, toId },
+            chunks,
+            durationSeconds = elapsed.TotalSeconds,
+            totals = new { entries = total, payloadBytes = totalBytes },
+            logIdRange = new { first = firstLogId, last = lastLogId },
+            tickRange = new { min = minTick, max = maxTick },
+            epochRange = new { min = minEpoch, max = maxEpoch },
+            byType = rows.Select(r => new
+            {
+                type = r.Type,
+                name = r.Name,
+                count = r.Count,
+                bytes = r.Bytes,
+                pct = Math.Round(100.0 * r.Count / total, 2),
+            }).ToArray(),
+        };
+        File.WriteAllText(jsonPath,
+            JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine();
+        Console.WriteLine($"  wrote summary JSON to {jsonPath}");
+    }
 }
 
 static void WriteRaw(string path, byte[]? raw)

@@ -84,6 +84,20 @@ public sealed class TickSummary
         }
     }
 
+    /// <summary>
+    /// SchnorrQ verification of the computor's signature over the tick-data bytes
+    /// (everything except the trailing 64-byte signature). Null when the analyzer
+    /// wasn't given a <c>Computors</c> set, or when the supplied set's epoch doesn't
+    /// match this tick's epoch (no public key to check against).
+    /// </summary>
+    public bool? SignatureVerified { get; init; }
+
+    /// <summary>
+    /// Diagnostic when <see cref="SignatureVerified"/> is null — e.g.
+    /// "no computors supplied" or "computor set epoch 214 ≠ tick epoch 215".
+    /// </summary>
+    public string? SignatureSkipReason { get; init; }
+
     /// <summary>Per-step wall-clock timings collected while building this summary.</summary>
     public required TickFetchTimings Timings { get; init; }
 

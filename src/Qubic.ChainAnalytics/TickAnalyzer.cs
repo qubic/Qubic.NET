@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Qubic.ChainAnalytics.Models;
 using Qubic.Core;
+using Qubic.Core.Entities;
 using Qubic.Network;
 
 namespace Qubic.ChainAnalytics;
@@ -15,12 +16,17 @@ public sealed class TickAnalyzer
 {
     private readonly QubicNodeClient _client;
     private readonly TickTransactionParser _parser;
+    private readonly Computors? _computors;
 
-    public TickAnalyzer(QubicNodeClient client, TickTransactionParser? parser = null)
+    public TickAnalyzer(
+        QubicNodeClient client,
+        TickTransactionParser? parser = null,
+        Computors? computors = null)
     {
         ArgumentNullException.ThrowIfNull(client);
         _client = client;
         _parser = parser ?? new TickTransactionParser();
+        _computors = computors;
     }
 
     /// <summary>
@@ -54,6 +60,8 @@ public sealed class TickAnalyzer
                 TickDataDigests = [],
                 Transactions = [],
                 DigestsVerified = false,
+                SignatureVerified = null,
+                SignatureSkipReason = "tick data unavailable",
                 Timings = new TickFetchTimings
                 {
                     StartedAt = startedAt,
@@ -74,6 +82,7 @@ public sealed class TickAnalyzer
         foreach (var raw in rawTxs)
             parsed.Add(_parser.Parse(raw));
         var verified = VerifyDigests(parsed, tickData.TransactionDigests);
+        var (sigOk, sigReason) = TickDataSignatureVerifier.Verify(tickData, tickDataRaw, _computors);
         var parseStep = new TimingStep(parseStart, DateTime.UtcNow);
 
         return new TickSummary
@@ -86,6 +95,8 @@ public sealed class TickAnalyzer
             TickDataDigests = tickData.TransactionDigests,
             Transactions = parsed,
             DigestsVerified = verified,
+            SignatureVerified = sigOk,
+            SignatureSkipReason = sigReason,
             Timings = new TickFetchTimings
             {
                 StartedAt = startedAt,

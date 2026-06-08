@@ -50,6 +50,7 @@ For each processed tick:
 |------|----------|
 | `tick-{N:D10}-tickdata.bin` | Raw `BroadcastFutureTickData` wire bytes (the canonical signed form — 139,376 B for V2). |
 | `tick-{N:D10}-txs.bin` | Concatenated raw tx bytes, self-described: `u32 magic ("QBTX") \| u32 tick \| u32 count \| per tx (u32 length \| bytes)`. All little-endian. |
+| `tick-{N:D10}-cli.bin` | **qubic-cli compatible.** Tick data bytes immediately followed by each tx's raw wire bytes, no framing — matches the file `qubic-cli -gettickdata` produces and `qubic-cli -readtickdata <file> <computor_list>` consumes. Only written when the tick has at least one tx. |
 | `tick-{N:D10}.json` | Full parsed view: tick-data fields (computor, timestamp, signature hex, non-empty digest slots, contract fees), all transactions with hashes, identities, payload / signature / raw bytes hex. |
 
 Use the binaries for re-verification on another tool (`tickdata.bin` is byte-for-byte

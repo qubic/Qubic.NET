@@ -14,7 +14,10 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
 {
     private const int DefaultPort = 21841;
     private const int DefaultTimeoutMs = 10000;
-    private const int MaxPacketSize = 1024 * 1024; // 1MB
+    // Matches qubic-core's RequestResponseHeader::max_size (0xFFFFFF, the 24-bit
+    // size field's ceiling). Log-bundle responses routinely exceed 1 MB after
+    // server-side bisection; a tighter cap rejects legitimate payloads.
+    private const int MaxPacketSize = 0xFFFFFF;
 
     private readonly string _host;
     private readonly int _port;

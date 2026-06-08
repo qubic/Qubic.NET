@@ -5,10 +5,11 @@ using Qubic.ChainAnalytics.Models;
 namespace Qubic.ChainAnalytics;
 
 /// <summary>
-/// Persists a <see cref="TickSummary"/> to disk in three forms:
+/// Persists a <see cref="TickSummary"/> to disk in four forms:
 /// <list type="bullet">
 ///   <item><c>tick-{N}-tickdata.bin</c> — raw <c>BroadcastFutureTickData</c> wire bytes (the canonical signed form).</item>
 ///   <item><c>tick-{N}-txs.bin</c> — concatenated raw tx bytes with a small framing header (count + per-tx length).</item>
+///   <item><c>tick-{N}-cli.bin</c> — qubic-cli compatible: tick data followed by raw tx wire bytes, no framing. Round-trips through <c>qubic-cli -readtickdata</c>.</item>
 ///   <item><c>tick-{N}.json</c> — full parsed view (tick data fields, digests, parsed transactions with hashes / identities / payload).</item>
 /// </list>
 /// Use the binaries for round-tripping or re-verification on another tool;
@@ -44,6 +45,17 @@ public static class TickSummaryDump
             written.Add(path);
         }
 
+        // qubic-cli compatible: TickData struct + each tx's wire bytes back-to-back,
+        // no framing. Matches the file produced by `qubic-cli -gettickdata` and
+        // consumed by `qubic-cli -readtickdata`. Only emitted when we have both the
+        // raw tick data and at least one tx (qubic-cli's reader needs both).
+        if (summary.TickDataRawBytes is byte[] cliRaw && summary.Transactions.Count > 0)
+        {
+            var path = Path.Combine(directory, $"{stem}-cli.bin");
+            File.WriteAllBytes(path, BuildCliBundle(cliRaw, summary.Transactions));
+            written.Add(path);
+        }
+
         {
             var path = Path.Combine(directory, $"{stem}.json");
             File.WriteAllText(path, BuildJson(summary, indentedJson));
@@ -51,6 +63,29 @@ public static class TickSummaryDump
         }
 
         return written;
+    }
+
+    /// <summary>
+    /// Wire layout for <c>tick-{N}-cli.bin</c>:
+    /// <c>TickData (139,376 B for V2) | tx1 raw wire bytes | tx2 raw wire bytes | …</c>.
+    /// Each tx's raw bytes = <c>32 src | 32 dst | 8 amount | 4 tick | 2 inputType |
+    /// 2 inputSize | inputSize payload | 64 signature</c>. qubic-cli's
+    /// <c>-readtickdata</c> sorts the txs into slot order by digest match after reading.
+    /// </summary>
+    private static byte[] BuildCliBundle(byte[] tickDataRaw, IReadOnlyList<TickTransaction> txs)
+    {
+        var total = tickDataRaw.Length;
+        foreach (var tx in txs) total += tx.RawBytes.Length;
+
+        var buf = new byte[total];
+        Buffer.BlockCopy(tickDataRaw, 0, buf, 0, tickDataRaw.Length);
+        var offset = tickDataRaw.Length;
+        foreach (var tx in txs)
+        {
+            Buffer.BlockCopy(tx.RawBytes, 0, buf, offset, tx.RawBytes.Length);
+            offset += tx.RawBytes.Length;
+        }
+        return buf;
     }
 
     /// <summary>
@@ -87,6 +122,8 @@ public static class TickSummaryDump
             epoch = s.Epoch,
             tickDataAvailable = s.TickDataAvailable,
             digestsVerified = s.DigestsVerified,
+            signatureVerified = s.SignatureVerified,
+            signatureSkipReason = s.SignatureSkipReason,
             tickData = s.TickData is null ? null : new
             {
                 computorIndex = s.TickData.ComputorIndex,

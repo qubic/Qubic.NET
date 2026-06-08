@@ -20,6 +20,9 @@ packages/
 tools/Qubic.Toolkit/publish/
 tools/Qubic.Net.Wallet/publish/
 
+## Local data dumps (tick artifacts, computor lists, log payloads, …)
+data/
+
 ## OS
 .DS_Store
 Thumbs.db
