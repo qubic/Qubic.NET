@@ -234,9 +234,23 @@ public static class SchnorrQ
         if (!FourQCodec.IsValidSignatureEncoding(signature))
             return false;
 
+        // Fast-path reject of the identity public key (QX contract address {1,0,0,0}).
+        // A single forged (R,S) on the identity verifies for every message without a
+        // private key. Checked before decode for robustness — see qubic/core PR #921.
+        if (FourQCodec.IsIdentityPublicKeyEncoding(publicKey))
+            return false;
+
         // Decode public key
         var P = FourQCodec.Decode(publicKey);
         if (P == null)
+            return false;
+
+        // Reject any low-order (cofactor-subgroup) public key. These are the only points
+        // for which an attacker can forge a signature without knowing a private key,
+        // because h·A then collapses to a value depending only on h mod ord(A).
+        // The identity fast-path above catches the most common case; this check covers
+        // the rest of the 392-element cofactor subgroup. See qubic/core PR #921.
+        if (FourQPoint.IsLowOrderPoint(P.Value))
             return false;
 
         // Decode R from signature
@@ -369,9 +383,23 @@ public static class SchnorrQ
         if (!FourQCodec.IsValidSignatureEncoding(signature))
             return false;
 
+        // Fast-path reject of the identity public key (QX contract address {1,0,0,0}).
+        // A single forged (R,S) on the identity verifies for every message without a
+        // private key. Checked before decode for robustness — see qubic/core PR #921.
+        if (FourQCodec.IsIdentityPublicKeyEncoding(publicKey))
+            return false;
+
         // Decode public key
         var P = FourQCodec.Decode(publicKey);
         if (P == null)
+            return false;
+
+        // Reject any low-order (cofactor-subgroup) public key. These are the only points
+        // for which an attacker can forge a signature without knowing a private key,
+        // because h·A then collapses to a value depending only on h mod ord(A).
+        // The identity fast-path above catches the most common case; this check covers
+        // the rest of the 392-element cofactor subgroup. See qubic/core PR #921.
+        if (FourQPoint.IsLowOrderPoint(P.Value))
             return false;
 
         // Decode R from signature

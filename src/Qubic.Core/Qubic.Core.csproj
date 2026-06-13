@@ -8,7 +8,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.Core</PackageId>
-    <Version>1.292.1</Version>
+    <Version>1.292.2</Version>
     <Authors>Qubic.NET Contributors</Authors>
     <Description>Core domain models and abstractions for the Qubic network</Description>
     <PackageTags>qubic;blockchain;cryptocurrency</PackageTags>
@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Qubic.Crypto" Version="1.5.1" />
+    <PackageReference Include="Qubic.Crypto" Version="1.5.2" />
   </ItemGroup>
 
 </Project>

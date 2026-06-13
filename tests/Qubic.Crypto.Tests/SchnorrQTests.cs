@@ -676,4 +676,169 @@ public class SchnorrQTests
 
         Assert.False(SchnorrQ.Verify(publicKey, digest, atOrder), "scalar S == curve_order accepted");
     }
+
+    // ── Low-order / identity public-key forgery regression (qubic/core PR #921) ──
+    //
+    // FourQ's group order is 392·r with cofactor 392 = 2³·7². Any public key whose
+    // order divides 392 (the 392-element cofactor subgroup) allows a signature
+    // forgery without a private key, because h·A then depends only on h mod ord(A).
+    // The identity point — encoded as {1,0,0,0} == the QX contract address — is the
+    // worst case: a single forged (R, S) verifies for EVERY message.
+
+    /// <summary>
+    /// Well-known low-order public keys. Each is a genuine cofactor-subgroup point;
+    /// see PR #921's test/fourq.cpp for derivation.
+    /// </summary>
+    private static readonly (string Name, ulong Limb0, ulong Limb1, ulong Limb2, ulong Limb3)[] s_lowOrderKeys =
+    {
+        ("identity (0,1) order 1 == QX address", 1UL, 0UL, 0UL, 0UL),
+        ("NULL_ID (i,0) order 4",                 0UL, 0UL, 0UL, 0UL),
+        ("(-i,0) order 4",                        0UL, 0UL, 0UL, 0x8000000000000000UL),
+        ("(0,-1) order 2",                        0xFFFFFFFFFFFFFFFEUL, 0x7FFFFFFFFFFFFFFFUL, 0UL, 0UL),
+    };
+
+    private static byte[] LowOrderKeyBytes(int idx)
+    {
+        var (_, l0, l1, l2, l3) = s_lowOrderKeys[idx];
+        var pk = new byte[32];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(pk.AsSpan(0, 8),  l0);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(pk.AsSpan(8, 8),  l1);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(pk.AsSpan(16, 8), l2);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(pk.AsSpan(24, 8), l3);
+        return pk;
+    }
+
+    /// <summary>
+    /// Deterministic identity-point forgery: R = encode(S·G), signature = (R || S).
+    /// Absent the low-order guard, this verifies for any message under publicKey = identity
+    /// because h·A == O and the verify equation collapses to S·G == R.
+    /// </summary>
+    private static byte[] ForgeIdentitySignature(ulong sLow)
+    {
+        var scalar = new byte[32];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(scalar.AsSpan(0, 8), sLow);
+        var encodedR = Qubic.Crypto.FourQ.EccMul.ScalarMulFixed(scalar);  // R = encode(S·G)
+
+        var signature = new byte[64];
+        Array.Copy(encodedR, 0, signature, 0, 32);
+        Array.Copy(scalar, 0, signature, 32, 32);
+        return signature;
+    }
+
+    [Theory]
+    [InlineData(0)] // identity
+    [InlineData(1)] // NULL_ID
+    [InlineData(2)] // (-i, 0)
+    [InlineData(3)] // (0, -1)
+    public void LowOrderVectors_AreCofactorSubgroupPoints(int idx)
+    {
+        // Sanity layer: prove the vectors really are low-order before asserting verify
+        // rejects them, so a failure here is attributable to the right cause.
+        var pk = LowOrderKeyBytes(idx);
+        var P = Qubic.Crypto.FourQ.FourQCodec.Decode(pk);
+        Assert.NotNull(P);
+        Assert.True(Qubic.Crypto.FourQ.FourQPoint.IsLowOrderPoint(P!.Value),
+            $"expected low-order: {s_lowOrderKeys[idx].Name}");
+    }
+
+    [Fact]
+    public void LegitimateKey_IsNotCofactorSubgroupPoint()
+    {
+        var (publicKey, _, _) = MakeValidSignature(0);
+        var P = Qubic.Crypto.FourQ.FourQCodec.Decode(publicKey);
+        Assert.NotNull(P);
+        Assert.False(Qubic.Crypto.FourQ.FourQPoint.IsLowOrderPoint(P!.Value),
+            "legitimate key must not be in cofactor subgroup");
+    }
+
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(123456789UL)]
+    public void Verify_RejectsIdentityForgery_AllMessages(ulong sLow)
+    {
+        var identity = LowOrderKeyBytes(0); // {1,0,0,0}
+        var signature = ForgeIdentitySignature(sLow);
+
+        // The hallmark of the identity attack: the same forged (R,S) verifies for every
+        // message absent the guard. So we check across all of our test digests AND an
+        // unrelated 0xAB-filled digest. All must be rejected.
+        foreach (var digestHex in s_verifyDigests)
+        {
+            var digest = HexToBytes(digestHex);
+            Assert.False(SchnorrQ.Verify(identity, digest, signature),
+                $"identity forgery accepted (S={sLow}, digest={digestHex.Substring(0, 8)}…)");
+        }
+
+        var arbitraryDigest = new byte[32];
+        Array.Fill<byte>(arbitraryDigest, 0xAB);
+        Assert.False(SchnorrQ.Verify(identity, arbitraryDigest, signature),
+            $"identity forgery accepted (S={sLow}, digest=0xAB×32)");
+    }
+
+    [Fact]
+    public void Verify_RejectsAllLowOrderPublicKeys()
+    {
+        // Use a well-formed forgery (R = encode(7·G), S = 7). The actual signature math
+        // is irrelevant — the low-order guard fires before it.
+        var signature = ForgeIdentitySignature(7UL);
+        var digest = new byte[32];
+        Array.Fill<byte>(digest, 0x5A);
+
+        for (int i = 0; i < s_lowOrderKeys.Length; i++)
+        {
+            var pk = LowOrderKeyBytes(i);
+            Assert.False(SchnorrQ.Verify(pk, digest, signature),
+                $"low-order public key accepted: {s_lowOrderKeys[i].Name}");
+        }
+    }
+
+    [Fact]
+    public void Verify_RejectsRealNetworkForgeries()
+    {
+        // Actual transactions an attacker executed on the network, spending QU from the
+        // identity point (== QX contract address) to attacker-controlled wallets. Each is
+        // a full transaction: source(32) | dest(32) | amount(8) | tick(4) | inputType(2)
+        // | inputSize(2) | signature(64). They passed the pre-fix verify() and must now
+        // be rejected. From qubic/core PR #921.
+        string[] networkForgeries =
+        {
+            "010000000000000000000000000000000000000000000000000000000000000091cfd01bb1d6b1d48e9f806a8ef65734ae6162fbb3b2643a0088c1046e55f776009435770000000072e878030000000052750c95db608b2ad33f260c13523f3392afdbeefcd071a824e3973403443d890f997c86e5c769fd2344c515a7ce19b4dffc30a06e6da2dab5a1bc09f2212300",
+            "010000000000000000000000000000000000000000000000000000000000000091cfd01bb1d6b1d48e9f806a8ef65734ae6162fbb3b2643a0088c1046e55f776009435770000000060e8780300000000304d8a0eef6d5e578f7fe3623f21d97debd5c1a77a2bad8f347ae4cf41256a61f31cd9c1d5280e2895ba8d3864e7e33cb9197d7e0fca47e38211277fb2960b00",
+            "01000000000000000000000000000000000000000000000000000000000000008220a28587c81abd47934c0f6e8af42d1b10182c494a3d46aa9908eaf83e606a00e40b5402000000e74a7803000000004c1357678e9aa76ef892379f94545e571a1435730c15b5ae366a1f34f9a8fa54834ba3e96e9c5b6407759e470b5ecceb5f233f067bbeecd72ebe0332b11f0200",
+            "01000000000000000000000000000000000000000000000000000000000000008220a28587c81abd47934c0f6e8af42d1b10182c494a3d46aa9908eaf83e606a00f2052a01000000bf487803000000009f660e0561ec753b2d2395ef84a8b305489c091fbba0cfa95f910cc13d56e67f542412901ff6107611d2d4facf038fe73193a3f8b1dff646be0a9100ce752600",
+            "0100000000000000000000000000000000000000000000000000000000000000d4902431eb401facb0e5f4c649b53801c3ad1228ba0294953922d2e662a66da301000000000000008d0d77030000000091f3a7dd1cf60d64a79efac0fe6f034a6848924a08f65d46059387a801761ebafc062f4764555f485fedbd34a7e536889d261582a46325cb5dd1e5b083412300",
+            "01000000000000000000000000000000000000000000000000000000000000004de5b0cd0b1f9638e12b9906cc36a39334835644d958318957bb37b648b5822f01000000000000003917770300000000ef46106b7a44f73e67f857b8b9f66e4c2a0ed960453fe55a4058d0e4c4a052d679d773ae43ec0bc24e200ae4ce28abb5e0a195d45c313358719b0c77ae131c00",
+            "01000000000000000000000000000000000000000000000000000000000000008220a28587c81abd47934c0f6e8af42d1b10182c494a3d46aa9908eaf83e606a01000000000000002b197703000000005cafd8c1dcf05b0eebf805cafb40d361848c13f94ce78640cfdb76fba0cddcde50ce8556637fdac894848fa18b18b5fdcbc49b0719ef505fcafe3100497f2200",
+            "01000000000000000000000000000000000000000000000000000000000000008220a28587c81abd47934c0f6e8af42d1b10182c494a3d46aa9908eaf83e606a00e40b5402000000a0437703000000009573ad5ce6f0e8d8d02a28297334c3009a319580e63c27c5a1b257fe2e056fcc0b8307956b52c223eba07eb5a8a0384ba044626aed71637ef3238ad3ee160c00",
+        };
+
+        var identity = LowOrderKeyBytes(0);
+
+        for (int i = 0; i < networkForgeries.Length; i++)
+        {
+            var tx = HexToBytes(networkForgeries[i]);
+            Assert.True(tx.Length >= 80 + 64, $"vector {i} too short to be a transaction");
+
+            // Confirm structure: source must be the identity point.
+            Assert.True(tx.AsSpan(0, 32).SequenceEqual(identity),
+                $"vector {i} source is not the identity point");
+
+            // Digest as the node computes it: K12 over everything but the 64-byte signature.
+            int digestLen = tx.Length - 64;
+            var digest = K12.Hash(tx.AsSpan(0, digestLen), 32);
+            var signature = tx.AsSpan(digestLen, 64).ToArray();
+
+            // Independent structural check: this really is a valid identity forgery.
+            // For A = identity, the verify equation collapses to encode(S·G) == R.
+            var sBytes = signature.AsSpan(32, 32).ToArray();
+            var encodedR = Qubic.Crypto.FourQ.EccMul.ScalarMulFixed(sBytes);
+            Assert.True(signature.AsSpan(0, 32).SequenceEqual(encodedR),
+                $"vector {i} is not a valid identity forgery (encode(S·G) != R)");
+
+            // The fix in action: the forgery MUST be rejected.
+            Assert.False(SchnorrQ.Verify(tx.AsSpan(0, 32), digest, signature),
+                $"NETWORK FORGERY ACCEPTED for vector {i} — the fix is NOT working");
+        }
+    }
 }

@@ -113,6 +113,25 @@ public static class FourQCodec
         return true;
     }
 
+    /// <summary>
+    /// Returns true if the public-key bytes encode the FourQ identity (neutral) point —
+    /// canonical encoding <c>01 00 .. 00</c> with bit 255 (the y-sign bit) masked out.
+    /// This is the QX contract address (<c>{1,0,0,0}</c>) and the most dangerous forgeable
+    /// public key: a single forged <c>(R, S)</c> verifies for every message without a
+    /// private key. The signature-verify path must reject it before decode runs.
+    /// See qubic/core PR #921.
+    /// </summary>
+    public static bool IsIdentityPublicKeyEncoding(ReadOnlySpan<byte> publicKey)
+    {
+        if (publicKey.Length != 32) return false;
+        if (publicKey[0] != 0x01) return false;
+        for (int i = 1; i < 31; i++)
+        {
+            if (publicKey[i] != 0) return false;
+        }
+        return (publicKey[31] & 0x7F) == 0; // mask the y-sign bit
+    }
+
     // Curve order N (little-endian limbs), kept in sync with EccMul.CURVE_ORDER_*.
     // N = 0x0029CBC14E5E0A72_F05397829CBC14E5_DFBD004DFE0F7999_2FB2540EC7768CE7
     private const ulong CURVE_ORDER_0 = 0x2FB2540EC7768CE7;

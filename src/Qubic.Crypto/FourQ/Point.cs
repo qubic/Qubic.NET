@@ -235,6 +235,22 @@ public static class FourQPoint
     }
 
     /// <summary>
+    /// Returns true if <paramref name="p"/> lies in FourQ's 392-element cofactor subgroup
+    /// (i.e. [392]·P == identity). FourQ's group order is 392·r with cofactor 392 = 2³·7²
+    /// and prime subgroup order r. A legitimate public key has order r, so [392]·A ≠ O.
+    /// Any low-order key — including the identity (QX address <c>{1,0,0,0}</c>), NULL_ID,
+    /// and the order-2/4 twins — allows signature forgery without a private key, because
+    /// <c>h·A</c> then depends only on <c>h</c> mod ord(A) and is enumerable.
+    /// See qubic/core PR #921 ("hotfix fourq library").
+    /// </summary>
+    public static bool IsLowOrderPoint(PointExt p)
+    {
+        // ScalarMul handles the projective math; equality is the projective identity check.
+        var cofactorMultiple = ScalarMul(p, new BigInteger(392));
+        return cofactorMultiple.Equals(PointExt.Identity);
+    }
+
+    /// <summary>
     /// Gets the sign bit of the x-coordinate.
     /// Uses bit 126 of the real part (a), or if a is 0, uses bit 126 of the imaginary part (b).
     /// </summary>
