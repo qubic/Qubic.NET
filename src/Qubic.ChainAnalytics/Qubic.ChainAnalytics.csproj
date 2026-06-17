@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Qubic.Crypto" Version="1.5.1" />
+    <PackageReference Include="Qubic.Crypto" Version="1.5.2" />
   </ItemGroup>
 
 </Project>
