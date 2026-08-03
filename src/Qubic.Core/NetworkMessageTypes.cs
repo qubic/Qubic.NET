@@ -53,8 +53,11 @@ public static class NetworkMessageTypes
     public const byte RespondOracleData = 67;
     public const byte BroadcastCustomMiningTask = 68;
     public const byte BroadcastCustomMiningSolution = 69;
+    public const byte RequestRevenueData = 70;
+    public const byte RespondRevenueData = 71;
     public const byte OracleMachineQuery = 190;
     public const byte OracleMachineReply = 191;
+    public const byte OcMachineInvocation = 192; // Core node <-> OC (Outsourced Computation) machine
     public const byte RequestTxStatus = 201;
     public const byte RespondTxStatus = 202;
     public const byte SpecialCommand = 255;

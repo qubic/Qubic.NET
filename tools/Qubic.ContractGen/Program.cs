@@ -33,6 +33,7 @@ var contracts = new (int Index, string CSharpName, string CppStruct, string? Hea
     (25, "Vottun",   "VOTTUNBRIDGE", "VottunBridge.h"),
     (26, "Qusino",   "QUSINO",    "Qusino.h"),
     (27, "Escrow",   "ESCROW",    "Escrow.h"),
+    (28, "Ggwp",     "WOLFPACK",  "GGWP.h"),
 };
 
 // Resolve paths

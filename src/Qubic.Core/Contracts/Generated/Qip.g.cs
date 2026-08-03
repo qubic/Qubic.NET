@@ -23,6 +23,8 @@ public static class QipContract
     {
         /// <summary>getICOInfo (inputType=1).</summary>
         public const uint GetICOInfo = 1;
+        /// <summary>getBuyerInfo (inputType=2).</summary>
+        public const uint GetBuyerInfo = 2;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -34,6 +36,8 @@ public static class QipContract
         public const uint BuyToken = 2;
         /// <summary>TransferShareManagementRights (inputType=3).</summary>
         public const uint TransferShareManagementRights = 3;
+        /// <summary>returnFunds (inputType=4).</summary>
+        public const uint ReturnFunds = 4;
     }
 }
 
@@ -92,6 +96,9 @@ public readonly struct GetICOInfoOutput : ISmartContractOutput<GetICOInfoOutput>
     public uint Percent9 { get; init; }
     public uint Percent10 { get; init; }
     public uint StartEpoch { get; init; }
+    public bool BurnRemainingTokens { get; init; }
+    public bool IsVested { get; init; }
+    public uint VestingPeriod { get; init; }
 
     public static GetICOInfoOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -129,7 +136,55 @@ public readonly struct GetICOInfoOutput : ISmartContractOutput<GetICOInfoOutput>
             Percent8 = BinaryPrimitives.ReadUInt32LittleEndian(data[492..]),
             Percent9 = BinaryPrimitives.ReadUInt32LittleEndian(data[496..]),
             Percent10 = BinaryPrimitives.ReadUInt32LittleEndian(data[500..]),
-            StartEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[504..])
+            StartEpoch = BinaryPrimitives.ReadUInt32LittleEndian(data[504..]),
+            BurnRemainingTokens = (data.Slice(508, 1)[0] != 0),
+            IsVested = (data.Slice(509, 1)[0] != 0),
+            VestingPeriod = BinaryPrimitives.ReadUInt32LittleEndian(data[512..])
+        };
+    }
+}
+
+// ═══ Function: getBuyerInfo (inputType=2) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetBuyerInfoInput : ISmartContractInput
+{
+    public const int Size = 40;
+
+    public int SerializedSize => Size;
+
+    public required byte[] Buyer { get; init; }
+    public uint IndexOfICO { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Buyer.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(32), IndexOfICO);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetBuyerInfoOutput : ISmartContractOutput<GetBuyerInfoOutput>
+{
+    public long TokensToReceive { get; init; }
+    public long ReceivedTokens { get; init; }
+    public long TotalQuPayed { get; init; }
+    public bool IsReturned { get; init; }
+    public bool IsVested { get; init; }
+    public uint RemainingVestingPeriod { get; init; }
+
+    public static GetBuyerInfoOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetBuyerInfoOutput
+        {
+            TokensToReceive = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
+            ReceivedTokens = BinaryPrimitives.ReadInt64LittleEndian(data[8..]),
+            TotalQuPayed = BinaryPrimitives.ReadInt64LittleEndian(data[16..]),
+            IsReturned = (data.Slice(24, 1)[0] != 0),
+            IsVested = (data.Slice(25, 1)[0] != 0),
+            RemainingVestingPeriod = BinaryPrimitives.ReadUInt32LittleEndian(data[28..])
         };
     }
 }
@@ -139,7 +194,7 @@ public readonly struct GetICOInfoOutput : ISmartContractOutput<GetICOInfoOutput>
 /// <summary>Input payload for procedure.</summary>
 public sealed class CreateICOPayload : ITransactionPayload, ISmartContractInput
 {
-    public const int Size = 456;
+    public const int Size = 464;
 
     public ushort InputType => 1;
     public ushort InputSize => Size;
@@ -174,6 +229,9 @@ public sealed class CreateICOPayload : ITransactionPayload, ISmartContractInput
     public uint Percent9 { get; init; }
     public uint Percent10 { get; init; }
     public uint StartEpoch { get; init; }
+    public bool BurnRemainingTokens { get; init; }
+    public bool IsVested { get; init; }
+    public uint VestingPeriod { get; init; }
 
     public byte[] GetPayloadBytes() => ToBytes();
 
@@ -209,6 +267,9 @@ public sealed class CreateICOPayload : ITransactionPayload, ISmartContractInput
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(440), Percent9);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(444), Percent10);
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(448), StartEpoch);
+        bytes.AsSpan(452, 1)[0] = (byte)(BurnRemainingTokens ? 1 : 0);
+        bytes.AsSpan(453, 1)[0] = (byte)(IsVested ? 1 : 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(456), VestingPeriod);
         return bytes;
     }
 }
@@ -303,6 +364,43 @@ public readonly struct TransferShareManagementRightsOutput : ISmartContractOutpu
         return new TransferShareManagementRightsOutput
         {
             TransferredNumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: returnFunds (inputType=4) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class ReturnFundsPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 4;
+
+    public ushort InputType => 4;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public uint IndexOfICO { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), IndexOfICO);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct ReturnFundsOutput : ISmartContractOutput<ReturnFundsOutput>
+{
+    public int ReturnCode { get; init; }
+
+    public static ReturnFundsOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new ReturnFundsOutput
+        {
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..])
         };
     }
 }

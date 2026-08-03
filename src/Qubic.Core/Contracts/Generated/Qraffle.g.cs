@@ -39,6 +39,16 @@ public static class QraffleContract
         public const uint GetQuRaffleEntryAmountPerUser = 8;
         /// <summary>getQuRaffleEntryAverageAmount (inputType=9).</summary>
         public const uint GetQuRaffleEntryAverageAmount = 9;
+        /// <summary>getActiveAssetRaffle (inputType=10).</summary>
+        public const uint GetActiveAssetRaffle = 10;
+        /// <summary>getActiveAssetRaffleBundleItem (inputType=11).</summary>
+        public const uint GetActiveAssetRaffleBundleItem = 11;
+        /// <summary>getActiveAssetRaffleBuyer (inputType=12).</summary>
+        public const uint GetActiveAssetRaffleBuyer = 12;
+        /// <summary>getEndedAssetRaffle (inputType=13).</summary>
+        public const uint GetEndedAssetRaffle = 13;
+        /// <summary>getAssetRaffleAnalytics (inputType=14).</summary>
+        public const uint GetAssetRaffleAnalytics = 14;
     }
 
     /// <summary>State-mutating procedure IDs.</summary>
@@ -60,6 +70,12 @@ public static class QraffleContract
         public const uint DepositInTokenRaffle = 7;
         /// <summary>TransferShareManagementRights (inputType=8).</summary>
         public const uint TransferShareManagementRights = 8;
+        /// <summary>createAssetRaffle (inputType=9).</summary>
+        public const uint CreateAssetRaffle = 9;
+        /// <summary>buyAssetRaffleTicket (inputType=10).</summary>
+        public const uint BuyAssetRaffleTicket = 10;
+        /// <summary>cancelAssetRaffle (inputType=11).</summary>
+        public const uint CancelAssetRaffle = 11;
     }
 }
 
@@ -464,6 +480,229 @@ public readonly struct GetQuRaffleEntryAverageAmountOutput : ISmartContractOutpu
     }
 }
 
+// ═══ Function: getActiveAssetRaffle (inputType=10) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetActiveAssetRaffleInput : ISmartContractInput
+{
+    public const int Size = 4;
+
+    public int SerializedSize => Size;
+
+    public uint IndexOfAssetRaffle { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), IndexOfAssetRaffle);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetActiveAssetRaffleOutput : ISmartContractOutput<GetActiveAssetRaffleOutput>
+{
+    public byte[] Creator { get; init; }
+    public ulong ReservePriceQu { get; init; }
+    public ulong EntryTicketQu { get; init; }
+    public ulong TotalTicketsPaidQu { get; init; }
+    public uint NumberOfBuyers { get; init; }
+    public uint TotalTickets { get; init; }
+    public uint BundleSize { get; init; }
+    public uint Epoch { get; init; }
+    public int ReturnCode { get; init; }
+
+    public static GetActiveAssetRaffleOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetActiveAssetRaffleOutput
+        {
+            Creator = data[0..].Slice(0, 32).ToArray(),
+            ReservePriceQu = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            EntryTicketQu = BinaryPrimitives.ReadUInt64LittleEndian(data[40..]),
+            TotalTicketsPaidQu = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
+            NumberOfBuyers = BinaryPrimitives.ReadUInt32LittleEndian(data[56..]),
+            TotalTickets = BinaryPrimitives.ReadUInt32LittleEndian(data[60..]),
+            BundleSize = BinaryPrimitives.ReadUInt32LittleEndian(data[64..]),
+            Epoch = BinaryPrimitives.ReadUInt32LittleEndian(data[68..]),
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[72..])
+        };
+    }
+}
+
+// ═══ Function: getActiveAssetRaffleBundleItem (inputType=11) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetActiveAssetRaffleBundleItemInput : ISmartContractInput
+{
+    public const int Size = 8;
+
+    public int SerializedSize => Size;
+
+    public uint IndexOfAssetRaffle { get; init; }
+    public uint ItemIndex { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), IndexOfAssetRaffle);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), ItemIndex);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetActiveAssetRaffleBundleItemOutput : ISmartContractOutput<GetActiveAssetRaffleBundleItemOutput>
+{
+    public byte[] AssetIssuer { get; init; }
+    public ulong AssetName { get; init; }
+    public long NumberOfShares { get; init; }
+    public int ReturnCode { get; init; }
+
+    public static GetActiveAssetRaffleBundleItemOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetActiveAssetRaffleBundleItemOutput
+        {
+            AssetIssuer = data[0..].Slice(0, 32).ToArray(),
+            AssetName = BinaryPrimitives.ReadUInt64LittleEndian(data[32..]),
+            NumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[40..]),
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[48..])
+        };
+    }
+}
+
+// ═══ Function: getActiveAssetRaffleBuyer (inputType=12) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetActiveAssetRaffleBuyerInput : ISmartContractInput
+{
+    public const int Size = 8;
+
+    public int SerializedSize => Size;
+
+    public uint IndexOfAssetRaffle { get; init; }
+    public uint BuyerIndex { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), IndexOfAssetRaffle);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), BuyerIndex);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetActiveAssetRaffleBuyerOutput : ISmartContractOutput<GetActiveAssetRaffleBuyerOutput>
+{
+    public byte[] Buyer { get; init; }
+    public uint TicketCount { get; init; }
+    public int ReturnCode { get; init; }
+
+    public static GetActiveAssetRaffleBuyerOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetActiveAssetRaffleBuyerOutput
+        {
+            Buyer = data[0..].Slice(0, 32).ToArray(),
+            TicketCount = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[36..])
+        };
+    }
+}
+
+// ═══ Function: getEndedAssetRaffle (inputType=13) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetEndedAssetRaffleInput : ISmartContractInput
+{
+    public const int Size = 4;
+
+    public int SerializedSize => Size;
+
+    public uint IndexOfRaffle { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), IndexOfRaffle);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetEndedAssetRaffleOutput : ISmartContractOutput<GetEndedAssetRaffleOutput>
+{
+    public byte[] Creator { get; init; }
+    public byte[] EpochWinner { get; init; }
+    public ulong ReservePriceQu { get; init; }
+    public ulong EntryTicketQu { get; init; }
+    public ulong GrossPoolQu { get; init; }
+    public ulong CreatorPaidQu { get; init; }
+    public uint TotalTickets { get; init; }
+    public uint NumberOfBuyers { get; init; }
+    public uint BundleSize { get; init; }
+    public uint Epoch { get; init; }
+    public byte ReserveMet { get; init; }
+    public int ReturnCode { get; init; }
+
+    public static GetEndedAssetRaffleOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetEndedAssetRaffleOutput
+        {
+            Creator = data[0..].Slice(0, 32).ToArray(),
+            EpochWinner = data[32..].Slice(0, 32).ToArray(),
+            ReservePriceQu = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
+            EntryTicketQu = BinaryPrimitives.ReadUInt64LittleEndian(data[72..]),
+            GrossPoolQu = BinaryPrimitives.ReadUInt64LittleEndian(data[80..]),
+            CreatorPaidQu = BinaryPrimitives.ReadUInt64LittleEndian(data[88..]),
+            TotalTickets = BinaryPrimitives.ReadUInt32LittleEndian(data[96..]),
+            NumberOfBuyers = BinaryPrimitives.ReadUInt32LittleEndian(data[100..]),
+            BundleSize = BinaryPrimitives.ReadUInt32LittleEndian(data[104..]),
+            Epoch = BinaryPrimitives.ReadUInt32LittleEndian(data[108..]),
+            ReserveMet = data.Slice(112, 1)[0],
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[116..])
+        };
+    }
+}
+
+// ═══ Function: getAssetRaffleAnalytics (inputType=14) ═══
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct GetAssetRaffleAnalyticsInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetAssetRaffleAnalyticsOutput : ISmartContractOutput<GetAssetRaffleAnalyticsOutput>
+{
+    public ulong TotalAssetRaffleProposalFees { get; init; }
+    public ulong TotalAssetRaffleCreatorPaid { get; init; }
+    public ulong TotalAssetRaffleRefunded { get; init; }
+    public uint NumberOfActiveAssetRaffles { get; init; }
+    public uint NumberOfEndedAssetRaffles { get; init; }
+    public uint TotalAssetRafflesCreated { get; init; }
+    public uint TotalAssetRafflesSucceeded { get; init; }
+    public uint TotalAssetRafflesFailed { get; init; }
+    public int ReturnCode { get; init; }
+
+    public static GetAssetRaffleAnalyticsOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new GetAssetRaffleAnalyticsOutput
+        {
+            TotalAssetRaffleProposalFees = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
+            TotalAssetRaffleCreatorPaid = BinaryPrimitives.ReadUInt64LittleEndian(data[8..]),
+            TotalAssetRaffleRefunded = BinaryPrimitives.ReadUInt64LittleEndian(data[16..]),
+            NumberOfActiveAssetRaffles = BinaryPrimitives.ReadUInt32LittleEndian(data[24..]),
+            NumberOfEndedAssetRaffles = BinaryPrimitives.ReadUInt32LittleEndian(data[28..]),
+            TotalAssetRafflesCreated = BinaryPrimitives.ReadUInt32LittleEndian(data[32..]),
+            TotalAssetRafflesSucceeded = BinaryPrimitives.ReadUInt32LittleEndian(data[36..]),
+            TotalAssetRafflesFailed = BinaryPrimitives.ReadUInt32LittleEndian(data[40..]),
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[44..])
+        };
+    }
+}
+
 // ═══ Procedure: registerInSystem (inputType=1) ═══
 
 /// <summary>Input payload for procedure.</summary>
@@ -746,6 +985,156 @@ public readonly struct TransferShareManagementRightsOutput : ISmartContractOutpu
         return new TransferShareManagementRightsOutput
         {
             TransferredNumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+        };
+    }
+}
+
+// ═══ Procedure: createAssetRaffle (inputType=9) ═══
+
+/// <summary>Nested type from CreateAssetRafflePayload.</summary>
+public readonly struct CreateAssetRafflePayloadAssetRaffleItem
+{
+    public const int Size = 48;
+
+    public required QubicAsset Asset { get; init; }
+    public long NumberOfShares { get; init; }
+
+    public static CreateAssetRafflePayloadAssetRaffleItem ReadFrom(ReadOnlySpan<byte> data)
+    {
+        return new CreateAssetRafflePayloadAssetRaffleItem
+        {
+            Asset = QubicAsset.ReadFrom(data[0..]),
+            NumberOfShares = BinaryPrimitives.ReadInt64LittleEndian(data[40..])
+        };
+    }
+
+    public void WriteTo(Span<byte> dest)
+    {
+        Asset.WriteTo(dest.Slice(0));
+        BinaryPrimitives.WriteInt64LittleEndian(dest.Slice(40), NumberOfShares);
+    }
+}
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class CreateAssetRafflePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 216;
+
+    public ushort InputType => 9;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public CreateAssetRafflePayloadAssetRaffleItem[] BundleItems { get; init; }
+    public uint BundleSize { get; init; }
+    public ulong ReservePriceQu { get; init; }
+    public ulong EntryTicketQu { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        for (int i = 0; i < 4 && BundleItems != null && i < BundleItems.Length; i++)
+        {
+            BundleItems[i].WriteTo(bytes.AsSpan(0 + i * 48, 48));
+        }
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(192), BundleSize);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(200), ReservePriceQu);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(208), EntryTicketQu);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct CreateAssetRaffleOutput : ISmartContractOutput<CreateAssetRaffleOutput>
+{
+    public uint RaffleIndex { get; init; }
+    public int ReturnCode { get; init; }
+
+    public static CreateAssetRaffleOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new CreateAssetRaffleOutput
+        {
+            RaffleIndex = BinaryPrimitives.ReadUInt32LittleEndian(data[0..]),
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[4..])
+        };
+    }
+}
+
+// ═══ Procedure: buyAssetRaffleTicket (inputType=10) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class BuyAssetRaffleTicketPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 8;
+
+    public ushort InputType => 10;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public uint IndexOfAssetRaffle { get; init; }
+    public uint NumberOfTickets { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), IndexOfAssetRaffle);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), NumberOfTickets);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct BuyAssetRaffleTicketOutput : ISmartContractOutput<BuyAssetRaffleTicketOutput>
+{
+    public uint TicketsBought { get; init; }
+    public int ReturnCode { get; init; }
+
+    public static BuyAssetRaffleTicketOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new BuyAssetRaffleTicketOutput
+        {
+            TicketsBought = BinaryPrimitives.ReadUInt32LittleEndian(data[0..]),
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[4..])
+        };
+    }
+}
+
+// ═══ Procedure: cancelAssetRaffle (inputType=11) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class CancelAssetRafflePayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 4;
+
+    public ushort InputType => 11;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public uint IndexOfAssetRaffle { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(0), IndexOfAssetRaffle);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct CancelAssetRaffleOutput : ISmartContractOutput<CancelAssetRaffleOutput>
+{
+    public int ReturnCode { get; init; }
+
+    public static CancelAssetRaffleOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new CancelAssetRaffleOutput
+        {
+            ReturnCode = BinaryPrimitives.ReadInt32LittleEndian(data[0..])
         };
     }
 }

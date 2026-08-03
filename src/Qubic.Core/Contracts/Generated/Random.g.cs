@@ -18,11 +18,118 @@ public static class RandomContract
     /// <summary>Gets the 32-byte contract public key.</summary>
     public static byte[] GetPublicKey() => QubicContracts.GetContractPublicKey(ContractIndex);
 
+    /// <summary>Read-only query function IDs.</summary>
+    public static class Functions
+    {
+        /// <summary>Fees (inputType=1).</summary>
+        public const uint Fees = 1;
+        /// <summary>GetProviderStatus (inputType=2).</summary>
+        public const uint GetProviderStatus = 2;
+    }
+
     /// <summary>State-mutating procedure IDs.</summary>
     public static class Procedures
     {
         /// <summary>RevealAndCommit (inputType=1).</summary>
         public const uint RevealAndCommit = 1;
+        /// <summary>BuyEntropy (inputType=2).</summary>
+        public const uint BuyEntropy = 2;
+    }
+}
+
+// ═══ Function: Fees (inputType=1) ═══
+
+/// <summary>Input for query (empty).</summary>
+public readonly struct FeesInput : ISmartContractInput
+{
+    public int SerializedSize => 0;
+    public byte[] ToBytes() => [];
+}
+
+/// <summary>Output.</summary>
+public readonly struct FeesOutput : ISmartContractOutput<FeesOutput>
+{
+    public uint[] Fees { get; init; }
+
+    public static FeesOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var fees = new uint[16];
+        for (int i = 0; i < 16; i++)
+        {
+            fees[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(0 + i * 4)..]);
+        }
+        return new FeesOutput
+        {
+            Fees = fees
+        };
+    }
+}
+
+// ═══ Function: GetProviderStatus (inputType=2) ═══
+
+/// <summary>Input for query.</summary>
+public readonly struct GetProviderStatusInput : ISmartContractInput
+{
+    public const int Size = 32;
+
+    public int SerializedSize => Size;
+
+    public required byte[] Provider { get; init; }
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        Provider.AsSpan(0, 32).CopyTo(bytes.AsSpan(0));
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct GetProviderStatusOutput : ISmartContractOutput<GetProviderStatusOutput>
+{
+    public uint Count { get; init; }
+    public uint[] Stream { get; init; }
+    public uint[] CollateralTier { get; init; }
+    public ulong[] LockedCollateral { get; init; }
+    public byte[] ContributedToEntropy { get; init; }
+    public uint[] LastUpdateTick { get; init; }
+
+    public static GetProviderStatusOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var stream = new uint[32];
+        for (int i = 0; i < 32; i++)
+        {
+            stream[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(4 + i * 4)..]);
+        }
+        var collateralTier = new uint[32];
+        for (int i = 0; i < 32; i++)
+        {
+            collateralTier[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(132 + i * 4)..]);
+        }
+        var lockedCollateral = new ulong[32];
+        for (int i = 0; i < 32; i++)
+        {
+            lockedCollateral[i] = BinaryPrimitives.ReadUInt64LittleEndian(data[(264 + i * 8)..]);
+        }
+        var contributedToEntropy = new byte[32];
+        for (int i = 0; i < 32; i++)
+        {
+            contributedToEntropy[i] = data.Slice(520 + i * 1, 1)[0];
+        }
+        var lastUpdateTick = new uint[32];
+        for (int i = 0; i < 32; i++)
+        {
+            lastUpdateTick[i] = BinaryPrimitives.ReadUInt32LittleEndian(data[(552 + i * 4)..]);
+        }
+        return new GetProviderStatusOutput
+        {
+            Count = BinaryPrimitives.ReadUInt32LittleEndian(data[0..]),
+            Stream = stream,
+            CollateralTier = collateralTier,
+            LockedCollateral = lockedCollateral,
+            ContributedToEntropy = contributedToEntropy,
+            LastUpdateTick = lastUpdateTick
+        };
     }
 }
 
@@ -58,4 +165,50 @@ public sealed class RevealAndCommitPayload : ITransactionPayload, ISmartContract
 public readonly struct RevealAndCommitOutput : ISmartContractOutput<RevealAndCommitOutput>
 {
     public static RevealAndCommitOutput FromBytes(ReadOnlySpan<byte> data) => new();
+}
+
+// ═══ Procedure: BuyEntropy (inputType=2) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class BuyEntropyPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 40;
+
+    public ushort InputType => 2;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public byte CollateralTier { get; init; }
+    public ushort NumberOfBits { get; init; }
+    public required byte[] Trustee { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        bytes.AsSpan(0, 1)[0] = CollateralTier;
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(2), NumberOfBits);
+        Trustee.AsSpan(0, 32).CopyTo(bytes.AsSpan(8));
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct BuyEntropyOutput : ISmartContractOutput<BuyEntropyOutput>
+{
+    public bool[] Entropy { get; init; }
+
+    public static BuyEntropyOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        var entropy = new bool[4096];
+        for (int i = 0; i < 4096; i++)
+        {
+            entropy[i] = (data.Slice(0 + i * 1, 1)[0] != 0);
+        }
+        return new BuyEntropyOutput
+        {
+            Entropy = entropy
+        };
+    }
 }

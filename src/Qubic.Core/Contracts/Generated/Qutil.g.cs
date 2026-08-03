@@ -70,6 +70,8 @@ public static class QutilContract
         public const uint SubscribePriceOracle = 101;
         /// <summary>UnsubscribeOracle (inputType=102).</summary>
         public const uint UnsubscribeOracle = 102;
+        /// <summary>TriggerOC (inputType=103).</summary>
+        public const uint TriggerOC = 103;
     }
 }
 
@@ -905,6 +907,43 @@ public readonly struct UnsubscribeOracleOutput : ISmartContractOutput<Unsubscrib
         return new UnsubscribeOracleOutput
         {
             Success = (data.Slice(0, 1)[0] != 0)
+        };
+    }
+}
+
+// ═══ Procedure: TriggerOC (inputType=103) ═══
+
+/// <summary>Input payload for procedure.</summary>
+public sealed class TriggerOCPayload : ITransactionPayload, ISmartContractInput
+{
+    public const int Size = 8;
+
+    public ushort InputType => 103;
+    public ushort InputSize => Size;
+    public int SerializedSize => Size;
+
+    public ulong Value { get; init; }
+
+    public byte[] GetPayloadBytes() => ToBytes();
+
+    public byte[] ToBytes()
+    {
+        var bytes = new byte[Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(0), Value);
+        return bytes;
+    }
+}
+
+/// <summary>Output.</summary>
+public readonly struct TriggerOCOutput : ISmartContractOutput<TriggerOCOutput>
+{
+    public long InvocationId { get; init; }
+
+    public static TriggerOCOutput FromBytes(ReadOnlySpan<byte> data)
+    {
+        return new TriggerOCOutput
+        {
+            InvocationId = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
         };
     }
 }

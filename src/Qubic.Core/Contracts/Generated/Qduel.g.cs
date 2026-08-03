@@ -71,7 +71,7 @@ public readonly struct GetPercentFeesOutput : ISmartContractOutput<GetPercentFee
     public byte BurnFeePercentBps { get; init; }
     public byte ShareholdersFeePercentBps { get; init; }
     public ushort PercentScale { get; init; }
-    public ulong ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetPercentFeesOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -81,7 +81,7 @@ public readonly struct GetPercentFeesOutput : ISmartContractOutput<GetPercentFee
             BurnFeePercentBps = data.Slice(1, 1)[0],
             ShareholdersFeePercentBps = data.Slice(2, 1)[0],
             PercentScale = BinaryPrimitives.ReadUInt16LittleEndian(data[4..]),
-            ReturnCode = BinaryPrimitives.ReadUInt64LittleEndian(data[8..])
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -135,7 +135,7 @@ public readonly struct GetRoomsInput : ISmartContractInput
 public readonly struct GetRoomsOutput : ISmartContractOutput<GetRoomsOutput>
 {
     public GetRoomsRoomInfo[] Rooms { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetRoomsOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -147,7 +147,7 @@ public readonly struct GetRoomsOutput : ISmartContractOutput<GetRoomsOutput>
         return new GetRoomsOutput
         {
             Rooms = rooms,
-            ReturnCode = data.Slice(61440, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -165,14 +165,14 @@ public readonly struct GetTTLHoursInput : ISmartContractInput
 public readonly struct GetTTLHoursOutput : ISmartContractOutput<GetTTLHoursOutput>
 {
     public byte TtlHours { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetTTLHoursOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetTTLHoursOutput
         {
             TtlHours = data.Slice(0, 1)[0],
-            ReturnCode = data.Slice(1, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -205,7 +205,7 @@ public readonly struct GetUserProfileOutput : ISmartContractOutput<GetUserProfil
     public ulong Stake { get; init; }
     public ulong RaiseStep { get; init; }
     public ulong MaxStake { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetUserProfileOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -217,7 +217,7 @@ public readonly struct GetUserProfileOutput : ISmartContractOutput<GetUserProfil
             Stake = BinaryPrimitives.ReadUInt64LittleEndian(data[48..]),
             RaiseStep = BinaryPrimitives.ReadUInt64LittleEndian(data[56..]),
             MaxStake = BinaryPrimitives.ReadUInt64LittleEndian(data[64..]),
-            ReturnCode = data.Slice(72, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -304,7 +304,7 @@ public readonly struct GetLastWinnersInput : ISmartContractInput
 public readonly struct GetLastWinnersOutput : ISmartContractOutput<GetLastWinnersOutput>
 {
     public GetLastWinnersWinnerData[] Winners { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetLastWinnersOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -316,7 +316,7 @@ public readonly struct GetLastWinnersOutput : ISmartContractOutput<GetLastWinner
         return new GetLastWinnersOutput
         {
             Winners = winners,
-            ReturnCode = data.Slice(13312, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -353,13 +353,13 @@ public sealed class CreateRoomPayload : ITransactionPayload, ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct CreateRoomOutput : ISmartContractOutput<CreateRoomOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static CreateRoomOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new CreateRoomOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -391,14 +391,14 @@ public sealed class ConnectToRoomPayload : ITransactionPayload, ISmartContractIn
 public readonly struct ConnectToRoomOutput : ISmartContractOutput<ConnectToRoomOutput>
 {
     public byte[] Winner { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static ConnectToRoomOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new ConnectToRoomOutput
         {
             Winner = data[0..].Slice(0, 32).ToArray(),
-            ReturnCode = data.Slice(32, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -435,13 +435,13 @@ public sealed class SetPercentFeesPayload : ITransactionPayload, ISmartContractI
 /// <summary>Output.</summary>
 public readonly struct SetPercentFeesOutput : ISmartContractOutput<SetPercentFeesOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SetPercentFeesOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SetPercentFeesOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -472,13 +472,13 @@ public sealed class SetTTLHoursPayload : ITransactionPayload, ISmartContractInpu
 /// <summary>Output.</summary>
 public readonly struct SetTTLHoursOutput : ISmartContractOutput<SetTTLHoursOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SetTTLHoursOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SetTTLHoursOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -498,13 +498,13 @@ public sealed class DepositPayload : ITransactionPayload, ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct DepositOutput : ISmartContractOutput<DepositOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static DepositOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new DepositOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -535,13 +535,13 @@ public sealed class WithdrawPayload : ITransactionPayload, ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct WithdrawOutput : ISmartContractOutput<WithdrawOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static WithdrawOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new WithdrawOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -561,13 +561,13 @@ public sealed class CloseRoomPayload : ITransactionPayload, ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct CloseRoomOutput : ISmartContractOutput<CloseRoomOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static CloseRoomOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new CloseRoomOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
