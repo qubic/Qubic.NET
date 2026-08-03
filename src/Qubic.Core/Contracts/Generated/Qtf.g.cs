@@ -388,7 +388,7 @@ public readonly struct GetFeesOutput : ISmartContractOutput<GetFeesOutput>
     public byte DistributionFeePercent { get; init; }
     public byte WinnerFeePercent { get; init; }
     public byte BurnPercent { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetFeesOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -398,7 +398,7 @@ public readonly struct GetFeesOutput : ISmartContractOutput<GetFeesOutput>
             DistributionFeePercent = data.Slice(1, 1)[0],
             WinnerFeePercent = data.Slice(2, 1)[0],
             BurnPercent = data.Slice(3, 1)[0],
-            ReturnCode = data.Slice(4, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -497,7 +497,7 @@ public readonly struct GetPlayersInput : ISmartContractInput
 public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
 {
     public GetPlayersPlayerData[] Players { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetPlayersOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -509,7 +509,7 @@ public readonly struct GetPlayersOutput : ISmartContractOutput<GetPlayersOutput>
         return new GetPlayersOutput
         {
             Players = players,
-            ReturnCode = data.Slice(40960, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -556,7 +556,7 @@ public readonly struct GetWinningCombinationsHistoryInput : ISmartContractInput
 public readonly struct GetWinningCombinationsHistoryOutput : ISmartContractOutput<GetWinningCombinationsHistoryOutput>
 {
     public GetWinningCombinationsHistoryWinningCombination[] History { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static GetWinningCombinationsHistoryOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -568,7 +568,7 @@ public readonly struct GetWinningCombinationsHistoryOutput : ISmartContractOutpu
         return new GetWinningCombinationsHistoryOutput
         {
             History = history,
-            ReturnCode = data.Slice(512, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -602,13 +602,13 @@ public sealed class BuyTicketPayload : ITransactionPayload, ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct BuyTicketOutput : ISmartContractOutput<BuyTicketOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static BuyTicketOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new BuyTicketOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -639,13 +639,13 @@ public sealed class SetPricePayload : ITransactionPayload, ISmartContractInput
 /// <summary>Output.</summary>
 public readonly struct SetPriceOutput : ISmartContractOutput<SetPriceOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SetPriceOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SetPriceOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -676,13 +676,13 @@ public sealed class SetSchedulePayload : ITransactionPayload, ISmartContractInpu
 /// <summary>Output.</summary>
 public readonly struct SetScheduleOutput : ISmartContractOutput<SetScheduleOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SetScheduleOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SetScheduleOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -713,13 +713,13 @@ public sealed class SetTargetJackpotPayload : ITransactionPayload, ISmartContrac
 /// <summary>Output.</summary>
 public readonly struct SetTargetJackpotOutput : ISmartContractOutput<SetTargetJackpotOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SetTargetJackpotOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SetTargetJackpotOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -750,13 +750,13 @@ public sealed class SetDrawHourPayload : ITransactionPayload, ISmartContractInpu
 /// <summary>Output.</summary>
 public readonly struct SetDrawHourOutput : ISmartContractOutput<SetDrawHourOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SetDrawHourOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SetDrawHourOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -776,13 +776,13 @@ public sealed class SyncJackpotPayload : ITransactionPayload, ISmartContractInpu
 /// <summary>Output.</summary>
 public readonly struct SyncJackpotOutput : ISmartContractOutput<SyncJackpotOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SyncJackpotOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SyncJackpotOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -817,14 +817,14 @@ public sealed class BuyTicketsBatchPayload : ITransactionPayload, ISmartContract
 public readonly struct BuyTicketsBatchOutput : ISmartContractOutput<BuyTicketsBatchOutput>
 {
     public ushort BoughtTicketCount { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static BuyTicketsBatchOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new BuyTicketsBatchOutput
         {
             BoughtTicketCount = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
-            ReturnCode = data.Slice(2, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -860,7 +860,7 @@ public readonly struct BuyTicketsBySelectionOutput : ISmartContractOutput<BuyTic
 {
     public ushort RequestedTicketCount { get; init; }
     public ushort BoughtTicketCount { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static BuyTicketsBySelectionOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -868,7 +868,7 @@ public readonly struct BuyTicketsBySelectionOutput : ISmartContractOutput<BuyTic
         {
             RequestedTicketCount = BinaryPrimitives.ReadUInt16LittleEndian(data[0..]),
             BoughtTicketCount = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
-            ReturnCode = data.Slice(4, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }

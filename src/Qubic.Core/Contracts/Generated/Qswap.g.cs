@@ -132,6 +132,7 @@ public readonly struct GetPoolBasicStateOutput : ISmartContractOutput<GetPoolBas
     public long ReservedQuAmount { get; init; }
     public long ReservedAssetAmount { get; init; }
     public long TotalLiquidity { get; init; }
+    public ulong AccFeePerLP { get; init; }
 
     public static GetPoolBasicStateOutput FromBytes(ReadOnlySpan<byte> data)
     {
@@ -140,7 +141,8 @@ public readonly struct GetPoolBasicStateOutput : ISmartContractOutput<GetPoolBas
             PoolExists = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
             ReservedQuAmount = BinaryPrimitives.ReadInt64LittleEndian(data[8..]),
             ReservedAssetAmount = BinaryPrimitives.ReadInt64LittleEndian(data[16..]),
-            TotalLiquidity = BinaryPrimitives.ReadInt64LittleEndian(data[24..])
+            TotalLiquidity = BinaryPrimitives.ReadInt64LittleEndian(data[24..]),
+            AccFeePerLP = BinaryPrimitives.ReadUInt64LittleEndian(data[32..])
         };
     }
 }
@@ -172,12 +174,14 @@ public readonly struct GetLiquidityOfInput : ISmartContractInput
 public readonly struct GetLiquidityOfOutput : ISmartContractOutput<GetLiquidityOfOutput>
 {
     public long Liquidity { get; init; }
+    public ulong EarnedFees { get; init; }
 
     public static GetLiquidityOfOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new GetLiquidityOfOutput
         {
-            Liquidity = BinaryPrimitives.ReadInt64LittleEndian(data[0..])
+            Liquidity = BinaryPrimitives.ReadInt64LittleEndian(data[0..]),
+            EarnedFees = BinaryPrimitives.ReadUInt64LittleEndian(data[8..])
         };
     }
 }

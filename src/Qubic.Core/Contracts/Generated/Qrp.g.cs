@@ -119,14 +119,14 @@ public sealed class WithdrawReservePayload : ITransactionPayload, ISmartContract
 public readonly struct WithdrawReserveOutput : ISmartContractOutput<WithdrawReserveOutput>
 {
     public ulong AllocatedRevenue { get; init; }
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static WithdrawReserveOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new WithdrawReserveOutput
         {
             AllocatedRevenue = BinaryPrimitives.ReadUInt64LittleEndian(data[0..]),
-            ReturnCode = data.Slice(8, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -157,13 +157,13 @@ public sealed class AddAllowedSCPayload : ITransactionPayload, ISmartContractInp
 /// <summary>Output.</summary>
 public readonly struct AddAllowedSCOutput : ISmartContractOutput<AddAllowedSCOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static AddAllowedSCOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new AddAllowedSCOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -194,13 +194,13 @@ public sealed class RemoveAllowedSCPayload : ITransactionPayload, ISmartContract
 /// <summary>Output.</summary>
 public readonly struct RemoveAllowedSCOutput : ISmartContractOutput<RemoveAllowedSCOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static RemoveAllowedSCOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new RemoveAllowedSCOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }
@@ -233,13 +233,13 @@ public sealed class SendReservePayload : ITransactionPayload, ISmartContractInpu
 /// <summary>Output.</summary>
 public readonly struct SendReserveOutput : ISmartContractOutput<SendReserveOutput>
 {
-    public byte ReturnCode { get; init; }
+    public byte[] ReturnCode { get; init; }
 
     public static SendReserveOutput FromBytes(ReadOnlySpan<byte> data)
     {
         return new SendReserveOutput
         {
-            ReturnCode = data.Slice(0, 1)[0]
+            ReturnCode = [] /* unknown type EReturnCode */
         };
     }
 }

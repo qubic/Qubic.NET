@@ -92,6 +92,9 @@ public static class QubicContracts
     /// <summary>ESCROW - Escrow contract.</summary>
     public const int Escrow = 27;
 
+    /// <summary>GGWP - WOLFPACK contract. (epoch 218)</summary>
+    public const int Ggwp = 28;
+
     // Single source of truth for contract index → name mapping.
     private static readonly Dictionary<int, string> _contractNames = new()
     {
@@ -101,7 +104,8 @@ public static class QubicContracts
         [Qbay] = "QBay", [Qswap] = "QSwap", [Nost] = "Nostromo", [Qdraw] = "QDraw",
         [Rl] = "RL", [Qbond] = "QBond", [Qip] = "QIP", [Qraffle] = "QRaffle",
         [Qrwa] = "QRWA", [Qrp] = "QRP", [Qtf] = "QTF", [Qduel] = "QDuel",
-        [Pulse] = "Pulse", [Vottun] = "Vottun", [Qusino] = "Qusino", [Escrow] = "Escrow"
+        [Pulse] = "Pulse", [Vottun] = "Vottun", [Qusino] = "Qusino", [Escrow] = "Escrow",
+        [Ggwp] = "GGWP"
     };
 
     /// <summary>
