@@ -2,14 +2,14 @@ namespace Qubic.Core;
 
 /// <summary>
 /// Qubic protocol constants derived from qubic/core.
-/// Based on: https://github.com/qubic/core v1.301.2
+/// Based on: https://github.com/qubic/core v1.301.7
 /// </summary>
 public static class QubicConstants
 {
     /// <summary>
     /// The Qubic core release version these models are based on.
     /// </summary>
-    public const string QubicCoreVersion = "1.301.2";
+    public const string QubicCoreVersion = "1.301.7";
 
 
     #region Network Configuration
