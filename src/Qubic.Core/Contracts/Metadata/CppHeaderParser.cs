@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Qubic.ContractGen.Parsing;
+namespace Qubic.Core.Contracts.Metadata;
 
 public class CppHeaderParser
 {

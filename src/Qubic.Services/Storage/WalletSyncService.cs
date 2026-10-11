@@ -3,6 +3,7 @@ using Qubic.Bob;
 using Qubic.Bob.Models;
 using Qubic.Rpc;
 using Qubic.Rpc.Models;
+using Qubic.Services.Networks;
 
 namespace Qubic.Services.Storage;
 
@@ -141,6 +142,19 @@ public sealed class WalletSyncService : IDisposable
         const int pageSize = 100;
         const string watermarkKey = "rpc_last_offset";
 
+        // The archive (query service) only exists on RPC. Without an RPC method in the
+        // profile, history comes from the Bob log stream alone — never from another network.
+        if (!_backend.IsAvailable(Capability.TransactionArchive))
+        {
+            RpcStatus = StreamStatus.Done;
+            RpcStatusMessage = "Not available on this network (no RPC method) — using Bob logs";
+            Log("RPC: archive not available in this network profile, skipping");
+            _rpcInitialDone = true;
+            CheckInitialSyncComplete();
+            RaiseChanged();
+            return;
+        }
+
         try
         {
             while (!ct.IsCancellationRequested)
@@ -152,7 +166,7 @@ public sealed class WalletSyncService : IDisposable
                     Log("RPC: Connecting...");
                     RaiseChanged();
 
-                    using var rpc = new QubicRpcClient(_backend.RpcUrl);
+                    using var rpc = _backend.CreateRpcClient();
 
                     var offsetStr = _db.GetWatermark(watermarkKey);
                     var offset = uint.TryParse(offsetStr, out var o) ? o : 0u;
@@ -257,6 +271,18 @@ public sealed class WalletSyncService : IDisposable
         const string epochWatermarkKey = "bob_log_last_epoch";
         const string prevEpochDoneKey = "bob_log_prev_epoch_done";
 
+        if (!_backend.IsAvailable(Capability.Logs)
+            || _backend.Profile.GetMethod(BackendMethodKind.Bob) is not { UseWebSocket: true })
+        {
+            BobLogStatus = StreamStatus.Done;
+            BobLogStatusMessage = "Not available on this network (needs a Bob method with WebSocket)";
+            Log("Bob Logs: not available in this network profile, skipping");
+            _bobLogInitialDone = true;
+            CheckInitialSyncComplete();
+            RaiseChanged();
+            return;
+        }
+
         try
         {
             while (!ct.IsCancellationRequested)
@@ -269,11 +295,7 @@ public sealed class WalletSyncService : IDisposable
                     Log("Bob Logs: Connecting...");
                     RaiseChanged();
 
-                    var wsOptions = new BobWebSocketOptions
-                    {
-                        Nodes = [_backend.BobUrl],
-                        OnConnectionEvent = evt => Log($"Bob WS: [{evt.Type}] {evt.Message}")
-                    };
+                    var wsOptions = _backend.CreateBobWebSocketOptions(evt => Log($"Bob WS: [{evt.Type}] {evt.Message}"));
                     wsClient = new BobWebSocketClient(wsOptions);
                     await wsClient.ConnectAsync(ct);
                     Log("Bob Logs: Connected");
@@ -621,16 +643,16 @@ public sealed class WalletSyncService : IDisposable
 
                         var fetched = 0;
 
-                        // Fetch standard hashes via RPC (richer data: MoneyFlew, Signature, etc.)
-                        if (standardHashes.Count > 0)
+                        // Fetch standard hashes via the profile's lookup method
+                        // (RPC when present: richer data such as MoneyFlew and Signature; otherwise Bob).
+                        if (standardHashes.Count > 0 && _backend.IsAvailable(Capability.TransactionLookup))
                         {
-                            using var rpc = new QubicRpcClient(_backend.RpcUrl);
                             foreach (var hash in standardHashes)
                             {
                                 if (ct.IsCancellationRequested) break;
                                 try
                                 {
-                                    var txInfo = await rpc.GetTransactionByHashAsync(hash, ct);
+                                    var txInfo = await _backend.GetTransactionByHashAsync(hash, ct);
                                     if (txInfo != null)
                                     {
                                         var now = DateTime.UtcNow.ToString("O");
@@ -647,7 +669,7 @@ public sealed class WalletSyncService : IDisposable
                                             InputData = string.IsNullOrEmpty(txInfo.InputData) ? null : txInfo.InputData,
                                             Signature = string.IsNullOrEmpty(txInfo.Signature) ? null : txInfo.Signature,
                                             MoneyFlew = txInfo.MoneyFlew,
-                                            SyncedFrom = "log_ref",
+                                            SyncedFrom = _backend.RouteFor(Capability.TransactionLookup) == BackendMethodKind.Rpc ? "log_ref" : "log_ref_bob",
                                             SyncedAtUtc = now
                                         });
                                         fetched++;
@@ -657,15 +679,15 @@ public sealed class WalletSyncService : IDisposable
                                 catch (OperationCanceledException) { throw; }
                                 catch (Exception ex)
                                 {
-                                    Log($"Missing TX: RPC failed for {hash[..Math.Min(16, hash.Length)]}... — {ex.Message}");
+                                    Log($"Missing TX: lookup failed for {hash[..Math.Min(16, hash.Length)]}... — {ex.Message}");
                                 }
                             }
                         }
 
                         // Fetch non-standard hashes via Bob (e.g. SC_END_TICK_TX_*)
-                        if (nonStandardHashes.Count > 0 && !ct.IsCancellationRequested)
+                        if (nonStandardHashes.Count > 0 && !ct.IsCancellationRequested && _backend.HasMethod(BackendMethodKind.Bob))
                         {
-                            using var bob = new BobClient(_backend.BobUrl);
+                            using var bob = _backend.CreateBobClient();
                             foreach (var hash in nonStandardHashes)
                             {
                                 if (ct.IsCancellationRequested) break;

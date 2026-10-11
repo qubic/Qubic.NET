@@ -164,18 +164,20 @@ public sealed class TransactionTrackerService : IDisposable
             throw new InvalidOperationException("Not connected. Cannot determine current tick.");
 
         var dest = QubicIdentity.FromIdentity(original.Destination);
-        var newTick = _tickMonitor.Tick + (uint)_settings.TickOffset;
+        var newTick = NextTargetTick();
 
+        // A user-initiated repeat is a new signature: it goes through the signing review.
+        var repeatContext = new Signing.SigningContext(Signing.SigningOrigin.Repeat, $"Repeat: {original.Description}");
         QubicTransaction tx;
         if (original.InputType == 0 && string.IsNullOrEmpty(original.PayloadHex))
         {
-            tx = _seed.CreateAndSignTransfer(dest, original.Amount, newTick);
+            tx = await _seed.SignTransferAsync(dest, original.Amount, newTick, repeatContext);
         }
         else
         {
             var data = string.IsNullOrEmpty(original.PayloadHex) ? [] : Convert.FromHexString(original.PayloadHex);
             var payload = new Qubic.Core.Payloads.GenericContractPayload(original.InputType, data);
-            tx = _seed.CreateAndSignTransaction(dest, original.Amount, newTick, payload);
+            tx = await _seed.SignTransactionAsync(dest, original.Amount, newTick, payload, repeatContext);
         }
 
         var result = await _backend.BroadcastTransactionAsync(tx);
@@ -239,6 +241,36 @@ public sealed class TransactionTrackerService : IDisposable
             RaiseChanged();
         }
         return added;
+    }
+
+    /// <summary>Target tick for repeats/resends, from the active profile's tick policy.</summary>
+    private uint NextTargetTick() =>
+        Networks.TickTargeting.Compute(_backend.Profile, _tickMonitor.Tick, _tickMonitor.EstimatedTickDurationMs).TargetTick;
+
+    /// <summary>When each pending tx was first seen with its target tick already passed.</summary>
+    private readonly Dictionary<string, DateTime> _targetPassedAt = new();
+
+    /// <summary>
+    /// A pending tx becomes Unknown only after the chain moved <see cref="UnknownAfterTicks"/> past its
+    /// target AND at least <see cref="UnknownAfterTime"/> elapsed since then — so neither very fast
+    /// ticks (unpaced devnets) nor very slow ticks trigger premature or endless resends.
+    /// </summary>
+    private const uint UnknownAfterTicks = 20;
+    private static readonly TimeSpan UnknownAfterTime = TimeSpan.FromSeconds(30);
+
+    private bool ShouldMarkUnknown(TrackedTransaction tx, uint currentTick)
+    {
+        if (currentTick <= tx.TargetTick) return false;
+        DateTime passedAt;
+        lock (_targetPassedAt)
+        {
+            if (!_targetPassedAt.TryGetValue(tx.Hash, out passedAt))
+            {
+                passedAt = DateTime.UtcNow;
+                _targetPassedAt[tx.Hash] = passedAt;
+            }
+        }
+        return currentTick > tx.TargetTick + UnknownAfterTicks && DateTime.UtcNow - passedAt >= UnknownAfterTime;
     }
 
     private async Task MonitorLoop(CancellationToken ct)
@@ -315,8 +347,8 @@ public sealed class TransactionTrackerService : IDisposable
 
             try
             {
-                // Try RPC first (has MoneyFlew)
-                if (_backend.ActiveBackend == QueryBackend.Rpc)
+                // Try the profile's tx lookup when it is served by RPC (has MoneyFlew)
+                if (_backend.RouteFor(Networks.Capability.TransactionLookup) == Networks.BackendMethodKind.Rpc)
                 {
                     var info = await _backend.GetTransactionByHashAsync(tx.Hash, ct);
                     if (info != null)
@@ -341,7 +373,7 @@ public sealed class TransactionTrackerService : IDisposable
                 }
 
                 // Try Bob receipt
-                if (!confirmed && _backend.ActiveBackend == QueryBackend.Bob)
+                if (!confirmed && _backend.IsAvailable(Networks.Capability.TransactionReceipt))
                 {
                     var receipt = await _backend.GetTransactionReceiptAsync(tx.Hash, ct);
                     if (receipt != null)
@@ -363,8 +395,13 @@ public sealed class TransactionTrackerService : IDisposable
                     }
                 }
 
-                // Try DirectNetwork: check if tx exists in the tick's transactions
-                if (!confirmed && _backend.ActiveBackend == QueryBackend.DirectNetwork
+                // Try Direct: check if tx exists in the tick's transactions
+                // (only when Direct is the primary method, or nothing else in the profile can confirm)
+                if (!confirmed && tx.Status == TrackedTxStatus.Pending
+                    && _backend.IsAvailable(Networks.Capability.TickTransactionCheck)
+                    && (_backend.ActiveBackend == QueryBackend.DirectNetwork
+                        || (!_backend.IsAvailable(Networks.Capability.TransactionLookup)
+                            && !_backend.IsAvailable(Networks.Capability.TransactionReceipt)))
                     && currentTick > tx.TargetTick + 2) // wait a couple ticks for data availability
                 {
                     var found = await _backend.CheckTransactionInTickAsync(tx.Hash, tx.TargetTick, ct);
@@ -388,7 +425,7 @@ public sealed class TransactionTrackerService : IDisposable
 
             // If tick passed significantly and still no info, mark unknown.
             // This runs even if the receipt/lookup above threw an exception.
-            if (tx.Status == TrackedTxStatus.Pending && currentTick > tx.TargetTick + 20)
+            if (tx.Status == TrackedTxStatus.Pending && ShouldMarkUnknown(tx, currentTick))
             {
                 tx.Status = TrackedTxStatus.Unknown;
                 tx.ResolvedUtc = DateTime.UtcNow;
@@ -430,7 +467,7 @@ public sealed class TransactionTrackerService : IDisposable
         try
         {
             var dest = QubicIdentity.FromIdentity(original.Destination);
-            var newTick = _tickMonitor.Tick + (uint)_settings.TickOffset;
+            var newTick = NextTargetTick();
 
             QubicTransaction tx;
             if (original.InputType == 0 && string.IsNullOrEmpty(original.PayloadHex))

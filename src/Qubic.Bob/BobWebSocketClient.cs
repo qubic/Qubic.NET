@@ -1127,6 +1127,15 @@ public sealed class BobWebSocketClient : IAsyncDisposable, IDisposable
     public Task<BobTransactionResponse?> GetTransactionByHashAsync(string txHash, CancellationToken cancellationToken = default)
         => CallAsync<BobTransactionResponse?>("qubic_getTransactionByHash", new object[] { txHash }, cancellationToken);
 
+    /// <summary>Broadcasts a signed transaction (<c>qubic_broadcastTransaction</c>) and returns its hash.</summary>
+    /// <exception cref="BobRpcException">Bob rejected the transaction.</exception>
+    public async Task<string> BroadcastTransactionAsync(byte[] signedTransaction, CancellationToken cancellationToken = default)
+    {
+        var hex = Convert.ToHexString(signedTransaction).ToLowerInvariant();
+        var result = await CallAsync<JsonElement>("qubic_broadcastTransaction", new object[] { hex }, cancellationToken);
+        return BobClient.ParseBroadcastResult(result);
+    }
+
     /// <summary>Gets a transaction receipt by hash.</summary>
     public Task<TransactionReceiptResponse?> GetTransactionReceiptAsync(string txHash, CancellationToken cancellationToken = default)
         => CallAsync<TransactionReceiptResponse?>("qubic_getTransactionReceipt", new object[] { txHash }, cancellationToken);

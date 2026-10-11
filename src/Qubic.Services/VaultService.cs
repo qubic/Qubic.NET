@@ -18,6 +18,13 @@ public sealed class VaultEntry
     /// <summary>Computed from Seed on load, not serialized to disk.</summary>
     [JsonIgnore]
     public string Identity { get; set; } = "";
+
+    /// <summary>
+    /// Network classes this seed has signed on ("mainnet", "test"). Qubic transactions carry no
+    /// chain id, so a seed used on both can have test signatures replayed on mainnet — the wallet
+    /// warns before that happens.
+    /// </summary>
+    public List<string>? SignedOn { get; set; }
 }
 
 /// <summary>
@@ -410,6 +417,29 @@ public sealed class VaultService
     /// <summary>Gets an entry by identity, or null.</summary>
     public VaultEntry? GetEntry(string identity) =>
         _entries?.FirstOrDefault(e => e.Identity == identity);
+
+    /// <summary>Network classes the vault seed for <paramref name="identity"/> has signed on (empty if unknown).</summary>
+    public IReadOnlyList<string> GetSignedOn(string identity) =>
+        (IReadOnlyList<string>?)GetEntry(identity)?.SignedOn?.ToList() ?? [];
+
+    /// <summary>
+    /// Records that the vault seed for <paramref name="identity"/> signed on <paramref name="networkClass"/>.
+    /// Only writes the vault the first time a class is seen. Returns true if the vault was updated.
+    /// </summary>
+    public bool RecordSignedOn(string identity, string networkClass)
+    {
+        if (!IsUnlocked) return false;
+        lock (_entries!)
+        {
+            var entry = GetEntry(identity);
+            if (entry == null) return false;
+            entry.SignedOn ??= [];
+            if (entry.SignedOn.Contains(networkClass)) return false;
+            entry.SignedOn.Add(networkClass);
+        }
+        SaveToDisk();
+        return true;
+    }
 
     // ── Contact (address book) management ──
 

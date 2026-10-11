@@ -278,6 +278,28 @@ public sealed class QubicPacketWriter
     }
 
     /// <summary>
+    /// Writes a request for assets issued by an identity.
+    /// </summary>
+    public byte[] WriteRequestIssuedAssets(QubicIdentity identity)
+    {
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestIssuedAssets, 32);
+        _writer.Write(identity.PublicKey);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
+    /// Writes a request for assets possessed by an identity.
+    /// </summary>
+    public byte[] WriteRequestPossessedAssets(QubicIdentity identity)
+    {
+        Reset();
+        WriteHeader(QubicPacketTypes.RequestPossessedAssets, 32);
+        _writer.Write(identity.PublicKey);
+        return GetPacketBytes();
+    }
+
+    /// <summary>
     /// Writes a request for owned assets.
     /// </summary>
     public byte[] WriteRequestOwnedAssets(QubicIdentity identity)

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Qubic.Bob; // BobClient for fetching current logId
+using Qubic.Services.Networks;
 
 namespace Qubic.Services.Storage;
 
@@ -15,7 +16,13 @@ public sealed class WalletStorageService : IDisposable
     private readonly WalletSyncService _sync;
     private readonly QubicSettingsService _settings;
     private readonly QubicBackendService _backend;
+    private readonly NetworkProfileService _profiles;
+    private readonly NetworkChainState _chainState;
     private string? _identity;
+    private string? _seed;
+    private string? _openProfileId;
+
+    private const string ChainGenerationKey = "chain_generation";
 
     public bool IsOpen => _db.IsOpen;
     public WalletDatabase Database => _db;
@@ -24,12 +31,18 @@ public sealed class WalletStorageService : IDisposable
 
     public event Action? OnStateChanged;
 
-    public WalletStorageService(WalletDatabase db, WalletSyncService sync, QubicSettingsService settings, QubicBackendService backend)
+    /// <summary>Network profile whose database is currently open, or null.</summary>
+    public string? OpenProfileId => _openProfileId;
+
+    public WalletStorageService(WalletDatabase db, WalletSyncService sync, QubicSettingsService settings,
+        QubicBackendService backend, NetworkProfileService profiles, NetworkChainState chainState)
     {
         _db = db;
         _sync = sync;
         _settings = settings;
         _backend = backend;
+        _profiles = profiles;
+        _chainState = chainState;
     }
 
     /// <summary>
@@ -42,13 +55,19 @@ public sealed class WalletStorageService : IDisposable
         Close();
 
         _identity = identity;
+        _seed = seed;
+        var profileId = _profiles.ActiveId;
+        _openProfileId = profileId;
 
-        var dbPath = GetDbPath(seed);
+        var dbPath = GetDbPath(seed, profileId);
         var isNew = !File.Exists(dbPath);
         var passphrase = GetPassphrase(seed);
         _db.Open(dbPath, passphrase);
 
-        MigrateLegacyTxdb(seed);
+        if (profileId == NetworkPresets.MainnetId)
+            MigrateLegacyTxdb(seed);
+
+        ApplyChainGeneration(profileId, restartSync: false);
 
         if (skipInitialSync && isNew && currentEpoch > 0)
         {
@@ -72,7 +91,8 @@ public sealed class WalletStorageService : IDisposable
     {
         try
         {
-            using var bob = new BobClient(_backend.BobUrl);
+            if (!_backend.HasMethod(Networks.BackendMethodKind.Bob)) return;
+            using var bob = _backend.CreateBobClient();
             var epochInfo = await bob.GetCurrentEpochAsync();
             var logId = epochInfo.GetLastLogId();
             if (logId > 0 && _db.IsOpen)
@@ -87,6 +107,7 @@ public sealed class WalletStorageService : IDisposable
     public void ClearSeed()
     {
         Close();
+        _seed = null;
         OnStateChanged?.Invoke();
     }
 
@@ -95,6 +116,44 @@ public sealed class WalletStorageService : IDisposable
         _sync.Stop();
         _db.Close();
         _identity = null;
+        _openProfileId = null;
+    }
+
+    /// <summary>
+    /// Re-opens the current seed's database for the active network profile
+    /// (each network has its own wallet DB). No-op if no seed is open.
+    /// </summary>
+    public void ReopenForActiveProfile(uint currentEpoch = 0)
+    {
+        if (_seed == null || _identity == null) return;
+        if (_openProfileId == _profiles.ActiveId && IsOpen) return;
+        var seed = _seed;
+        var identity = _identity;
+        SetSeed(seed, identity, currentEpoch);
+    }
+
+    /// <summary>
+    /// If a chain reset was detected for <paramref name="profileId"/> after this DB last synced,
+    /// purge its cached history so stale transactions from the previous chain disappear.
+    /// Returns true if data was purged.
+    /// </summary>
+    public bool ApplyChainGeneration(string profileId, bool restartSync = true)
+    {
+        if (!IsOpen || _openProfileId != profileId) return false;
+        var generation = _chainState.GetGeneration(profileId);
+        var dbGeneration = int.TryParse(_db.GetWatermark(ChainGenerationKey), out var g) ? g : 0;
+        if (dbGeneration >= generation) return false;
+
+        if (restartSync) _sync.Stop();
+        _db.ClearTransactions();
+        _db.ClearLogEvents();
+        _db.ClearTrackedTransactions();
+        foreach (var key in _db.GetAllWatermarks().Keys)
+            _db.DeleteWatermark(key);
+        _db.SetWatermark(ChainGenerationKey, generation.ToString());
+        if (restartSync && _identity != null) _sync.Start(_identity);
+        OnStateChanged?.Invoke();
+        return true;
     }
 
     // ── Convenience query methods ──
@@ -262,12 +321,16 @@ public sealed class WalletStorageService : IDisposable
 
     // ── DB path / passphrase derivation ──
 
-    private string GetDbPath(string seed)
+    /// <summary>
+    /// Mainnet keeps the pre-profile name (&lt;hash&gt;.walletdb); other networks get
+    /// &lt;hash&gt;.&lt;profileId&gt;.walletdb so histories never mix.
+    /// </summary>
+    private string GetDbPath(string seed, string profileId)
     {
         using var sha = SHA256.Create();
         var hash = Convert.ToHexString(sha.ComputeHash(
             Encoding.UTF8.GetBytes("qubic-walletdb-" + seed))).ToLowerInvariant();
-        return Path.Combine(_settings.StorageDirectory, hash[..16] + ".walletdb");
+        return Path.Combine(_settings.StorageDirectory, hash[..16] + NetworkStorage.Suffix(profileId) + ".walletdb");
     }
 
     private static string GetPassphrase(string seed)
