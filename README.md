@@ -15,6 +15,8 @@ A modular .NET 8.0 library for interacting with the [Qubic](https://qubic.org) n
 | **[Qubic.Network](https://www.nuget.org/packages/Qubic.Network)** | [![NuGet](https://img.shields.io/nuget/v/Qubic.Network)](https://www.nuget.org/packages/Qubic.Network) | Direct TCP client for communicating with Qubic network nodes. |
 | **[Qubic.Rpc](https://www.nuget.org/packages/Qubic.Rpc)** | [![NuGet](https://img.shields.io/nuget/v/Qubic.Rpc)](https://www.nuget.org/packages/Qubic.Rpc) | HTTP client for the official Qubic RPC API. |
 | **[Qubic.Bob](https://www.nuget.org/packages/Qubic.Bob)** | [![NuGet](https://img.shields.io/nuget/v/Qubic.Bob)](https://www.nuget.org/packages/Qubic.Bob) | JSON-RPC client for the QubicBob API. |
+| **[Qubic.Services](https://www.nuget.org/packages/Qubic.Services)** | [![NuGet](https://img.shields.io/nuget/v/Qubic.Services)](https://www.nuget.org/packages/Qubic.Services) | Application services for wallets: network profiles with strict per-operation routing, network fingerprinting, signing review, encrypted storage, vault, tick monitoring. |
+| **[Qubic.WalletConnect](https://www.nuget.org/packages/Qubic.WalletConnect)** | [![NuGet](https://img.shields.io/nuget/v/Qubic.WalletConnect)](https://www.nuget.org/packages/Qubic.WalletConnect) | WalletConnect v2 wallet side for Qubic (official `qubic_*` method set), built on Reown WalletKit and the Qubic.Services signing review. |
 
 ### Installation
 
@@ -34,6 +36,9 @@ Qubic.Crypto        (no dependencies)
             └── Qubic.Network
        └── Qubic.Rpc
        └── Qubic.Bob
+
+Qubic.Services      (Core, Network, Rpc, Bob)
+  └── Qubic.WalletConnect
 ```
 
 ## Usage
