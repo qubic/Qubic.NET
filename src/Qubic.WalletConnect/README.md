@@ -25,4 +25,6 @@ await walletConnect.StartAsync();
 await walletConnect.PairAsync("wc:…");   // URI from the dApp's QR code
 ```
 
-The service only runs when the user enabled the WalletConnect feature.
+The service only runs when the user enabled the WalletConnect feature. Only one process per data folder
+(`QubicSettingsService.StorageDirectory`) runs the client: it holds `walletconnect.lock`. Another process
+reports `WalletConnectState.OtherInstance` and takes over when the lock is released.

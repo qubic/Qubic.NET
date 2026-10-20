@@ -16,7 +16,16 @@ using Reown.WalletKit.Interfaces;
 
 namespace Qubic.WalletConnect;
 
-public enum WalletConnectState { Off, NeedsProjectId, Starting, Ready, Error }
+public enum WalletConnectState
+{
+    Off,
+    NeedsProjectId,
+    Starting,
+    Ready,
+    Error,
+    /// <summary>Another wallet process on the same data folder runs WalletConnect; this one takes over when it stops.</summary>
+    OtherInstance
+}
 
 /// <summary>A dApp asking to connect.</summary>
 public sealed record WalletConnectProposal(long Id, string Name, string Url, string? Description, string? Icon,
@@ -63,6 +72,11 @@ public sealed class QubicWalletConnectService : IAsyncDisposable
     private IWalletKit? _kit;
     private CoreClient? _core;
     private readonly List<IDisposable> _handlers = [];
+    private FileStream? _instanceLock;
+    private CancellationTokenSource? _waitForLock;
+
+    /// <summary>How often a process in <see cref="WalletConnectState.OtherInstance"/> checks whether it can take over.</summary>
+    public static TimeSpan InstanceLockRetryInterval { get; set; } = TimeSpan.FromSeconds(10);
 
     public WalletConnectState State { get; private set; } = WalletConnectState.Off;
     public string? LastError { get; private set; }
@@ -107,6 +121,14 @@ public sealed class QubicWalletConnectService : IAsyncDisposable
             if (_kit != null) return;
             if (!_features.IsEnabled(WalletFeature.WalletConnect)) { SetState(WalletConnectState.Off); return; }
             if (string.IsNullOrWhiteSpace(ProjectId)) { SetState(WalletConnectState.NeedsProjectId); return; }
+            // One WalletConnect client per data folder: two processes on the same sessions would both
+            // answer every dApp request and fight over walletconnect.json.
+            if (!TryAcquireInstanceLock())
+            {
+                SetState(WalletConnectState.OtherInstance);
+                WaitForInstanceLock();
+                return;
+            }
 
             SetState(WalletConnectState.Starting);
             _guard.AllowFeatureHost("walletconnect", "relay.walletconnect.org");
@@ -149,6 +171,7 @@ public sealed class QubicWalletConnectService : IAsyncDisposable
 
     public async Task StopAsync()
     {
+        CancelWaitForLock();
         await _lifecycle.WaitAsync();
         try
         {
@@ -172,7 +195,56 @@ public sealed class QubicWalletConnectService : IAsyncDisposable
         lock (_proposals) _proposals.Clear();
         _guard.RevokeFeatureHost("walletconnect");
         _guard.RevokeFeatureHost("walletconnect-verify");
+        ReleaseInstanceLock();
         return Task.CompletedTask;
+    }
+
+    // ── One WalletConnect client per data folder ──
+
+    private string InstanceLockPath => Path.Combine(_settings.StorageDirectory, "walletconnect.lock");
+
+    private bool TryAcquireInstanceLock()
+    {
+        if (_instanceLock != null) return true;
+        try
+        {
+            Directory.CreateDirectory(_settings.StorageDirectory);
+            // FileShare.None is an OS lock on Windows and an advisory flock on Linux/macOS; both are
+            // released automatically if the process dies.
+            _instanceLock = new FileStream(InstanceLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private void ReleaseInstanceLock()
+    {
+        try { _instanceLock?.Dispose(); } catch { }
+        _instanceLock = null;
+    }
+
+    /// <summary>Retries in the background so this process takes over when the other one stops.</summary>
+    private void WaitForInstanceLock()
+    {
+        if (_waitForLock != null) return;
+        var cts = _waitForLock = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(InstanceLockRetryInterval, cts.Token); }
+            catch (OperationCanceledException) { return; }
+            if (Interlocked.CompareExchange(ref _waitForLock, null, cts) != cts) return;
+            cts.Dispose();
+            if (State == WalletConnectState.OtherInstance && _features.IsEnabled(WalletFeature.WalletConnect))
+                await StartAsync(); // re-arms the wait if the other process still holds the lock
+        });
+    }
+
+    private void CancelWaitForLock()
+    {
+        var cts = Interlocked.Exchange(ref _waitForLock, null);
+        if (cts == null) return;
+        try { cts.Cancel(); cts.Dispose(); } catch { }
     }
 
     // ── Pairing & sessions ──
@@ -440,6 +512,7 @@ public sealed class QubicWalletConnectService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        CancelWaitForLock();
         await _lifecycle.WaitAsync();
         try { await DisposeKitAsync(); }
         finally { _lifecycle.Release(); }

@@ -8,7 +8,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.WalletConnect</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Qubic.NET Contributors</Authors>
     <Description>WalletConnect v2 wallet side for Qubic (namespace "qubic"): pairing, session approval and the official Qubic method set, on top of Reown WalletKit and Qubic.Services signing review.</Description>
     <PackageTags>qubic;blockchain;walletconnect</PackageTags>
