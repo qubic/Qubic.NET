@@ -372,15 +372,18 @@ public sealed class TransactionTrackerService : IDisposable
                     }
                 }
 
-                // Try Bob receipt
+                // Try Bob receipt. Only resolve on a definitive verdict: a "pending" receipt
+                // (Bob is still log-verifying the tick) or one with no status yet must NOT be
+                // treated as failure — keep the tx Pending and re-check next cycle, otherwise a
+                // successful transaction gets a permanent false "Failed".
                 if (!confirmed && _backend.IsAvailable(Networks.Capability.TransactionReceipt))
                 {
                     var receipt = await _backend.GetTransactionReceiptAsync(tx.Hash, ct);
-                    if (receipt != null)
+                    if (receipt?.Executed is { } executed)
                     {
-                        tx.MoneyFlew = receipt.Status;
+                        tx.MoneyFlew = executed;
                         var isZeroAmountContractCall = tx.Amount == 0 && tx.InputType > 0;
-                        if (receipt.Status)
+                        if (executed)
                         {
                             tx.Status = TrackedTxStatus.Confirmed;
                             confirmed = true;
