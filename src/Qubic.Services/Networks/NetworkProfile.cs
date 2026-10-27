@@ -89,7 +89,7 @@ public sealed class NetworkProfile
     public TickTargetMode TickMode { get; set; } = TickTargetMode.FixedOffset;
 
     /// <summary>Ticks added to the current tick in <see cref="TickTargetMode.FixedOffset"/> mode.</summary>
-    public int TickOffset { get; set; } = 7;
+    public int TickOffset { get; set; } = 12;
 
     /// <summary>Seconds ahead in <see cref="TickTargetMode.TimeBased"/> mode.</summary>
     public int TickTargetSeconds { get; set; } = 10;

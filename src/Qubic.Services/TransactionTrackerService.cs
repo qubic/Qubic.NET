@@ -65,6 +65,9 @@ public sealed class TransactionTrackerService : IDisposable
 
     public event Action? OnChanged;
 
+    /// <summary>Raised when a transaction is first tracked (i.e. just submitted), for surfacing progress UI.</summary>
+    public event Action<TrackedTransaction>? OnTransactionTracked;
+
     private void RaiseChanged()
     {
         var handler = OnChanged;
@@ -111,17 +114,21 @@ public sealed class TransactionTrackerService : IDisposable
         {
             _storage.Database.UpsertTrackedTransaction(tx);
             RaiseChanged();
+            OnTransactionTracked?.Invoke(tx);
             return;
         }
 
+        bool added;
         lock (_lock)
         {
             // Avoid duplicates
-            if (_transactions.Any(t => t.Hash == tx.Hash)) return;
-            _transactions.Insert(0, tx);
+            if (_transactions.Any(t => t.Hash == tx.Hash)) added = false;
+            else { _transactions.Insert(0, tx); added = true; }
         }
+        if (!added) return;
         SaveToDisk();
         RaiseChanged();
+        OnTransactionTracked?.Invoke(tx);
     }
 
     public void Remove(string hash)
