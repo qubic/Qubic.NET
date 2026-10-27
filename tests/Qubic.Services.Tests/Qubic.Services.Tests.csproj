@@ -25,4 +25,8 @@
     <ProjectReference Include="..\..\src\Qubic.Services\Qubic.Services.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

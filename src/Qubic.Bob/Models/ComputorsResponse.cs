@@ -7,6 +7,13 @@ namespace Qubic.Bob.Models;
 /// </summary>
 public sealed class ComputorsResponse
 {
+    [JsonPropertyName("epoch")]
+    public uint Epoch { get; set; }
+
     [JsonPropertyName("computors")]
     public List<string> Computors { get; set; } = new();
+
+    /// <summary>Arbitrator signature over the computor list (hex, 64 bytes).</summary>
+    [JsonPropertyName("signature")]
+    public string? Signature { get; set; }
 }

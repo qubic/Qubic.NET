@@ -8,7 +8,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>Qubic.Services</PackageId>
-    <Version>1.5.2</Version>
+    <Version>1.6.3</Version>
     <Authors>Qubic.NET Contributors</Authors>
     <Description>High-level services for Qubic applications: backend abstraction, tick monitoring, label service, wallet storage, transaction tracking, and more.</Description>
     <PackageTags>qubic;blockchain;services</PackageTags>
@@ -20,12 +20,15 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!-- Microsoft.Data.Sqlite.Core: no bundled native SQLite. The wallet DB is SQLCipher-encrypted, so apps
+       reference SQLitePCLRaw.bundle_e_sqlcipher themselves. Referencing Microsoft.Data.Sqlite here pulled in
+       bundle_e_sqlite3, whose newer batteries_v2 replaced SQLCipher's ("e_sqlite3 doesn't support encryption"). -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.*" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,6 +44,10 @@
     <ProjectReference Include="..\Qubic.Rpc\Qubic.Rpc.csproj" />
     <ProjectReference Include="..\Qubic.Bob\Qubic.Bob.csproj" />
     <ProjectReference Include="..\Qubic.Network\Qubic.Network.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Qubic.Services.Tests" />
   </ItemGroup>
 
 </Project>

@@ -30,7 +30,7 @@ public sealed class QubicSettingsService
 
     // ── Common settings ──
 
-    /// <summary>Number of ticks to add when using auto-tick (default 5).</summary>
+    /// <summary>Number of ticks to add when using auto-tick (default 12).</summary>
     public int TickOffset
     {
         get => _data.TickOffset;
@@ -236,7 +236,7 @@ public sealed class QubicSettingsService
 
     private sealed class SettingsData
     {
-        public int TickOffset { get; set; } = 7;
+        public int TickOffset { get; set; } = 12;
         public bool AutoResend { get; set; }
         public int AutoResendMaxRetries { get; set; } = 3;
         public string DefaultBackend { get; set; } = "Rpc";

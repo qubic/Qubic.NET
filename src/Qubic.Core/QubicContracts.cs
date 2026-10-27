@@ -26,7 +26,7 @@ public static class QubicContracts
     /// <summary>MLM - Machine Learning Mining contract. (epoch 112)</summary>
     public const int Mlm = 5;
 
-    /// <summary>GQMPROP - GQM proposal contract. (epoch 123)</summary>
+    /// <summary>GQMPROP - General Quorum Proposal contract. (epoch 123)</summary>
     public const int Gqmprop = 6;
 
     /// <summary>SWATCH - Swatch contract. (epoch 123)</summary>
@@ -99,7 +99,7 @@ public static class QubicContracts
     private static readonly Dictionary<int, string> _contractNames = new()
     {
         [Core] = "Core", [Qx] = "QX", [Quottery] = "Quottery", [Random] = "Random",
-        [Qutil] = "QUtil", [Mlm] = "MLM", [Gqmprop] = "GQMProp", [Swatch] = "Swatch",
+        [Qutil] = "QUtil", [Mlm] = "MLM", [Gqmprop] = "General Quorum Proposal", [Swatch] = "Swatch",
         [Ccf] = "CCF", [Qearn] = "QEarn", [Qvault] = "QVault", [Msvault] = "MSVault",
         [Qbay] = "QBay", [Qswap] = "QSwap", [Nost] = "Nostromo", [Qdraw] = "QDraw",
         [Rl] = "RL", [Qbond] = "QBond", [Qip] = "QIP", [Qraffle] = "QRaffle",

@@ -1,22 +1,37 @@
 using System.Text.Json;
+using Qubic.Services.Networks;
 
 namespace Qubic.Services;
 
 public sealed class AssetRegistryService
 {
     private readonly string _storageDir;
-    private readonly string _assetsFile;
-    private readonly string _lastRefreshFile;
+    private readonly NetworkProfileService _profiles;
+    private string _assetsFile = "";
+    private string _lastRefreshFile = "";
     private List<AssetEntry> _assets = [];
 
     /// <summary>The SC token issuer identity (contract index 0 = zero public key).</summary>
     public const string ScTokenIssuer = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFXIB";
 
-    public AssetRegistryService(QubicSettingsService settings)
+    /// <summary>Asset lists are kept per network profile (assets.json for Mainnet, assets.&lt;id&gt;.json otherwise).</summary>
+    public AssetRegistryService(QubicSettingsService settings, NetworkProfileService profiles)
     {
         _storageDir = settings.StorageDirectory;
-        _assetsFile = Path.Combine(_storageDir, "assets.json");
-        _lastRefreshFile = Path.Combine(_storageDir, "assets_refreshed.txt");
+        _profiles = profiles;
+        SelectProfile(profiles.ActiveId);
+        _profiles.OnActiveProfileChanged += (_, p) =>
+        {
+            SelectProfile(p.Id);
+            OnChanged?.Invoke();
+        };
+    }
+
+    private void SelectProfile(string profileId)
+    {
+        _assetsFile = Path.Combine(_storageDir, NetworkStorage.PartitionFileName("assets.json", profileId));
+        _lastRefreshFile = Path.Combine(_storageDir, NetworkStorage.PartitionFileName("assets_refreshed.txt", profileId));
+        _assets = [];
         LoadFromDisk();
     }
 
@@ -60,6 +75,8 @@ public sealed class AssetRegistryService
     public async Task<int> RefreshFromNetworkAsync(QubicBackendService backend, bool force = false)
     {
         if (!force && !IsRefreshNeeded())
+            return -1;
+        if (!backend.IsAvailable(Networks.Capability.Issuances))
             return -1;
 
         try

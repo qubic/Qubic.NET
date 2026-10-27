@@ -1,5 +1,5 @@
 using System.Text;
-using Qubic.ContractGen.Parsing;
+using Qubic.Core.Contracts.Metadata;
 
 namespace Qubic.ContractGen.Generation;
 
@@ -739,74 +739,10 @@ public class CSharpEmitter
 
     /// <summary>
     /// Compute field offsets with C++ alignment rules (MSVC default /Zp8).
-    /// Each field is aligned to its natural alignment, and the struct size
-    /// is padded to a multiple of the struct's max member alignment.
+    /// Delegates to <see cref="ContractLayout"/> so generated code and runtime decoding share one layout.
     /// </summary>
     public List<int> ComputeFieldOffsets(StructDef def, out int totalSize, out int structAlignment)
-    {
-        var offsets = new List<int>();
-        int offset = 0;
-        int maxAlign = 1;
-
-        foreach (var field in def.Fields)
-        {
-            int fieldAlign;
-            int fieldSize;
-
-            if (field.IsArray)
-            {
-                var elemType = field.ArrayElementType ?? field.CppType;
-                var elemSize = GetTypeSize(elemType);
-                // Array alignment = element alignment
-                fieldAlign = TypeMapper.IsPrimitive(elemType) ? GetTypeAlignment(elemType) : 1;
-
-                if (elemSize == 0 && field.NestedStructTypeName != null)
-                {
-                    var nestedDef = def.NestedStructs.FirstOrDefault(n => n.CppName == field.NestedStructTypeName);
-                    if (nestedDef != null)
-                    {
-                        ComputeFieldOffsets(nestedDef, out var nestedSize, out var nestedAlign);
-                        elemSize = nestedSize;
-                        fieldAlign = nestedAlign;
-                    }
-                }
-
-                fieldSize = elemSize * field.ArrayLength;
-            }
-            else
-            {
-                fieldSize = GetTypeSize(field.CppType);
-                fieldAlign = TypeMapper.IsPrimitive(field.CppType) ? GetTypeAlignment(field.CppType) : 1;
-
-                // Non-primitive field: look up in NestedStructs registry
-                if (fieldSize == 0 && !TypeMapper.IsPrimitive(field.CppType))
-                {
-                    var nestedDef = def.NestedStructs.FirstOrDefault(n => n.CppName == field.CppType)
-                                    ?? (field.NestedStructTypeName != null
-                                        ? def.NestedStructs.FirstOrDefault(n => n.CppName == field.NestedStructTypeName)
-                                        : null);
-                    if (nestedDef != null)
-                    {
-                        ComputeFieldOffsets(nestedDef, out var nestedSize, out var nestedAlign);
-                        fieldSize = nestedSize;
-                        fieldAlign = nestedAlign;
-                    }
-                }
-            }
-
-            // Align the offset for this field
-            offset = AlignUp(offset, fieldAlign);
-            offsets.Add(offset);
-            offset += fieldSize;
-
-            if (fieldAlign > maxAlign) maxAlign = fieldAlign;
-        }
-
-        // Pad struct to alignment boundary (required for arrays of this struct)
-        structAlignment = maxAlign;
-        totalSize = AlignUp(offset, maxAlign);
-        return offsets;
-    }
+        => ContractLayout.ComputeFieldOffsets(def, out totalSize, out structAlignment);
 
     private int ComputeStructSize(StructDef def)
     {

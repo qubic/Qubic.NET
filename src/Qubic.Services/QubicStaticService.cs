@@ -1,15 +1,40 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using Qubic.Services.Networks;
 
 namespace Qubic.Services;
 
 /// <summary>
 /// Downloads and parses the static data bundle from static.qubic.org.
 /// Exposes parsed data (labels, contract fees, etc.) for consumption by other services.
+/// The bundle describes mainnet: it is only fetched when the active network profile
+/// uses it (<see cref="NetworkProfile.UseStaticBundle"/>), and cleared on network switch.
 /// </summary>
 public sealed class QubicStaticService
 {
     private const string BundleUrl = "https://static.qubic.org/v1/general/data/bundle.min.json";
+    private const string BundleHost = "static.qubic.org";
+    private const string FeatureKey = "static-bundle";
+
+    private readonly NetworkProfileService _profiles;
+    private readonly EgressGuard _guard;
+
+    public QubicStaticService(NetworkProfileService profiles, EgressGuard guard)
+    {
+        _profiles = profiles;
+        _guard = guard;
+        _profiles.OnActiveProfileChanged += (_, p) =>
+        {
+            if (!p.UseStaticBundle)
+            {
+                _guard.RevokeFeatureHost(FeatureKey);
+                Clear();
+            }
+        };
+    }
+
+    /// <summary>Whether the bundle applies to the active network.</summary>
+    public bool IsApplicable => _profiles.Active.UseStaticBundle;
 
     private readonly Dictionary<string, string> _exchangeLabels = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _addressLabels = new(StringComparer.OrdinalIgnoreCase);
@@ -59,6 +84,12 @@ public sealed class QubicStaticService
     public async Task<bool> LoadAsync(CancellationToken ct = default)
     {
         if (IsLoading) return false;
+        if (!IsApplicable)
+        {
+            Clear();
+            LastError = "The static data bundle is not used on this network.";
+            return false;
+        }
 
         IsLoading = true;
         LastError = null;
@@ -66,7 +97,8 @@ public sealed class QubicStaticService
 
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            _guard.AllowFeatureHost(FeatureKey, BundleHost);
+            using var http = _guard.CreateHttpClient("static-bundle", TimeSpan.FromSeconds(15));
             var bundle = await http.GetFromJsonAsync<BundleData>(BundleUrl, ct);
             if (bundle == null)
             {
@@ -124,6 +156,13 @@ public sealed class QubicStaticService
         {
             IsLoading = false;
         }
+    }
+
+    /// <summary>Clears all loaded data and stops allowing the bundle host (remote labels turned off).</summary>
+    public void Disable()
+    {
+        _guard.RevokeFeatureHost(FeatureKey);
+        Clear();
     }
 
     /// <summary>Clears all loaded data.</summary>

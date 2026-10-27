@@ -197,10 +197,71 @@ public sealed class BobClient : IDisposable
     }
 
     /// <summary>
+    /// Gets a transaction by hash with all fields Bob reports (input type/data included).
+    /// Returns null if Bob does not know the transaction.
+    /// </summary>
+    public Task<BobTransactionResponse?> GetTransactionDetailsAsync(string txHash, CancellationToken cancellationToken = default)
+        => CallAsync<BobTransactionResponse?>("qubic_getTransactionByHash", new object[] { txHash }, cancellationToken);
+
+    /// <summary>
+    /// Broadcasts a signed transaction through the Bob node (<c>qubic_broadcastTransaction</c>).
+    /// </summary>
+    /// <param name="signedTransaction">Raw signed transaction bytes (header + payload + signature).</param>
+    /// <returns>The transaction hash reported by Bob.</returns>
+    /// <exception cref="BobRpcException">Bob rejected the transaction.</exception>
+    public async Task<string> BroadcastTransactionAsync(byte[] signedTransaction, CancellationToken cancellationToken = default)
+    {
+        var hex = Convert.ToHexString(signedTransaction).ToLowerInvariant();
+        var result = await CallAsync<JsonElement>("qubic_broadcastTransaction", new object[] { hex }, cancellationToken);
+        return ParseBroadcastResult(result);
+    }
+
+    /// <summary>
+    /// Broadcasts a signed <see cref="QubicTransaction"/> through the Bob node.
+    /// </summary>
+    public Task<string> BroadcastTransactionAsync(QubicTransaction transaction, CancellationToken cancellationToken = default)
+    {
+        if (!transaction.IsSigned)
+            throw new InvalidOperationException("Transaction must be signed before broadcasting.");
+        return BroadcastTransactionAsync(transaction.GetRawBytes(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Bob returns the tx hash as a bare string on success, but reports failures
+    /// as an object with an <c>error</c> member inside <c>result</c>.
+    /// </summary>
+    internal static string ParseBroadcastResult(JsonElement result)
+    {
+        switch (result.ValueKind)
+        {
+            case JsonValueKind.String:
+                return result.GetString() ?? string.Empty;
+            case JsonValueKind.Object when result.TryGetProperty("error", out var err):
+                throw new BobRpcException(-1, err.ValueKind == JsonValueKind.String ? err.GetString() ?? "Broadcast failed" : err.ToString());
+            case JsonValueKind.Object when result.TryGetProperty("txHash", out var hash):
+                return hash.GetString() ?? string.Empty;
+            default:
+                throw new BobRpcException(-1, $"Unexpected broadcast response: {result}");
+        }
+    }
+
+    /// <summary>
     /// Gets a transaction receipt.
     /// </summary>
     public Task<TransactionReceiptResponse?> GetTransactionReceiptAsync(string txHash, CancellationToken cancellationToken = default)
         => CallAsync<TransactionReceiptResponse?>("qubic_getTransactionReceipt", new object[] { txHash }, cancellationToken);
+
+    #endregion
+
+    #region Computors
+
+    /// <summary>
+    /// Gets the computor list (676 identities + arbitrator signature) for an epoch.
+    /// Omit <paramref name="epoch"/> for the current epoch.
+    /// </summary>
+    public Task<ComputorsResponse> GetComputorsAsync(uint? epoch = null, CancellationToken cancellationToken = default)
+        => CallAsync<ComputorsResponse>("qubic_getComputors",
+            epoch.HasValue ? new object[] { epoch.Value } : null, cancellationToken);
 
     #endregion
 

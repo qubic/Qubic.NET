@@ -1,4 +1,6 @@
-namespace Qubic.ContractGen.Parsing;
+using System.Text.Json.Serialization;
+
+namespace Qubic.Core.Contracts.Metadata;
 
 public class ContractDefinition
 {
@@ -31,6 +33,7 @@ public class StructDef
     public string CppName { get; set; } = "";
     public List<FieldDef> Fields { get; set; } = [];
     public List<StructDef> NestedStructs { get; set; } = [];
+    [JsonIgnore]
     public bool IsEmpty => Fields.Count == 0 && NestedStructs.Count == 0;
     public bool IsTypedef { get; set; }
     public string? TypedefTarget { get; set; }

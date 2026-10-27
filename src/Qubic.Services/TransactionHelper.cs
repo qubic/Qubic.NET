@@ -1,5 +1,6 @@
 using Qubic.Core.Entities;
 using Qubic.Core.Payloads;
+using Qubic.Services.Networks;
 
 namespace Qubic.Services;
 
@@ -10,9 +11,8 @@ namespace Qubic.Services;
 public static class TransactionHelper
 {
     /// <summary>
-    /// Resolves a target tick for a new transaction.
-    /// Uses the connected TickMonitor tick + offset, falling back to an RPC query.
-    /// If explicitTick > 0, returns it unchanged.
+    /// Resolves a target tick for a new transaction using the active network profile's
+    /// tick policy (fixed offset or time-based). If explicitTick > 0, returns it unchanged.
     /// </summary>
     public static async Task<uint> ResolveTargetTickAsync(
         QubicBackendService backend, TickMonitorService tickMonitor,
@@ -20,11 +20,27 @@ public static class TransactionHelper
         CancellationToken ct = default)
     {
         if (explicitTick > 0) return explicitTick;
+        return (await ResolveTickTargetAsync(backend, tickMonitor, ct)).TargetTick;
+    }
+
+    /// <summary>
+    /// Computes the target tick plus offset, ETA and pending-window warning for display.
+    /// Uses the monitored tick when connected, otherwise asks the active profile.
+    /// </summary>
+    public static async Task<TickTarget> ResolveTickTargetAsync(
+        QubicBackendService backend, TickMonitorService tickMonitor, CancellationToken ct = default)
+    {
         var baseTick = tickMonitor.IsConnected
             ? tickMonitor.Tick
             : (await backend.GetTickInfoAsync(ct)).Tick;
-        return baseTick + (uint)settings.TickOffset;
+        return TickTargeting.Compute(backend.Profile, baseTick, tickMonitor.EstimatedTickDurationMs);
     }
+
+    /// <summary>Same as <see cref="ResolveTickTargetAsync"/> but synchronous; null when not connected.</summary>
+    public static TickTarget? PreviewTickTarget(QubicBackendService backend, TickMonitorService tickMonitor) =>
+        tickMonitor.IsConnected
+            ? TickTargeting.Compute(backend.Profile, tickMonitor.Tick, tickMonitor.EstimatedTickDurationMs)
+            : null;
 
     /// <summary>
     /// Broadcasts an already-signed transaction, tracks it, and returns the transaction ID.
@@ -75,7 +91,8 @@ public static class TransactionHelper
         string description,
         CancellationToken ct = default)
     {
-        var tx = seed.CreateAndSignTransaction(destination, amount, targetTick, payload);
+        var tx = await seed.SignTransactionAsync(destination, amount, targetTick, payload,
+            Signing.SigningContext.InApp(description), ct);
         return await BroadcastAndTrackAsync(
             backend, tracker, seed, tx,
             destination.ToString(), amount, targetTick, description,

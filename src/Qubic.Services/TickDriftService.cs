@@ -1,12 +1,11 @@
-using Qubic.Bob;
-using Qubic.Network;
-using Qubic.Rpc;
+using Qubic.Services.Networks;
 
 namespace Qubic.Services;
 
 /// <summary>
-/// Periodically queries all backends (RPC, Bob, DirectNetwork) for their current tick
-/// and detects drift between them.
+/// Periodically queries the enabled methods of the active network profile (RPC, Bob, Direct)
+/// for their current tick and detects drift between them. Methods outside the profile are
+/// never contacted; with fewer than two methods there is nothing to compare.
 /// </summary>
 public sealed class TickDriftService : IDisposable
 {
@@ -83,11 +82,15 @@ public sealed class TickDriftService : IDisposable
         }
     }
 
+    /// <summary>Number of tick-serving methods in the active profile (drift needs at least two).</summary>
+    public int ComparableMethodCount => _backend.Profile.EnabledMethods.Count();
+
     private async Task PollOnceAsync(CancellationToken ct)
     {
-        var rpcTask = QueryRpcAsync(ct);
-        var bobTask = QueryBobAsync(ct);
-        var directTask = QueryDirectAsync(ct);
+        var profile = _backend.Profile;
+        var rpcTask = profile.HasMethod(BackendMethodKind.Rpc) ? QueryRpcAsync(ct) : Task.FromResult<BackendTickSnapshot?>(null);
+        var bobTask = profile.HasMethod(BackendMethodKind.Bob) ? QueryBobAsync(ct) : Task.FromResult<BackendTickSnapshot?>(null);
+        var directTask = profile.HasMethod(BackendMethodKind.Direct) ? QueryDirectAsync(ct) : Task.FromResult<BackendTickSnapshot?>(null);
 
         await Task.WhenAll(rpcTask, bobTask, directTask);
 
@@ -95,11 +98,11 @@ public sealed class TickDriftService : IDisposable
         BobTick = bobTask.Result;
         DirectTick = directTask.Result;
 
-        // Calculate drift from reachable backends
+        // Calculate drift from reachable methods
         var reachable = new List<uint>();
-        if (RpcTick.Reachable) reachable.Add(RpcTick.Tick);
-        if (BobTick.Reachable) reachable.Add(BobTick.Tick);
-        if (DirectTick.Reachable) reachable.Add(DirectTick.Tick);
+        if (RpcTick is { Reachable: true }) reachable.Add(RpcTick.Tick);
+        if (BobTick is { Reachable: true }) reachable.Add(BobTick.Tick);
+        if (DirectTick is { Reachable: true }) reachable.Add(DirectTick.Tick);
 
         if (reachable.Count >= 2)
         {
@@ -120,11 +123,11 @@ public sealed class TickDriftService : IDisposable
         RaiseDriftChanged();
     }
 
-    private async Task<BackendTickSnapshot> QueryRpcAsync(CancellationToken ct)
+    private async Task<BackendTickSnapshot?> QueryRpcAsync(CancellationToken ct)
     {
         try
         {
-            using var rpc = new QubicRpcClient(_backend.RpcUrl);
+            using var rpc = _backend.CreateRpcClient();
             var info = await rpc.GetTickInfoAsync(ct);
             return new BackendTickSnapshot(QueryBackend.Rpc, info.Tick, true, null, DateTime.UtcNow);
         }
@@ -135,11 +138,11 @@ public sealed class TickDriftService : IDisposable
         }
     }
 
-    private async Task<BackendTickSnapshot> QueryBobAsync(CancellationToken ct)
+    private async Task<BackendTickSnapshot?> QueryBobAsync(CancellationToken ct)
     {
         try
         {
-            using var bob = new BobClient(_backend.BobUrl);
+            using var bob = _backend.CreateBobClient();
             var tick = await bob.GetTickNumberAsync(ct);
             return new BackendTickSnapshot(QueryBackend.Bob, tick, true, null, DateTime.UtcNow);
         }
@@ -150,11 +153,11 @@ public sealed class TickDriftService : IDisposable
         }
     }
 
-    private async Task<BackendTickSnapshot> QueryDirectAsync(CancellationToken ct)
+    private async Task<BackendTickSnapshot?> QueryDirectAsync(CancellationToken ct)
     {
         try
         {
-            using var node = new QubicNodeClient(_backend.NodeHost, _backend.NodePort);
+            using var node = _backend.CreateNodeClient(_backend.NodeHost, _backend.NodePort);
             await node.ConnectAsync(ct);
             var info = await node.GetCurrentTickInfoAsync(ct);
             return new BackendTickSnapshot(QueryBackend.DirectNetwork, info.Tick, true, null, DateTime.UtcNow);

@@ -1,3 +1,4 @@
+using Qubic.Services.Networks;
 namespace Qubic.Services;
 
 /// <summary>
@@ -52,7 +53,7 @@ public sealed class PeerAutoDiscoverService : IDisposable
     private void ApplyInterval()
     {
         var minutes = _settings.GetCustom<int>("AutoDiscoverIntervalMinutes");
-        if (minutes <= 0 || _backend.ActiveBackend != QueryBackend.DirectNetwork)
+        if (minutes <= 0 || !DiscoveryAllowed)
         {
             _timer?.Change(Timeout.Infinite, Timeout.Infinite);
             _timer?.Dispose();
@@ -68,6 +69,12 @@ public sealed class PeerAutoDiscoverService : IDisposable
     }
 
     /// <summary>
+    /// Peer discovery only runs when the active profile has a Direct method with
+    /// peer discovery enabled (never on AIO/devnet presets).
+    /// </summary>
+    public bool DiscoveryAllowed => _backend.Profile.GetMethod(BackendMethodKind.Direct) is { PeerDiscovery: true };
+
+    /// <summary>
     /// Re-evaluate whether the timer should be running (e.g. after backend change).
     /// </summary>
     public void Restart()
@@ -78,7 +85,7 @@ public sealed class PeerAutoDiscoverService : IDisposable
     private async void OnTimerTick(object? state)
     {
         if (_running) return; // skip if previous run still in progress
-        if (_backend.ActiveBackend != QueryBackend.DirectNetwork) return;
+        if (!DiscoveryAllowed) return;
 
         _running = true;
         try

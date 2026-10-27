@@ -26,6 +26,7 @@ PROJECTS=(
     "src/Qubic.Rpc/Qubic.Rpc.csproj"
     "src/Qubic.Bob/Qubic.Bob.csproj"
     "src/Qubic.Services/Qubic.Services.csproj"
+    "src/Qubic.WalletConnect/Qubic.WalletConnect.csproj"
 )
 
 MODE="build"

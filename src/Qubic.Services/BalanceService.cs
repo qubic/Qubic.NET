@@ -15,6 +15,10 @@ public sealed class BalanceService : IDisposable
     private readonly SemaphoreSlim _fetchLock = new(1, 1);
     private bool _disposed;
 
+    /// <summary>Minimum time between tick-driven refreshes.</summary>
+    private const long TickRefreshIntervalMs = 30_000;
+    private long _lastRefreshMs = -TickRefreshIntervalMs;
+
     public long? Balance { get; private set; }
     public bool IsLoading { get; private set; }
     public string? Error { get; private set; }
@@ -41,6 +45,7 @@ public sealed class BalanceService : IDisposable
         if (_disposed || !_seed.HasSeed || _seed.Identity == null) return;
 
         if (!await _fetchLock.WaitAsync(0)) return; // skip if already in-flight
+        _lastRefreshMs = Environment.TickCount64;
         try
         {
             IsLoading = true;
@@ -87,8 +92,9 @@ public sealed class BalanceService : IDisposable
     private void OnTickChanged()
     {
         if (_disposed) return;
-        // Refresh every ~30 ticks (~30 seconds)
-        if (_seed.HasSeed && _tickMonitor.Tick % 30 == 0)
+        // Refresh every ~30 seconds. Time-based rather than Tick % 30: polling can skip
+        // tick numbers, and tick duration varies (e.g. local testnets).
+        if (_seed.HasSeed && Environment.TickCount64 - _lastRefreshMs >= TickRefreshIntervalMs)
             RequestRefresh();
     }
 

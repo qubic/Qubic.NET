@@ -1,5 +1,6 @@
 using Qubic.Bob;
 using Qubic.Bob.Models;
+using Qubic.Services.Networks;
 
 namespace Qubic.Services;
 
@@ -20,6 +21,17 @@ public sealed class TickMonitorService : IDisposable
     public ushort Epoch { get; private set; }
     public bool IsConnected { get; private set; }
     public string? Error { get; private set; }
+
+    /// <summary>True while ticks arrive via the Bob WebSocket stream (exact ticks) rather than polling.</summary>
+    public bool IsStreaming { get; private set; }
+
+    private readonly TickRateEstimator _rate = new();
+
+    /// <summary>
+    /// Observed milliseconds per tick (EMA), or null until enough ticks were seen.
+    /// Used for time-based tick targeting and time-based tracker thresholds.
+    /// </summary>
+    public double? EstimatedTickDurationMs => _rate.EstimatedMs;
 
     public event Action? OnTickChanged;
 
@@ -51,8 +63,11 @@ public sealed class TickMonitorService : IDisposable
 
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
+            _rate.Reset();
 
-            if (_backend.ActiveBackend == QueryBackend.Bob)
+            // Stream ticks over Bob WS when Bob serves tick info in this profile.
+            var tickMethod = Capabilities.Resolve(_backend.Profile, Capability.TickInfo);
+            if (tickMethod is { Kind: BackendMethodKind.Bob, UseWebSocket: true })
                 _runTask = Task.Run(() => RunWebSocketAsync(ct), ct);
             else
                 _runTask = Task.Run(() => RunPollingAsync(ct), ct);
@@ -70,6 +85,7 @@ public sealed class TickMonitorService : IDisposable
         {
             await StopInternalAsync();
             IsConnected = false;
+            IsStreaming = false;
             RaiseTickChanged();
         }
         finally
@@ -119,11 +135,7 @@ public sealed class TickMonitorService : IDisposable
             // Initial tick via HTTP first
             await FetchOnce(ct);
 
-            var wsOptions = new BobWebSocketOptions
-            {
-                Nodes = [_backend.BobUrl]
-            };
-            _wsClient = new BobWebSocketClient(wsOptions);
+            _wsClient = new BobWebSocketClient(_backend.CreateBobWebSocketOptions());
             await _wsClient.ConnectAsync(ct);
             _tickSub = await _wsClient.SubscribeNewTicksAsync(ct);
 
@@ -131,7 +143,9 @@ public sealed class TickMonitorService : IDisposable
             {
                 Tick = tick.TickNumber;
                 Epoch = (ushort)tick.Epoch;
+                _rate.Observe(Tick);
                 IsConnected = true;
+                IsStreaming = true;
                 Error = null;
                 RaiseTickChanged();
             }
@@ -141,9 +155,10 @@ public sealed class TickMonitorService : IDisposable
         {
             Error = ex.Message;
             IsConnected = false;
+            IsStreaming = false;
             RaiseTickChanged();
 
-            // Fall back to polling if WS fails
+            // Fall back to polling (still inside the active profile) if WS fails
             if (!ct.IsCancellationRequested)
                 await RunPollingAsync(ct);
         }
@@ -168,6 +183,7 @@ public sealed class TickMonitorService : IDisposable
             var info = await _backend.GetTickInfoAsync(ct);
             Tick = info.Tick;
             Epoch = info.Epoch;
+            _rate.Observe(Tick);
             IsConnected = true;
             Error = null;
         }

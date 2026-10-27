@@ -1,4 +1,4 @@
-namespace Qubic.ContractGen.Parsing;
+namespace Qubic.Core.Contracts.Metadata;
 
 public static class TypeMapper
 {

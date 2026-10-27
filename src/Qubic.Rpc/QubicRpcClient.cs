@@ -285,6 +285,17 @@ public sealed class QubicRpcClient : IDisposable
         return result?.ComputorsLists ?? [];
     }
 
+    /// <summary>
+    /// Lists the contracts compiled into the node (index, name, construction epoch).
+    /// GET /query/v1/getContracts — served by core-lite (e.g. the AIO dev kit).
+    /// </summary>
+    public async Task<IReadOnlyList<ContractInfo>> GetContractsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await _httpClient.GetFromJsonAsync<ContractsResponse>(
+            "/query/v1/getContracts", _jsonOptions, cancellationToken);
+        return result?.Contracts ?? [];
+    }
+
     #endregion
 
     #region Query API — Tick Data

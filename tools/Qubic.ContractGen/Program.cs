@@ -1,5 +1,5 @@
 using Qubic.ContractGen.Generation;
-using Qubic.ContractGen.Parsing;
+using Qubic.Core.Contracts.Metadata;
 
 // Contract definitions: (index, csharpName, cppStructName, headerFile)
 // From deps/qubic-core/src/contract_core/contract_def.h
@@ -37,8 +37,10 @@ var contracts = new (int Index, string CSharpName, string CppStruct, string? Hea
 };
 
 // Resolve paths
+var metadataOnly = args.Contains("--metadata-only");
+var positional = args.Where(a => !a.StartsWith("--")).ToArray();
 var toolDir = AppContext.BaseDirectory;
-var repoRoot = args.Length > 0 ? args[0] : FindRepoRoot(toolDir);
+var repoRoot = positional.Length > 0 ? positional[0] : FindRepoRoot(toolDir);
 var headersDir = Path.Combine(repoRoot, "deps", "qubic-core", "src", "contracts");
 var outputDir = Path.Combine(repoRoot, "src", "Qubic.Core", "Contracts", "Generated");
 
@@ -56,6 +58,8 @@ Console.WriteLine($"Output:  {outputDir}");
 Console.WriteLine();
 
 var emitter = new CSharpEmitter();
+var metadata = new List<ContractDefinition>();
+var metadataPath = Path.Combine(repoRoot, "src", "Qubic.Core", "Contracts", "Metadata", "builtin-contracts.json");
 int successCount = 0;
 int skipCount = 0;
 var allWarnings = new List<(string Contract, string Warning)>();
@@ -83,9 +87,13 @@ foreach (var (index, csName, cppStruct, headerFile) in contracts)
         var parser = new CppHeaderParser();
         var contract = parser.Parse(headerPath, index, csName, cppStruct);
 
-        var code = emitter.Emit(contract);
-        var outputPath = Path.Combine(outputDir, $"{csName}.g.cs");
-        File.WriteAllText(outputPath, code);
+        metadata.Add(contract);
+        if (!metadataOnly)
+        {
+            var code = emitter.Emit(contract);
+            var outputPath = Path.Combine(outputDir, $"{csName}.g.cs");
+            File.WriteAllText(outputPath, code);
+        }
 
         var funcCount = contract.Functions.Count;
         var procCount = contract.Procedures.Count;
@@ -105,8 +113,15 @@ foreach (var (index, csName, cppStruct, headerFile) in contracts)
     }
 }
 
+// Runtime metadata for Qubic.Core's ContractCatalog (signing previews, contract console)
+File.WriteAllText(metadataPath, ContractCatalog.Serialize(metadata));
 Console.WriteLine();
-Console.WriteLine($"Generated {successCount} files, skipped {skipCount}.");
+Console.WriteLine($"Metadata: {metadataPath} ({metadata.Count} contracts)");
+
+Console.WriteLine();
+Console.WriteLine(metadataOnly
+    ? $"Parsed {successCount} contracts (metadata only), skipped {skipCount}."
+    : $"Generated {successCount} files, skipped {skipCount}.");
 
 if (allWarnings.Count > 0)
 {

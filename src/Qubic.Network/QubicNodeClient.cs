@@ -208,6 +208,39 @@ public sealed class QubicNodeClient : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
+    /// Requests the issuance records of assets issued by <paramref name="identity"/>.
+    /// Each item is a raw RespondIssuedAssets payload (AssetRecord, tick, universeIndex, siblings).
+    /// </summary>
+    public async Task<List<byte[]>> GetIssuedAssetsRawAsync(QubicIdentity identity, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestIssuedAssets(identity);
+        return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.RespondIssuedAssets, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Requests the ownership records of <paramref name="identity"/>.
+    /// Each item is a raw RespondOwnedAssets payload (ownership AssetRecord, issuance AssetRecord, tick, universeIndex, siblings).
+    /// </summary>
+    public async Task<List<byte[]>> GetOwnedAssetsRawAsync(QubicIdentity identity, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestOwnedAssets(identity);
+        return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.RespondOwnedAssets, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
+    /// Requests the possession records of <paramref name="identity"/>.
+    /// Each item is a raw RespondPossessedAssets payload (possession, ownership and issuance AssetRecords, tick, universeIndex, siblings).
+    /// </summary>
+    public async Task<List<byte[]>> GetPossessedAssetsRawAsync(QubicIdentity identity, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        var packet = _writer.WriteRequestPossessedAssets(identity);
+        return await SendAndReceiveMultiAsync(packet, QubicPacketTypes.RespondPossessedAssets, QubicPacketTypes.EndResponse, cancellationToken);
+    }
+
+    /// <summary>
     /// Requests the current epoch's computor list (676 public keys + epoch + signature).
     /// Returns <c>null</c> when the node has no computor set yet (e.g. mid-epoch boot).
     /// </summary>

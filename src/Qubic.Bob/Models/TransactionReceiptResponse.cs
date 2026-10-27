@@ -38,7 +38,7 @@ public sealed class TransactionReceiptResponse
         JsonValueKind.True => "success",
         JsonValueKind.False => "failed",
         JsonValueKind.String => NormalizeStatusString(StatusRaw.GetString()),
-        _ => "failed"
+        _ => "pending"  // absent / undefined status is not yet resolved — never treat as failure
     };
 
     /// <summary>
