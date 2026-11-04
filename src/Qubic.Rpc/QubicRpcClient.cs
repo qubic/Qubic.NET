@@ -102,10 +102,9 @@ public sealed class QubicRpcClient : IDisposable
 
         var response = await _httpClient.PostAsJsonAsync(
             "/live/v1/broadcast-transaction", request, _jsonOptions, cancellationToken);
-        response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<BroadcastTransactionResponse>(
-            _jsonOptions, cancellationToken);
+        var result = await ReadJsonOrThrowAsync<BroadcastTransactionResponse>(
+            response, "/live/v1/broadcast-transaction", cancellationToken);
 
         return new BroadcastResult
         {
@@ -138,10 +137,9 @@ public sealed class QubicRpcClient : IDisposable
 
         var response = await _httpClient.PostAsJsonAsync(
             "/live/v1/querySmartContract", request, _jsonOptions, cancellationToken);
-        response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<QuerySmartContractResponse>(
-            _jsonOptions, cancellationToken);
+        var result = await ReadJsonOrThrowAsync<QuerySmartContractResponse>(
+            response, "/live/v1/querySmartContract", cancellationToken);
 
         return string.IsNullOrEmpty(result?.ResponseData)
             ? Array.Empty<byte>()
@@ -380,6 +378,55 @@ public sealed class QubicRpcClient : IDisposable
     #endregion
 
     #region Helpers
+
+    /// <summary>
+    /// Reads a response body, surfacing the node's actual error instead of discarding it.
+    /// Throws <see cref="QubicRpcException"/> with the body on a non-2xx status, and also when a
+    /// 2xx response carries a <c>{"code":..,"message":..}</c> error envelope (core-lite answers
+    /// broadcast/query failures that way, with HTTP 200).
+    /// </summary>
+    private async Task<T?> ReadJsonOrThrowAsync<T>(HttpResponseMessage response, string path, CancellationToken ct)
+    {
+        var body = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+            throw new QubicRpcException(
+                $"RPC {path} failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}. {TrimBody(body)}",
+                (int)response.StatusCode, TrimBody(body), requestPath: path);
+
+        if (TryReadErrorEnvelope(body, out var code, out var message))
+            throw new QubicRpcException(
+                $"RPC {path} rejected: {message} (code {code}).",
+                (int)response.StatusCode, TrimBody(body), code, path);
+
+        return string.IsNullOrWhiteSpace(body) ? default : JsonSerializer.Deserialize<T>(body, _jsonOptions);
+    }
+
+    private static string TrimBody(string? body) =>
+        string.IsNullOrEmpty(body) ? "(empty response body)" : body.Length > 2000 ? body[..2000] + "…" : body;
+
+    private static bool TryReadErrorEnvelope(string body, out int code, out string message)
+    {
+        code = 0;
+        message = "";
+        if (string.IsNullOrWhiteSpace(body)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+            // An error envelope has both "code" (number) and "message" (string) at the root;
+            // success payloads (tick-info, balances, broadcast, querySmartContract) never do.
+            if (doc.RootElement.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.Number
+                && doc.RootElement.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String)
+            {
+                code = c.GetInt32();
+                message = m.GetString() ?? "";
+                return true;
+            }
+        }
+        catch (JsonException) { /* not JSON — leave it to the deserializer */ }
+        return false;
+    }
 
     private static byte[] GetSignedTransactionBytes(QubicTransaction transaction)
     {

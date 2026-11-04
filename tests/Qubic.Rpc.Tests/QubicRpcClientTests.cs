@@ -169,6 +169,39 @@ public class QubicRpcClientTests
         Assert.Empty(result);
     }
 
+    [Fact]
+    public async Task QuerySmartContractAsync_HttpError_ThrowsWithBody()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.OnPost("/live/v1/querySmartContract", "upstream rejected the request",
+            System.Net.HttpStatusCode.BadRequest);
+
+        using var client = CreateClient(handler);
+        var ex = await Assert.ThrowsAsync<QubicRpcException>(
+            () => client.QuerySmartContractAsync(1, 0, new byte[] { 0 }));
+
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Contains("upstream rejected the request", ex.ResponseBody);
+        Assert.Contains("/live/v1/querySmartContract", ex.Message);
+    }
+
+    [Fact]
+    public async Task QuerySmartContractAsync_ErrorEnvelopeWith200_Throws()
+    {
+        // core-lite answers failures with HTTP 200 + {"code":..,"message":..}
+        var handler = new MockHttpMessageHandler();
+        handler.OnPost("/live/v1/querySmartContract", """
+        { "code": 3, "message": "Invalid validity" }
+        """);
+
+        using var client = CreateClient(handler);
+        var ex = await Assert.ThrowsAsync<QubicRpcException>(
+            () => client.QuerySmartContractAsync(1, 0, new byte[] { 0 }));
+
+        Assert.Equal(3, ex.NodeCode);
+        Assert.Contains("Invalid validity", ex.Message);
+    }
+
     #endregion
 
     #region Live API — Assets

@@ -121,7 +121,8 @@ public sealed class DevToolsService
 
             var target = await TransactionHelper.ResolveTickTargetAsync(_backend, _tickMonitor, ct);
             var tx = await _review.SignTransactionAsync(account.Seed, $"Dev account #{account.Index}", dest, amount,
-                target.TargetTick, null, new SigningContext(SigningOrigin.DevTools, $"Faucet: {amount:N0} QU"), ct);
+                target.TargetTick, null, new SigningContext(SigningOrigin.DevTools, $"Faucet: {amount:N0} QU"),
+                refreshTickOnApproval: true, ct);
             var result = await _backend.BroadcastTransactionAsync(tx, ct);
             return result.TransactionId;
         }
@@ -151,7 +152,7 @@ public sealed class DevToolsService
         var target = await TransactionHelper.ResolveTickTargetAsync(_backend, _tickMonitor, ct);
         var tx = await _review.SignTransactionAsync(account.Seed, $"Dev account #{account.Index}",
             QubicContracts.GetContractIdentity(QxContract.ContractIndex), fee, target.TargetTick, payload,
-            new SigningContext(SigningOrigin.DevTools, $"Issue {shares:N0} {name}"), ct);
+            new SigningContext(SigningOrigin.DevTools, $"Issue {shares:N0} {name}"), refreshTickOnApproval: true, ct);
         var result = await _backend.BroadcastTransactionAsync(tx, ct);
         return result.TransactionId;
     }

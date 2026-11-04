@@ -68,22 +68,30 @@ public class SeedSessionService
 
     // ── Reviewed signing (use these from UI flows) ──
 
-    /// <summary>Shows the signing review, then signs a QU transfer. Throws <see cref="SigningRejectedException"/> if declined.</summary>
+    /// <summary>
+    /// Shows the signing review, then signs a QU transfer. Throws <see cref="SigningRejectedException"/> if declined.
+    /// Pass <paramref name="autoTick"/> true when <paramref name="tick"/> is an auto-resolved target (not set
+    /// manually by the user): the tick is then re-picked at signing time so it can't go stale during the review.
+    /// </summary>
     public Task<QubicTransaction> SignTransferAsync(QubicIdentity destination, long amount, uint tick,
-        SigningContext? context = null, CancellationToken ct = default)
+        SigningContext? context = null, bool autoTick = false, CancellationToken ct = default)
     {
         EnsureSeed();
         if (_review == null) return Task.FromResult(CreateAndSignTransfer(destination, amount, tick));
-        return _review.SignTransactionAsync(_seed!, _activeLabel, destination, amount, tick, null, context ?? SigningContext.InApp(), ct);
+        return _review.SignTransactionAsync(_seed!, _activeLabel, destination, amount, tick, null, context ?? SigningContext.InApp(), autoTick, ct);
     }
 
-    /// <summary>Shows the signing review (with the decoded contract call), then signs. Throws <see cref="SigningRejectedException"/> if declined.</summary>
+    /// <summary>
+    /// Shows the signing review (with the decoded contract call), then signs. Throws <see cref="SigningRejectedException"/> if declined.
+    /// Pass <paramref name="autoTick"/> true when <paramref name="tick"/> is an auto-resolved target (not set
+    /// manually by the user): the tick is then re-picked at signing time so it can't go stale during the review.
+    /// </summary>
     public Task<QubicTransaction> SignTransactionAsync(QubicIdentity destination, long amount, uint tick,
-        ITransactionPayload payload, SigningContext? context = null, CancellationToken ct = default)
+        ITransactionPayload payload, SigningContext? context = null, bool autoTick = false, CancellationToken ct = default)
     {
         EnsureSeed();
         if (_review == null) return Task.FromResult(CreateAndSignTransaction(destination, amount, tick, payload));
-        return _review.SignTransactionAsync(_seed!, _activeLabel, destination, amount, tick, payload, context ?? SigningContext.InApp(), ct);
+        return _review.SignTransactionAsync(_seed!, _activeLabel, destination, amount, tick, payload, context ?? SigningContext.InApp(), autoTick, ct);
     }
 
     /// <summary>Shows the signing review, then signs a raw message (64-byte signature). Sign-In with Qubic messages are recognised.</summary>

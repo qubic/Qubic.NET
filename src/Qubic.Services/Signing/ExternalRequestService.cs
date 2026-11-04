@@ -187,6 +187,9 @@ public sealed class ExternalRequestService
 
         uint tick;
         var current = _tickMonitor.IsConnected ? _tickMonitor.Tick : (await _backend.GetTickInfoAsync(ct)).Tick;
+        // A caller-supplied tick is honoured as-is; an auto tick is re-picked at signing time (below),
+        // so a long approval delay doesn't leave it stale.
+        var autoTick = p.Tick is null;
         if (p.Tick is { } requested)
         {
             if (requested <= current)
@@ -205,18 +208,21 @@ public sealed class ExternalRequestService
         QubicTransaction tx;
         try
         {
-            tx = await _review.SignTransactionAsync(seed, label, dest, p.Amount, tick, payload, context, ct);
+            tx = await _review.SignTransactionAsync(seed, label, dest, p.Amount, tick, payload, context, autoTick, ct);
         }
         catch (SigningRejectedException)
         {
             throw new ExternalRequestException(ExternalRequestException.UserRejected, "User rejected");
         }
 
-        // The user may have taken a while: refuse to hand out a transaction whose tick already passed.
-        if (_tickMonitor.IsConnected && _tickMonitor.Tick >= tick)
+        // The signed transaction carries the tick actually used (refreshed on approval for an auto tick).
+        var signedTick = tx.Tick;
+
+        // A manual tick that expired while the user deliberated is still refused; an auto tick was just refreshed.
+        if (!autoTick && _tickMonitor.IsConnected && _tickMonitor.Tick >= signedTick)
             throw new ExternalRequestException(ExternalRequestException.TickExpired, "Tick expired");
 
-        return (new ExternalSignedTx(tx.TransactionHash ?? "", tick, tx.GetRawBytes()), tx);
+        return (new ExternalSignedTx(tx.TransactionHash ?? "", signedTick, tx.GetRawBytes()), tx);
     }
 
     private async Task<ExternalSignedTx> BroadcastAsync(ExternalSignedTx signed, QubicTransaction tx, ExternalTxParams p, SigningContext context, CancellationToken ct)

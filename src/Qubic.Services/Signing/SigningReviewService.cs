@@ -253,9 +253,16 @@ public sealed class SigningReviewService
 
     // ── Signing with review ──
 
-    /// <summary>Reviews, then builds and signs a transfer or contract call with <paramref name="seed"/>.</summary>
+    /// <summary>
+    /// Reviews, then builds and signs a transfer or contract call with <paramref name="seed"/>.
+    /// When <paramref name="refreshTickOnApproval"/> is true (the caller did not set a manual tick),
+    /// the target tick is recomputed from the current chain head <em>after</em> the user approves —
+    /// so a tick chosen before a slow approval prompt doesn't go stale and get the transaction dropped.
+    /// A manual tick (<paramref name="refreshTickOnApproval"/> false) is signed exactly as given.
+    /// </summary>
     public async Task<QubicTransaction> SignTransactionAsync(string seed, string? sourceLabel, QubicIdentity destination,
-        long amount, uint targetTick, ITransactionPayload? payload, SigningContext context, CancellationToken ct = default)
+        long amount, uint targetTick, ITransactionPayload? payload, SigningContext context,
+        bool refreshTickOnApproval = false, CancellationToken ct = default)
     {
         var source = QubicIdentity.FromSeed(seed);
         var bytes = payload?.GetPayloadBytes();
@@ -263,6 +270,10 @@ public sealed class SigningReviewService
             payload?.InputType ?? 0, bytes is { Length: > 0 } ? bytes : null);
         if (!await ApproveAsync(req, ct))
             throw new SigningRejectedException();
+
+        // Pick the target tick at signing time, not when the request was built, for auto-tick requests.
+        if (refreshTickOnApproval && _tickMonitor.IsConnected)
+            targetTick = TickTargeting.Compute(_profiles.Active, _tickMonitor.Tick, _tickMonitor.EstimatedTickDurationMs).TargetTick;
 
         var tx = payload == null
             ? _txBuilder.CreateTransfer(source, destination, amount, targetTick)

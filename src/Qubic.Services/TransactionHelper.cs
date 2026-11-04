@@ -80,6 +80,11 @@ public static class TransactionHelper
     /// Convenience overload for contract calls with an ITransactionPayload.
     /// Signs, broadcasts, and tracks the transaction.
     /// </summary>
+    /// <param name="autoTick">
+    /// True (the default) when <paramref name="targetTick"/> was auto-resolved rather than typed by the user:
+    /// the tick is then re-picked at signing time so it can't go stale while the signing review is open.
+    /// Pass false when the user set a manual tick.
+    /// </param>
     public static async Task<string> BroadcastContractCallAsync(
         QubicBackendService backend,
         TransactionTrackerService tracker,
@@ -89,13 +94,15 @@ public static class TransactionHelper
         uint targetTick,
         ITransactionPayload payload,
         string description,
+        bool autoTick = true,
         CancellationToken ct = default)
     {
         var tx = await seed.SignTransactionAsync(destination, amount, targetTick, payload,
-            Signing.SigningContext.InApp(description), ct);
+            Signing.SigningContext.InApp(description), autoTick, ct);
+        // The signed transaction carries the tick actually used (refreshed on approval for auto-tick).
         return await BroadcastAndTrackAsync(
             backend, tracker, seed, tx,
-            destination.ToString(), amount, targetTick, description,
+            destination.ToString(), amount, tx.Tick, description,
             payload.InputType, Convert.ToHexString(payload.GetPayloadBytes()), ct);
     }
 }
