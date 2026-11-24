@@ -113,6 +113,32 @@ public sealed class QubicRpcClient : IDisposable
         };
     }
 
+    /// <summary>
+    /// Broadcasts an already-signed transaction given as its raw wire bytes
+    /// (source(32)+dest(32)+amount(8)+tick(4)+inputType(2)+inputSize(2)+payload+signature(64)).
+    /// Use this when the transaction was signed elsewhere (e.g. an HSM / remote
+    /// signer) and only the signed bytes are available, not a typed
+    /// <see cref="QubicTransaction"/>.
+    /// POST /live/v1/broadcast-transaction
+    /// </summary>
+    public async Task<BroadcastResult> BroadcastRawTransactionAsync(byte[] signedTransaction, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(signedTransaction);
+        var request = new { encodedTransaction = Convert.ToBase64String(signedTransaction) };
+
+        var response = await _httpClient.PostAsJsonAsync(
+            "/live/v1/broadcast-transaction", request, _jsonOptions, cancellationToken);
+
+        var result = await ReadJsonOrThrowAsync<BroadcastTransactionResponse>(
+            response, "/live/v1/broadcast-transaction", cancellationToken);
+
+        return new BroadcastResult
+        {
+            TransactionId = result?.TransactionId ?? string.Empty,
+            PeersBroadcasted = result?.PeersBroadcasted ?? 0
+        };
+    }
+
     #endregion
 
     #region Live API — Smart Contract Query
